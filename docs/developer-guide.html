@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eswachh Developer Handbook</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Print-first. This file exists to be rendered to docs/developer-guide.pdf:
+
+       chrome --headless --disable-gpu --no-pdf-header-footer \
+              --print-to-pdf=docs/developer-guide.pdf docs/developer-guide.html
+
+   Edit the HTML, re-run that, commit both.
+--------------------------------------------------------------------------- */
+
+@page { size: A4; margin: 17mm 15mm 15mm; }
+
+:root {
+    --ink:      #1C1917;
+    --body:     #403B37;
+    --muted:    #78716C;
+    --faint:    #A8A29E;
+    --rule:     #E7E5E4;
+    --rule-2:   #D6D3D1;
+    --accent:   #EA580C;
+    --deep:     #9A3412;
+    --wash:     #FFF7ED;
+    --ok:       #15803D;
+    --ok-bg:    #F0FDF4;
+    --warn:     #B45309;
+    --warn-bg:  #FFFBEB;
+    --crit:     #B91C1C;
+    --crit-bg:  #FEF2F2;
+    --surface:  #FAFAF9;
+
+    --sans: "Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    --mono: Consolas, "SFMono-Regular", "Courier New", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+body {
+    margin: 0;
+    background: #FFFFFF;
+    color: var(--body);
+    font-family: var(--sans);
+    font-size: 10.2pt;
+    line-height: 1.56;
+}
+
+.sheet { display: grid; grid-template-columns: 22mm 1fr; column-gap: 8mm; }
+.rail { text-align: right; }
+.flow { min-width: 0; }
+
+.rail .num {
+    font-family: var(--mono);
+    font-size: 8pt;
+    letter-spacing: .06em;
+    color: var(--accent);
+    padding-top: .35em;
+}
+
+h1, h2, h3, h4 { color: var(--ink); text-wrap: balance; margin: 0; }
+
+h1 {
+    font-size: 27pt;
+    font-weight: 650;
+    line-height: 1.1;
+    letter-spacing: -.028em;
+}
+
+h2 {
+    font-size: 16pt;
+    font-weight: 650;
+    line-height: 1.2;
+    letter-spacing: -.022em;
+}
+
+h3 {
+    font-size: 11pt;
+    font-weight: 650;
+    letter-spacing: -.008em;
+    margin: 1.6em 0 .3em;
+}
+
+h4 { font-size: 9.4pt; font-weight: 650; margin: 1.2em 0 .2em; }
+
+p { margin: 0 0 .72em; }
+p.lede { font-size: 11.2pt; }
+strong { color: var(--ink); font-weight: 650; }
+
+.eyebrow {
+    font-family: var(--mono);
+    font-size: 7.6pt;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+section { break-before: page; }
+section:first-of-type { break-before: auto; }
+
+.head { border-top: 2.5pt solid var(--accent); padding-top: 3mm; margin-bottom: 6mm; }
+.head .eyebrow { display: block; margin-bottom: 1.5mm; }
+
+ul, ol { margin: 0 0 .8em; padding-left: 1.15em; }
+li { margin-bottom: .28em; }
+li::marker { color: var(--faint); }
+
+/* --- the "where in the code" line --------------------------------------- */
+
+.where {
+    font-family: var(--mono);
+    font-size: 8.2pt;
+    color: var(--deep);
+    background: var(--surface);
+    border-left: 2pt solid var(--rule-2);
+    padding: 1.3mm 3mm;
+    margin: 0 0 .8em;
+    word-break: break-all;
+    break-inside: avoid;
+}
+.where b { color: var(--ink); font-weight: 650; }
+
+/* --- code --------------------------------------------------------------- */
+
+code {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--surface);
+    border: .5pt solid var(--rule);
+    border-radius: 2px;
+    padding: .05em .3em;
+    color: var(--deep);
+}
+
+pre {
+    font-family: var(--mono);
+    font-size: 8.4pt;
+    line-height: 1.5;
+    background: var(--surface);
+    border: .5pt solid var(--rule-2);
+    border-left: 2.5pt solid var(--accent);
+    padding: 3mm 4mm;
+    margin: 0 0 1em;
+    overflow-x: auto;
+    break-inside: avoid;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+pre code { background: none; border: none; padding: 0; color: inherit; font-size: 1em; }
+pre .c { color: var(--muted); font-style: italic; }
+
+/* --- tables ------------------------------------------------------------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.8pt;
+    margin: 0 0 1em;
+}
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 7.2pt;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1pt solid var(--rule-2);
+    padding: 0 .7em .45em 0;
+    vertical-align: bottom;
+}
+td {
+    padding: .5em .7em .5em 0;
+    border-bottom: .5pt solid var(--rule);
+    vertical-align: top;
+}
+td:last-child, th:last-child { padding-right: 0; }
+th.narrow, td.narrow { width: 24%; }
+td.name { color: var(--ink); font-weight: 600; }
+td.path { font-family: var(--mono); font-size: 8pt; color: var(--deep); word-break: break-all; }
+
+/* --- boxes -------------------------------------------------------------- */
+
+.note, .plain, .danger {
+    break-inside: avoid;
+    padding: 3.5mm 4mm;
+    margin: 0 0 1em;
+    font-size: 9.4pt;
+}
+.note   { background: var(--wash);    border-left: 2.5pt solid var(--accent); }
+.plain  { background: var(--surface); border: .5pt solid var(--rule-2); }
+.danger { background: var(--crit-bg); border-left: 2.5pt solid var(--crit); }
+
+.note p:last-child, .plain p:last-child, .danger p:last-child,
+.note ul:last-child, .plain ul:last-child, .danger ul:last-child { margin-bottom: 0; }
+
+.note .eyebrow   { display: block; color: var(--deep); margin-bottom: 1mm; }
+.danger .eyebrow { display: block; color: var(--crit); margin-bottom: 1mm; }
+.plain .eyebrow  { display: block; margin-bottom: 1mm; }
+
+/* --- chips -------------------------------------------------------------- */
+
+.chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: .18em .5em;
+    border-radius: 2px;
+    vertical-align: .12em;
+    white-space: nowrap;
+}
+.chip.on  { color: var(--ok);   background: var(--ok-bg);   border: .5pt solid #BBF7D0; }
+.chip.off { color: var(--warn); background: var(--warn-bg); border: .5pt solid #FDE68A; }
+
+/* --- cover -------------------------------------------------------------- */
+
+.cover { break-after: page; padding-top: 34mm; }
+.cover .bar { width: 26mm; height: 3pt; background: var(--accent); margin-bottom: 7mm; }
+.cover h1 { max-width: 140mm; }
+.cover .sub { font-size: 12.5pt; color: var(--muted); margin: 4mm 0 0; max-width: 122mm; line-height: 1.5; }
+.cover dl {
+    margin: 28mm 0 0;
+    display: grid;
+    grid-template-columns: 32mm 1fr;
+    row-gap: 1.6mm;
+    font-size: 9pt;
+    max-width: 125mm;
+}
+.cover dt {
+    font-family: var(--mono);
+    color: var(--muted);
+    font-size: 7.4pt;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding-top: .35em;
+}
+.cover dd { margin: 0; color: var(--ink); }
+
+/* --- contents ----------------------------------------------------------- */
+
+.toc { break-after: page; }
+.toc ol { list-style: none; padding: 0; margin: 6mm 0 0; counter-reset: toc; }
+.toc li {
+    display: grid;
+    grid-template-columns: 9mm 1fr;
+    column-gap: 3mm;
+    padding: 1.55mm 0;
+    border-bottom: .5pt solid var(--rule);
+    counter-increment: toc;
+    break-inside: avoid;
+}
+.toc li::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 8pt;
+    color: var(--accent);
+    padding-top: .15em;
+}
+.toc .t { color: var(--ink); font-weight: 600; font-size: 10pt; }
+.toc .d { color: var(--muted); font-size: 8.6pt; display: block; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+    <div class="bar"></div>
+    <p class="eyebrow">Developer handbook</p>
+    <h1>Working on Eswachh</h1>
+    <p class="sub">How the code is arranged, where every switch lives, what to edit
+    for the changes you are most likely to be asked for, and the mistakes this
+    codebase has already made so you do not repeat them.</p>
+
+    <dl>
+        <dt>Stack</dt><dd>Laravel 12 · PHP 8.2+ · Vue 3.5 · TypeScript 5.9 · Vite 7 · Pinia · TanStack Query · Tailwind 4 · MySQL</dd>
+        <dt>Suite</dt><dd>303 tests, 806 assertions, ~47s</dd>
+        <dt>Companion</dt><dd>admin-guide.pdf, for what the system does and why</dd>
+        <dt>Revised</dt><dd>15 August 2026</dd>
+    </dl>
+</div>
+
+<nav class="toc">
+    <div class="head">
+        <span class="eyebrow">Contents</span>
+        <h2>What is in this handbook</h2>
+    </div>
+    <ol>
+        <li><div><span class="t">Getting it running</span><span class="d">From clone to a working local copy</span></div></li>
+        <li><div><span class="t">How the code is arranged</span><span class="d">Filed by audience, not by resource</span></div></li>
+        <li><div><span class="t">Branch scoping</span><span class="d">Fail-closed tenancy, and why it answers 404</span></div></li>
+        <li><div><span class="t">Roles and abilities</span><span class="d">In code, not in tables — and custom roles on top</span></div></li>
+        <li><div><span class="t">Money</span><span class="d">Paise, PriceBook, and the two unbreakable rules</span></div></li>
+        <li><div><span class="t">Messaging</span><span class="d">The delivery gate, templates, and the dedupe key</span></div></li>
+        <li><div><span class="t">Every flag and switch</span><span class="d">What is off, where it is read, how to flip it</span></div></li>
+        <li><div><span class="t">Change this, edit that</span><span class="d">The tasks you will actually be handed</span></div></li>
+        <li><div><span class="t">The front end</span><span class="d">Two bundles, three routers, one trap in web.php</span></div></li>
+        <li><div><span class="t">Conventions</span><span class="d">Rules that hold everywhere in this codebase</span></div></li>
+        <li><div><span class="t">Tests</span><span class="d">Running them, and the two that guard the rest</span></div></li>
+        <li><div><span class="t">Commands and the schedule</span><span class="d">Everything artisan can do here</span></div></li>
+        <li><div><span class="t">Bugs this codebase has already had</span><span class="d">Read this one. All of these cost a day</span></div></li>
+    </ol>
+</nav>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 01</span>
+    <h2>Getting it running</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">1.1</div></div>
+    <div class="flow">
+<pre><code><span class="c"># everything: composer, .env, key, migrate, npm, build</span>
+composer setup
+
+<span class="c"># the price list, message templates, policies, a first admin</span>
+php artisan db:seed
+
+<span class="c"># server + queue + log tail + vite, all four at once</span>
+composer dev</code></pre>
+
+        <p><code>composer dev</code> runs <code>php artisan serve</code>, the queue
+        listener, <code>pail</code> and <code>npm run dev</code> together and kills all
+        four when any one stops. Use it rather than four terminals.</p>
+
+        <h3>What must be in .env</h3>
+        <table>
+            <thead><tr><th class="narrow">Key</th><th>Why</th></tr></thead>
+            <tbody>
+                <tr><td class="path">APP_TIMEZONE=Asia/Kolkata</td><td><strong>Not optional.</strong> v1 ran on it. On UTC, imported timestamps are mislabelled by five and a half hours and date filters silently find nothing.</td></tr>
+                <tr><td class="path">DB_CONNECTION=mysql</td><td>The importer reads a v1 MySQL database directly.</td></tr>
+                <tr><td class="path">SESSION_DRIVER=database</td><td>Sanctum SPA cookie auth.</td></tr>
+                <tr><td class="path">QUEUE_CONNECTION=database</td><td>Messaging is queued.</td></tr>
+            </tbody>
+        </table>
+
+        <div class="plain">
+            <span class="eyebrow">One command to answer "is it wired up?"</span>
+            <p><code>php artisan eswachh:check-integrations</code> reports whether payments
+            and messaging are configured and, when they are not, exactly what is stopping
+            them. Add <code>--ping</code> to prove the gateway key actually works.</p>
+        </div>
+
+        <h3>Importing v1 data</h3>
+        <div class="where"><b>app/Console/Commands/ImportLegacyData.php</b></div>
+        <p><code>php artisan eswachh:import</code> brings across customers, vehicles,
+        subscriptions and payments, links every customer to a login that still accepts
+        their old password, and issues invoice numbers for payments that had none. Five v1
+        orders cannot come across: their customers were deleted in v1, so there is nobody
+        to attach them to.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 02</span>
+    <h2>How the code is arranged</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">2.1</div></div>
+    <div class="flow">
+        <p class="lede">Everything is filed by <strong>who it is for</strong>, not by what
+        kind of file it is. The same four names appear on both sides of the wire.</p>
+
+        <table>
+            <thead><tr><th class="narrow">Audience</th><th>Backend</th><th>Front end</th></tr></thead>
+            <tbody>
+                <tr><td class="name">The office</td><td class="path">app/Http/Controllers/Api/V1/Admin</td><td class="path">resources/js/admin</td></tr>
+                <tr><td class="name">A customer</td><td class="path">.../Api/V1/Portal</td><td class="path">resources/js/portal</td></tr>
+                <tr><td class="name">A visitor</td><td class="path">.../Api/V1/Site</td><td class="path">resources/js/site</td></tr>
+                <tr><td class="name">More than one</td><td class="path">.../Api/V1/Shared</td><td class="path">resources/js/shared</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Why not group by resource</h3>
+        <p>A <code>SubscriptionController</code> holding everything anyone can do to a
+        subscription hides the only question that matters here: <em>who is asking</em>. A
+        customer holds <code>view.subscription</code> so they can look at their own plan.
+        An ability cannot say "their own"; only a query can. Filing by audience puts that
+        question in the folder name.</p>
+
+        <div class="note">
+            <span class="eyebrow">Shared is the load-bearing one</span>
+            <p>Those controllers are reached by both the office and a customer, so each
+            carries a row-level check inside it (<code>RestrictsToOwnRecords</code>). If one
+            is ever moved into <code>Admin</code>, that check starts to look redundant to
+            whoever edits it next — which is exactly how a customer ends up reading the
+            whole branch's payments.</p>
+        </div>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">2.2</div></div>
+    <div class="flow">
+        <h3>What is not in that table</h3>
+        <table>
+            <thead><tr><th class="narrow">Folder</th><th>Holds</th></tr></thead>
+            <tbody>
+                <tr><td class="path">app/Domain/*</td><td>The business itself: pricing, billing, messaging, the daily round, cloth ledger, complaints, alerts, phone codes. No HTTP, no request objects. A controller validates and delegates; the rules read the same whether a person, a scheduled job or a test called them.</td></tr>
+                <tr><td class="path">app/Support/*</td><td>Plumbing that is not a business rule: <code>Tenancy</code>, <code>Access</code>, <code>Http</code> (sorting whitelists, ownership), <code>Settings</code>, <code>Numbering</code>, <code>Content</code> (sanitising), <code>Masters</code>, <code>Legacy</code>, <code>Database</code>, <code>Preferences</code>.</td></tr>
+                <tr><td class="path">app/Models</td><td>One flat folder on purpose. Models are referenced from everywhere, and a <code>Subscription</code> filed under <code>Admin</code> would be a lie.</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Adding a route</h3>
+        <ol>
+            <li>Decide who it is for. That is the folder.</li>
+            <li>If the answer is "both the office and a customer", it is <code>Shared</code>,
+            and it needs an ownership check — <code>restrictToOwnRecords()</code> for a list,
+            <code>ownsRecord()</code> for a single row, returning <strong>404 and not
+            403</strong>, because refusing must not confirm that the record exists.</li>
+            <li>Abilities go on the route or at the top of the method. They answer <em>may
+            this person use this feature</em>, never <em>whose rows are these</em>.</li>
+        </ol>
+
+        <div class="where">
+            routes/api.php <span style="color:var(--muted)">— everything behind auth</span><br>
+            routes/api_public.php <span style="color:var(--muted)">— quotes, signup, renewal lookup, catalogue, blog</span><br>
+            routes/web.php <span style="color:var(--muted)">— which blade shell serves which URL</span><br>
+            routes/console.php <span style="color:var(--muted)">— the schedule</span>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 03</span>
+    <h2>Branch scoping</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">3.1</div></div>
+    <div class="flow">
+        <div class="where"><b>app/Support/Tenancy/BranchContext.php</b> · app/Models/Concerns/BelongsToBranch.php</div>
+
+        <p class="lede">Multi-tenancy is a global scope applied by a trait, and it is
+        <strong>fail-closed</strong>: a query that has not established which branch it
+        belongs to returns nothing, never everything.</p>
+
+<pre><code>BranchContext::currentBranchId()      <span class="c">// null for an admin, the id otherwise</span>
+BranchContext::isRestricted()         <span class="c">// false only for super_admin</span>
+BranchContext::withoutScope(fn () =&gt; ...)   <span class="c">// masters, cross-branch checks</span>
+BranchContext::forBranch($id, fn () =&gt; ...) <span class="c">// jobs, importers, tests</span>
+BranchContext::forBranchOrAll($id, fn () =&gt; ...)
+BranchContext::reset()                <span class="c">// tests, in setUp and tearDown</span></code></pre>
+
+        <p>Put <code>use BelongsToBranch;</code> on any model with a
+        <code>branch_id</code> and the scope applies everywhere, including relations and
+        counts. There is no "else" branch anywhere that means unrestricted.</p>
+
+        <div class="note">
+            <span class="eyebrow">404, not 403</span>
+            <p>A record belonging to another branch must produce the same response as one
+            that never existed. A 403 confirms there is something there to be refused,
+            which is itself a leak — it tells a franchise owner that a car number belongs to
+            somebody, somewhere.</p>
+        </div>
+
+        <h3>When to use withoutScope</h3>
+        <p>Only for things that are genuinely shared, and always with a comment saying
+        why. Two legitimate uses in the codebase today:</p>
+        <ul>
+            <li><strong>Masters.</strong> Every franchise sells from the same price list.
+            This is also the only reason a quote works on the public site, where there is
+            no signed-in user at all.</li>
+            <li><strong>Uniqueness of a car number.</strong> A car on another branch's books
+            is still taken, so <code>AddPlanController</code> and the signup flow both check
+            across every branch before refusing.</li>
+        </ul>
+
+        <h3>Sectors and societies</h3>
+        <p>A branch owns many sectors; a sector holds societies. A franchise covering four
+        societies simply has four sectors attached to its branch, so multi-sector
+        franchises need no special code. Assigning a sector's branch is an administrator
+        action on the Masters screen.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 04</span>
+    <h2>Roles and abilities</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">4.1</div></div>
+    <div class="flow">
+        <div class="where"><b>app/Enums/UserRole.php</b> · app/Support/Access/Abilities.php · app/Models/CustomRole.php</div>
+
+        <p>Four roles, declared in code rather than in tables:
+        <code>super_admin</code>, <code>franchise_owner</code>, <code>cleaner</code>,
+        <code>customer</code>. Abilities are named <code>{verb}.{resource}</code> and
+        listed on the enum. <code>super_admin</code> is granted everything by a
+        <code>Gate::before</code> hook, which keeps the table readable.</p>
+
+        <div class="plain">
+            <span class="eyebrow">Why in code</span>
+            <p>v1 stored roles and permissions in tables and then cached the lookup — a
+            cache that shadowed the relation and left newly created users with no roles at
+            all until somebody cleared it by hand. Abilities declared in code cannot drift
+            out of sync with themselves, cannot be cached wrongly, and are visible in
+            review.</p>
+        </div>
+
+        <h3>Adding an ability</h3>
+        <ol>
+            <li>Add the string to the relevant arm of <code>UserRole::abilities()</code>.</li>
+            <li>Add it to <code>Abilities</code> so the roles screen can offer it.</li>
+            <li>Check it on the route or at the top of the method.</li>
+            <li>If it is a screen, add it to the <code>navigation</code> array in
+            <code>resources/js/admin/AppLayout.vue</code> and to the route's
+            <code>meta.ability</code>.</li>
+        </ol>
+
+        <div class="danger">
+            <span class="eyebrow">Never name an ability "own"</span>
+            <p>An ability answers <em>may this person use this feature</em>. Which rows they
+            see is a separate question that only a query can answer. Naming one
+            <code>view.own.complaint</code> implied otherwise and left routes checking
+            <code>view.complaint</code> locking customers out of their own complaints
+            entirely.</p>
+        </div>
+
+        <h3>Custom roles</h3>
+        <p>DB-backed, and each <strong>refines</strong> one built-in role: it starts from
+        that role's abilities and may only narrow or pick from within them. A custom role
+        cannot grant cross-branch sight; there is no way to express it. Managing roles is
+        gated on <em>being</em> <code>super_admin</code>, not on an ability, so that a role
+        cannot be used to grant the power to rewrite roles.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 05</span>
+    <h2>Money</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">5.1</div></div>
+    <div class="flow">
+        <div class="where"><b>app/Domain/Pricing/PriceBook.php</b> · Quote.php · QuoteLine.php</div>
+
+<pre><code>( category + package + service_type + society surcharge ) × months
+    − duration discount
+    + cloth bundle</code></pre>
+
+        <p>Every master is looked up fresh on each call. A quote is a statement about the
+        price list <em>as it stands right now</em>, and must never be assembled from ids
+        the caller has already resolved to amounts. A master that was asked for and cannot
+        be sold produces a warning rather than being skipped — skipping it silently
+        under-prices the plan by whatever it used to charge, and nobody would notice.
+        Withdrawn and never-existed are told apart, because they need different fixes.</p>
+
+        <div class="danger">
+            <span class="eyebrow">Rule one · no amount ever comes from a request</span>
+            <p>Every price is worked out by <code>PriceBook</code>, on the server, at the
+            moment it is charged. The figure the browser shows is a quote and is thrown
+            away. v1 read <code>final_price</code> straight from the form and validated only
+            <code>min:1</code> — a customer could have paid ₹1 for any plan.</p>
+            <p>There is a test for this on every paying route. If you add one, add the test:
+            post a wrong <code>amount_paise</code> and assert the stored amount ignored it.</p>
+        </div>
+
+        <div class="danger">
+            <span class="eyebrow">Rule two · nothing is marked paid except a verified callback</span>
+            <p>Signup, renewal, top-up and add-a-car all open a payment and stop.
+            <code>Domain\Billing\RecordPayment</code> moves it, and only after the Razorpay
+            signature checks out <em>and</em> the gateway confirms what it holds.</p>
+        </div>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">5.2</div></div>
+    <div class="flow">
+        <h3>The billing pieces</h3>
+        <table>
+            <thead><tr><th class="narrow">Class</th><th>Does</th></tr></thead>
+            <tbody>
+                <tr><td class="path">StartPayment</td><td>Opens a payment row and a gateway order, before the window appears, so an abandoned checkout still leaves a record.</td></tr>
+                <tr><td class="path">RecordPayment</td><td>The only thing that marks anything paid. Idempotent.</td></tr>
+                <tr><td class="path">RazorpaySignature</td><td>HMAC verification, constant-time.</td></tr>
+                <tr><td class="path">RazorpayGateway</td><td>The HTTP client. Reports itself unavailable unless enabled and keyed.</td></tr>
+                <tr><td class="path">InvoiceNumber</td><td>Issues a numbered invoice per captured payment, prefix from settings.</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Paise, everywhere</h3>
+        <p>All money is an <strong>integer number of paise</strong>, named
+        <code>*_paise</code>. Never a float, never a decimal column, no exceptions. Format
+        for display at the edge only.</p>
+
+        <h3>Repricing on renewal</h3>
+        <div class="where"><b>app/Http/Controllers/Api/V1/Shared/RenewalController.php</b></div>
+        <p>A customer renewing from their account may change package, service type and
+        duration. The controller reprices and writes the new amount <em>before</em> opening
+        the payment. Without that step a customer switching one month to six would be
+        charged for one.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 06</span>
+    <h2>Messaging</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">6.1</div></div>
+    <div class="flow">
+        <div class="where"><b>app/Domain/Messaging/Messenger.php</b> · app/Enums/MessagePurpose.php · database/seeders/MessageTemplateSeeder.php</div>
+
+        <h3>The delivery gate</h3>
+<pre><code>public function deliveryEnabled(): bool
+{
+    <span class="c">// Never during tests, whatever the configuration says.</span>
+    if (app()-&gt;runningUnitTests()) {
+        return false;
+    }
+
+    return app()-&gt;isProduction() &amp;&amp; (bool) config('services.whatsapp.enabled');
+}</code></pre>
+
+        <div class="note">
+            <span class="eyebrow">This is the line that matters</span>
+            <p>A message leaves the building only when the app is in production
+            <em>and</em> <code>WHATSAPP_ENABLED=true</code>. Everywhere else it is written to
+            the <code>messages</code> table exactly as it would have been sent, together with
+            a <code>suppressionReason()</code> saying why it was held. Demonstrations against
+            real data cannot message a real customer.</p>
+            <p>Do not add a bypass for "just this one". If you need to see delivery work,
+            point a staging copy at a test number.</p>
+        </div>
+
+        <h3>Wording lives in the database</h3>
+        <p>Templates are seeded with the exact wording from the requirements document and
+        edited in the office. A template that is missing or switched off sends
+        <strong>nothing</strong>, rather than falling back to wording nobody has approved.
+        Both the nightly jobs and hand-sent messages read the same row.</p>
+
+        <h3>The dedupe key</h3>
+        <p><code>MessagePurpose</code> values are load-bearing: the purpose is half of the
+        key that stops a customer being messaged twice about the same thing.
+        <strong>Renaming a case silently allows a duplicate.</strong></p>
+        <p><code>isPerEvent()</code> splits the two behaviours. A renewal reminder is one
+        per customer per day. A "cleaning done" is per event, because a household with two
+        cars must get one for each.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 07</span>
+    <h2>Every flag and switch</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">7.1</div></div>
+    <div class="flow">
+        <p class="lede">Three kinds. Environment variables are for credentials and things
+        that differ per server. Settings are for the business. Hard-coded conditions are
+        for what the business asked to hide.</p>
+
+        <h4>Environment · .env</h4>
+        <table>
+            <thead><tr><th class="narrow">Key</th><th>Default</th><th>Read by</th></tr></thead>
+            <tbody>
+                <tr><td class="path">RAZORPAY_ENABLED</td><td><span class="chip off">false</span></td><td class="path">RazorpayGateway::available()</td></tr>
+                <tr><td class="path">RAZORPAY_KEY / _SECRET</td><td>empty</td><td class="path">config/services.php</td></tr>
+                <tr><td class="path">WHATSAPP_ENABLED</td><td><span class="chip off">false</span></td><td class="path">Messenger::deliveryEnabled()</td></tr>
+                <tr><td class="path">MSG91_AUTH_KEY</td><td>empty</td><td class="path">Messenger</td></tr>
+                <tr><td class="path">MSG91_WHATSAPP_NUMBER</td><td>empty</td><td class="path">Messenger</td></tr>
+                <tr><td class="path">APP_TIMEZONE</td><td>Asia/Kolkata</td><td>Everything. See section 13.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Settings · Settings screen, or <code>SiteSettings::put()</code></h4>
+        <div class="where"><b>app/Support/Settings/SiteSettings.php</b> — the whitelist of keys</div>
+        <table>
+            <thead><tr><th class="narrow">Key</th><th>Default</th><th>Effect</th></tr></thead>
+            <tbody>
+                <tr><td class="path">cloth_service_enabled</td><td><span class="chip off">0</span></td><td>Hides the top-up page, the cloth screens and the cloth choice on the forms. Touches no balance or ledger entry.</td></tr>
+                <tr><td class="path">lock_plan_edits_to_admin</td><td><span class="chip off">0</span></td><td>Franchise owners cannot change a plan. Never restricts an administrator.</td></tr>
+                <tr><td class="path">seo_index</td><td><span class="chip on">1</span></td><td>Off writes <code>noindex</code>. Switch it off on staging.</td></tr>
+                <tr><td class="path">cloth_low_threshold</td><td>5</td><td>The warning list and the low-balance message.</td></tr>
+                <tr><td class="path">renewal_grace_days</td><td>7</td><td>Days overdue before a plan is put on hold.</td></tr>
+                <tr><td class="path">admin_notify_phone</td><td>empty</td><td>Where "a new car needs a cleaner" goes. v1 had this number written into two controllers.</td></tr>
+                <tr><td class="path">invoice_prefix</td><td>ESW</td><td>Invoice numbering.</td></tr>
+                <tr><td class="path">seo_title / _description / _keywords / _share_image</td><td>set</td><td>Rendered server-side into <code>site.blade.php</code>.</td></tr>
+                <tr><td class="path">privacy_policy / terms / refund_policy</td><td>written</td><td>Rich text, sanitised on write.</td></tr>
+                <tr><td class="path">business_name, legal_name, gstin, address, contact_*, whatsapp_number, office_hours, invoice_footer</td><td>various</td><td>Presentation.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">7.2</div></div>
+    <div class="flow">
+        <h4>Hidden in code</h4>
+        <table>
+            <thead><tr><th class="narrow">What</th><th>Where</th><th>To restore</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td class="name">Renew &amp; Subscribe hidden from a signed-in customer</td>
+                    <td class="path">resources/js/site/PublicLayout.vue → <code>showVisitorActions</code></td>
+                    <td>Change the computed to <code>true</code>. Both the wide header and the narrow drawer read it.</td>
+                </tr>
+                <tr>
+                    <td class="name">Cloth top-up not in the public header</td>
+                    <td class="path">resources/js/site/PublicLayout.vue → the <code>links</code> array</td>
+                    <td>Add <code>{ name: 'Cloths', to: { name: 'cloth-top-up' } }</code>. The route and page are untouched.</td>
+                </tr>
+                <tr>
+                    <td class="name">Car number editable by administrators only</td>
+                    <td class="path">.../Admin/SubscriptionEditController.php → <code>actorMayRenumber()</code></td>
+                    <td>Deliberate, from the requirements document. A refused change sets <code>$registrationRefused</code> so the response says so rather than staying silent.</td>
+                </tr>
+                <tr>
+                    <td class="name">Paid amount never editable</td>
+                    <td class="path">.../Admin/SubscriptionEditController.php → <code>applyPaymentChanges()</code></td>
+                    <td>Method, reference, paid-at and notes are editable; the amount is not. Do not add it.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Adding a setting</h3>
+        <ol>
+            <li>Add the key to <code>SiteSettings::definitions()</code> with a label, group,
+            rules and default. Mark it <code>'boolean' =&gt; true</code>,
+            <code>'rich' =&gt; true</code> or <code>'long' =&gt; true</code> as needed — the
+            settings screen renders the right control from that.</li>
+            <li>Read it with <code>SiteSettings::get('your_key')</code>.</li>
+            <li>Nothing else. The cache rebuilds itself when the definition count changes,
+            so a new setting does not need a cache clear to appear.</li>
+        </ol>
+
+        <div class="plain">
+            <p><strong>Nothing secret goes in settings.</strong> Gateway keys and API tokens
+            stay in <code>.env</code>, where they are not inside a database dump an
+            administrator can download from the Backups screen.</p>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 08</span>
+    <h2>Change this, edit that</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">8.1</div></div>
+    <div class="flow">
+        <table>
+            <thead><tr><th style="width:32%">You are asked to…</th><th>Go here</th></tr></thead>
+            <tbody>
+                <tr><td class="name">Change a price</td><td>Masters screen. Nothing in code. Prices are <code>*_paise</code> integers in the masters tables.</td></tr>
+                <tr><td class="name">Change how a price is assembled</td><td class="path">app/Domain/Pricing/PriceBook.php — and add a test, because historic amounts must still reproduce.</td></tr>
+                <tr><td class="name">Change message wording</td><td>Messages screen. To change the <em>seed</em>: <code>database/seeders/MessageTemplateSeeder.php</code>.</td></tr>
+                <tr><td class="name">Add a new message</td><td>A case on <code>MessagePurpose</code> (+ <code>label()</code>, and <code>isPerEvent()</code> if it is per event), a row in the seeder, and the call site.</td></tr>
+                <tr><td class="name">Add an office screen</td><td>A view in <code>resources/js/admin/views</code>, a route with <code>meta.ability</code> in <code>admin/router.ts</code>, an entry in the <code>navigation</code> array in <code>AppLayout.vue</code>, and a controller under <code>Api/V1/Admin</code>.</td></tr>
+                <tr><td class="name">Add a customer portal screen</td><td>Same, but <code>resources/js/portal</code> and the <code>/my</code> children in <code>admin/router.ts</code>. It ships inside the admin bundle — see section 09.</td></tr>
+                <tr><td class="name">Add a public page</td><td><code>resources/js/site/views</code> + <code>site/router.ts</code>. Check the exclusion list in <code>routes/web.php</code> if the path collides.</td></tr>
+                <tr><td class="name">Change the home banner</td><td>Banners are records, not code: <code>Banner</code> model, managed in the office. Layout is <code>resources/js/site/BannerSlider.vue</code>.</td></tr>
+                <tr><td class="name">Change SEO</td><td>Settings screen. Rendered server-side by <code>resources/views/site.blade.php</code> — it must be server-side or a crawler will not see it.</td></tr>
+                <tr><td class="name">Change the policy pages</td><td>Settings screen, rich text. Shipped wording lives in <code>app/Support/Settings/PolicyText.php</code>.</td></tr>
+                <tr><td class="name">Change retention</td><td class="path">app/Console/Commands/PruneServiceHistory.php — currently fifty days, as the requirements document asks.</td></tr>
+                <tr><td class="name">Change a scheduled time</td><td class="path">routes/console.php. Read the comments first; the order is deliberate.</td></tr>
+                <tr><td class="name">Add a sortable column</td><td><code>app/Support/Http/SortsLists.php</code> — sorting is whitelisted, so an unlisted column is ignored rather than injected.</td></tr>
+                <tr><td class="name">Add a master type</td><td class="path">app/Support/Masters/MasterRegistry.php — the Masters screen builds itself from it.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 09</span>
+    <h2>The front end</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">9.1</div></div>
+    <div class="flow">
+        <h3>Two bundles</h3>
+        <div class="where"><b>vite.config.ts</b> — builds <code>site/main.ts</code> and <code>admin/main.ts</code> separately</div>
+        <p>A visitor reading the price list does not download the reports screen or the
+        masters form. The <strong>portal lives inside the admin bundle</strong> because it
+        needs the session and the auth store; it has its own layout and its own routes, and
+        the router keeps the two apart by role, not by ability:</p>
+
+<pre><code>if (auth.isCustomer !== (to.meta.customer === true)) return home;</code></pre>
+
+        <h3>Three URL spaces, one blade decision</h3>
+        <div class="where"><b>routes/web.php</b></div>
+<pre><code>Route::view('/login',        'app')-&gt;name('login.page');
+Route::view('/app/{any?}',   'app')-&gt;where('any', '.*')-&gt;name('app');
+Route::view('/my/{any?}',    'app')-&gt;where('any', '.*')-&gt;name('portal');
+
+Route::view('/{any?}', 'site')
+    -&gt;where('any', '^(?!api|sanctum|up|storage|login|app|my).*')
+    -&gt;name('site');</code></pre>
+
+        <div class="danger">
+            <span class="eyebrow">The trap</span>
+            <p>Any URL not in that exclusion list falls through to the <strong>public</strong>
+            bundle, whose catch-all route redirects to the home page. When <code>/my</code>
+            was missing here, every reload of a customer's page bounced them to the public
+            home page and it looked like a session bug. If you add a URL space, add it to
+            both the <code>Route::view</code> list <em>and</em> the negative lookahead.</p>
+        </div>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">9.2</div></div>
+    <div class="flow">
+        <h3>Where logic goes</h3>
+        <p>Not in <code>.vue</code> files. Anything with a decision in it — the signup
+        flow, row selection, the subscriptions API — is a <code>.ts</code> module beside
+        the views that use it (<code>site/signup.ts</code>,
+        <code>admin/shared/useRowSelection.ts</code>,
+        <code>admin/shared/subscriptions.api.ts</code>, <code>portal/portal.api.ts</code>,
+        <code>shared/api/checkout.ts</code>). A component binds and renders; it does not
+        decide.</p>
+
+        <div class="plain">
+            <p>This is applied to new work and to components as they are touched, not
+            retrospectively across all of them. A bulk extraction was attempted and reverted;
+            it broke 190 type checks in one go. Do it one component at a time, with the type
+            check green between each.</p>
+        </div>
+
+        <h3>Data fetching</h3>
+        <p>TanStack Query throughout, with the query key naming the thing and its filters.
+        Mutations invalidate rather than patching caches by hand. Axios lives in
+        <code>shared/api/client.ts</code> and carries the Sanctum cookie.</p>
+
+        <h3>Theme</h3>
+        <p>One set of CSS custom properties in <code>resources/css/app.css</code>, light
+        and dark, shared by both bundles. Use the token classes
+        (<code>bg-surface</code>, <code>text-ink</code>, <code>border-line</code>,
+        <code>text-accent</code>) rather than raw Tailwind colours, or the component will
+        be wrong in one of the two themes.</p>
+
+        <h3>Type checking</h3>
+<pre><code>npx vue-tsc --noEmit</code></pre>
+        <p>Run this rather than <code>npm run build</code> while working —
+        <code>npm run dev</code> is normally already running and a build fights it.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 10</span>
+    <h2>Conventions</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">10.1</div></div>
+    <div class="flow">
+        <table>
+            <thead><tr><th class="narrow">Rule</th><th>Detail</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td class="name">UUIDv7 keys</td>
+                    <td><code>BaseModel</code> brings <code>HasUuids</code>. Time-ordered, so they still index well, and an id in a URL reveals nothing about how many customers there are.</td>
+                </tr>
+                <tr>
+                    <td class="name">Integer paise</td>
+                    <td>Columns end <code>_paise</code>. No floats, no decimals, formatted only at the edge.</td>
+                </tr>
+                <tr>
+                    <td class="name">Soft deletes</td>
+                    <td>On <code>BaseModel</code>. Deleting hides; history stays joinable.</td>
+                </tr>
+                <tr>
+                    <td class="name">Audit columns</td>
+                    <td><code>HasAuditColumns</code> fills created-by and updated-by from the session.</td>
+                </tr>
+                <tr>
+                    <td class="name">Derived, not stored</td>
+                    <td>"Expired" is a date comparison, not a column somebody has to remember to update. Same for the order type and the plan's standing.</td>
+                </tr>
+                <tr>
+                    <td class="name">Append-only ledgers</td>
+                    <td>The cloth ledger is never edited. A correction is a new entry, and the weekly check proves the cached balance still matches the sum.</td>
+                </tr>
+                <tr>
+                    <td class="name">Sanitise on write</td>
+                    <td><code>Support/Content/HtmlSanitizer</code>, at the point of storing. Sanitising on read leaves the mess in the table for every future reader to remember to clean, and one that forgets is a hole.</td>
+                </tr>
+                <tr>
+                    <td class="name">Whitelist, do not blacklist</td>
+                    <td>Settings keys, sortable columns and master types are all allow-lists. Anything not on the list is dropped, not stored.</td>
+                </tr>
+                <tr>
+                    <td class="name">Enums for state</td>
+                    <td>Backed enums in <code>app/Enums</code>, cast on the model. No magic strings in controllers.</td>
+                </tr>
+                <tr>
+                    <td class="name">Comments say why</td>
+                    <td>The codebase is heavily commented and the comments explain reasoning, not mechanics. When you change behaviour a comment describes, change the comment in the same edit.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 11</span>
+    <h2>Tests</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">11.1</div></div>
+    <div class="flow">
+<pre><code>php artisan test                                  <span class="c"># all 303</span>
+php artisan test --filter=AddSecondCarTest        <span class="c"># one file</span>
+npx vue-tsc --noEmit                              <span class="c"># the front end</span></code></pre>
+
+        <h3>Why the suite is fast</h3>
+        <div class="where"><b>tests/Concerns/MigratesOnlyWhenStale.php</b></div>
+        <p>It hooks <code>setUpTraits()</code> and, when every migration on disk is already
+        recorded in the test database, sets <code>RefreshDatabaseState::$migrated = true</code>
+        so <code>migrate:fresh</code> is skipped. That took the suite from 217 seconds to
+        roughly forty-seven. Add a migration and the next run rebuilds automatically —
+        there is nothing to remember.</p>
+
+        <div class="plain">
+            <p><em>Both</em> a schema dump and paratest were tried before this and made the
+            suite <em>slower</em> — nine minutes. They are not the answer; do not reintroduce
+            them.</p>
+        </div>
+
+        <h3>The two tests that guard the rest</h3>
+        <table>
+            <thead><tr><th class="narrow">Test</th><th>Catches</th></tr></thead>
+            <tbody>
+                <tr><td class="path">Support/ClassNamesResolveTest</td><td>Walks <code>app/</code> and fails if any referenced class name will not resolve. It exists because a missing <code>use Log;</code> made complaint creation return 500 <em>after</em> successfully creating the complaint.</td></tr>
+                <tr><td class="path">BranchScopeTest</td><td>That the tenancy scope is still fail-closed.</td></tr>
+            </tbody>
+        </table>
+
+        <h3>Writing one</h3>
+        <ul>
+            <li><code>BranchContext::reset()</code> in both <code>setUp</code> and
+            <code>tearDown</code>. Leaked branch state makes an unrelated test fail later and
+            somewhere else.</li>
+            <li><code>fromSpa()</code> when the route needs the Origin header.</li>
+            <li>Assert reads through <code>BranchContext::withoutScope()</code>, or the scope
+            will hide the row you just created.</li>
+            <li>Any paying route gets a "price is not taken from the request" test.</li>
+        </ul>
+
+        <h3>What has no automated cover yet</h3>
+        <p>The cleaner app, the daily round and the reminder jobs. Worth knowing before you
+        change any of them.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 12</span>
+    <h2>Commands and the schedule</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">12.1</div></div>
+    <div class="flow">
+        <table>
+            <thead><tr><th class="narrow">Command</th><th>Does</th><th style="width:18%">Scheduled</th></tr></thead>
+            <tbody>
+                <tr><td class="path">eswachh:backup</td><td>Dumps the database, verifies it, prunes old copies. A failure raises a critical alert, not just a log line.</td><td>00:10, keep 14</td></tr>
+                <tr><td class="path">eswachh:reconcile-payments</td><td>Settles attempts that never came back from the gateway.</td><td>00:20, <code>--days=7</code></td></tr>
+                <tr><td class="path">eswachh:prune-service-history</td><td>Deletes cleaning records past the retention period.</td><td>00:40</td></tr>
+                <tr><td class="path">eswachh:send-renewal-reminders</td><td>Messages customers due or overdue.</td><td>09:30</td></tr>
+                <tr><td class="path">eswachh:hold-overdue</td><td>Puts long-overdue plans on hold.</td><td>10:00, <code>--grace=7</code></td></tr>
+                <tr><td class="path">eswachh:check-cloth-balances</td><td>Verifies cached balances against the ledger. Exits non-zero on a mismatch.</td><td>Mon 06:00</td></tr>
+                <tr><td class="path">eswachh:check-integrations</td><td>Reports whether payments and messaging are configured, and what is stopping them. <code>--ping</code> proves the key.</td><td>By hand</td></tr>
+                <tr><td class="path">eswachh:import</td><td>Imports from the v1 database.</td><td>By hand</td></tr>
+                <tr><td class="path">eswachh:backfill-invoice-numbers</td><td>Issues invoice numbers for captured payments that have none.</td><td>Called by the import</td></tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            <span class="eyebrow">The ordering is a design decision</span>
+            <p>Backup first, so a later job going wrong leaves a copy from before it did.
+            Settlement before reminders, so nobody is chased for money they already paid.
+            Holds last, so they act on a corrected picture. Pruning after the backup, so a
+            retention rule can never be the reason something is unrecoverable.</p>
+            <p>Every job is <code>withoutOverlapping</code>, <code>onOneServer</code> and
+            <code>runInBackground</code>. Keep all three on anything you add: an unattended
+            job that runs twice is worse than one that does not run at all.</p>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 13</span>
+    <h2>Bugs this codebase has already had</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">13.1</div></div>
+    <div class="flow">
+        <p class="lede">Each of these cost real time to find. They are recorded because
+        every one of them is easy to reintroduce.</p>
+
+        <h3>The timezone</h3>
+        <p>v1 ran on <code>Asia/Kolkata</code>; v2 started on UTC. Every imported
+        timestamp was mislabelled by five and a half hours, so date filters found nothing
+        and nobody could see why. <code>APP_TIMEZONE=Asia/Kolkata</code> is not a
+        preference.</p>
+
+        <h3>Sign-in codes that never expired</h3>
+        <p><code>login_codes.expires_at</code> was a MySQL <code>TIMESTAMP</code>, which
+        carries an implicit <code>ON UPDATE CURRENT_TIMESTAMP</code>. Every wrong guess
+        touched the row and pushed the expiry forward, so a code lived forever. Migration
+        <code>0001_01_01_000022</code> changes it to <code>DATETIME</code> and spends the
+        outstanding ones. <strong>Never use <code>TIMESTAMP</code> for an expiry.</strong></p>
+
+        <h3>The missing use statement</h3>
+        <p>A complaint was created and then the notification's own catch block threw,
+        because <code>Log</code> was not imported. The customer saw a 500 and the complaint
+        existed. <code>ClassNamesResolveTest</code> now walks <code>app/</code> and fails
+        on any name that will not resolve.</p>
+
+        <h3>Every portal reload going home</h3>
+        <p><code>/my/*</code> was not listed in <code>routes/web.php</code>, so it fell
+        through to the public bundle whose catch-all redirects home. Covered in section 09;
+        it was reported twice as a session bug before the cause was found.</p>
+
+        <h3>A cleared setting reverting to its default</h3>
+        <p><code>SiteSettings::read()</code> used <code>??</code>, which cannot tell a
+        stored <code>null</code> from a missing row. Emptying a policy page and saving
+        brought the shipped wording straight back, and looked like the save had failed. It
+        uses <code>array_key_exists</code> now.</p>
+
+        <h3>A settings cache that hid new settings</h3>
+        <p>The SEO fields were added and the site kept serving the fallback title until
+        somebody ran <code>cache:clear</code> by hand. The cache now rebuilds itself when
+        the number of definitions changes.</p>
+
+        <h3>Imported payments with no invoice number</h3>
+        <p>All 492 of them. <code>eswachh:backfill-invoice-numbers</code> exists for this
+        and the importer calls it.</p>
+
+        <h3>A dropdown clipped by its own container</h3>
+        <p>The plan list's action menu was cut off by an <code>overflow-x-auto</code>
+        ancestor. It is teleported to <code>&lt;body&gt;</code> with fixed positioning and
+        repositioned on scroll and resize. If you add a menu inside a scrolling table, do
+        the same.</p>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">13.2</div></div>
+    <div class="flow">
+        <h3>And one about tooling, not the app</h3>
+        <div class="danger">
+            <span class="eyebrow">Do not edit PHP through shell heredocs or node scripts</span>
+            <p>Passing PHP through a shell strips <code>$</code> sigils and <code>\</code>
+            namespace separators, silently producing <code>AppModelsPayment</code>,
+            <code>-&gt;actingAs(-&gt;owner)</code> and similar. This has caused real bugs in
+            this repository, including the missing-import one above. Edit files with an
+            editor.</p>
+        </div>
+
+        <h3>House rules for this repository</h3>
+        <ul>
+            <li><strong>Do not commit.</strong> The owner commits manually.</li>
+            <li><strong>Do not run <code>npm run build</code></strong> during development —
+            <code>npm run dev</code> is normally already running. Use
+            <code>npx vue-tsc --noEmit</code>.</li>
+            <li><strong>Finish the whole task, then run <code>php artisan test</code> once.</strong>
+            Not after each step.</li>
+        </ul>
+
+        <h3>Still open</h3>
+        <ul>
+            <li>Cloth count selectable while renewing on the <em>public</em> renew page.</li>
+            <li>Pending renewals and cloths-below-five as dedicated pages rather than saved
+            filters.</li>
+            <li>Society-wise WhatsApp targeting could be more direct than it is.</li>
+            <li>An "are you sure?" confirmation before a cleaner marks a car cleaned.</li>
+            <li>No automated tests for the cleaner app, the daily round or the reminders.</li>
+            <li>Five v1 orders (₹3,045) cannot be imported; their customers were deleted in v1.</li>
+            <li>Extracting logic out of the remaining <code>.vue</code> components — parked
+            by the owner, one of twenty-one done.</li>
+        </ul>
+    </div>
+</div>
+</section>
+
+</body>
+</html>

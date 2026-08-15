@@ -1,0 +1,1083 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Eswachh Operations Guide</title>
+<style>
+/* ---------------------------------------------------------------------------
+   Print-first. This file exists to be rendered to docs/admin-guide.pdf:
+
+       chrome --headless --disable-gpu --no-pdf-header-footer \
+              --print-to-pdf=docs/admin-guide.pdf docs/admin-guide.html
+
+   Edit the HTML, re-run that, commit both.
+--------------------------------------------------------------------------- */
+
+@page { size: A4; margin: 17mm 15mm 15mm; }
+
+:root {
+    --ink:      #1C1917;
+    --body:     #403B37;
+    --muted:    #78716C;
+    --faint:    #A8A29E;
+    --rule:     #E7E5E4;
+    --rule-2:   #D6D3D1;
+    --accent:   #EA580C;
+    --deep:     #9A3412;
+    --wash:     #FFF7ED;
+    --ok:       #15803D;
+    --ok-bg:    #F0FDF4;
+    --warn:     #B45309;
+    --warn-bg:  #FFFBEB;
+    --off:      #57534E;
+    --off-bg:   #F5F5F4;
+    --surface:  #FAFAF9;
+
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: "Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    --mono: Consolas, "SFMono-Regular", "Courier New", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+body {
+    margin: 0;
+    background: #FFFFFF;
+    color: var(--body);
+    font-family: var(--sans);
+    font-size: 10.2pt;
+    line-height: 1.58;
+}
+
+/* --- the left rail ------------------------------------------------------ */
+
+.sheet { display: grid; grid-template-columns: 22mm 1fr; column-gap: 8mm; }
+.rail { text-align: right; }
+.flow { min-width: 0; }
+
+.rail .num {
+    font-family: var(--mono);
+    font-size: 8pt;
+    letter-spacing: .06em;
+    color: var(--accent);
+    padding-top: .35em;
+}
+
+/* --- type --------------------------------------------------------------- */
+
+h1, h2, h3, h4 { color: var(--ink); text-wrap: balance; margin: 0; }
+
+h1 {
+    font-family: var(--serif);
+    font-size: 30pt;
+    line-height: 1.08;
+    letter-spacing: -.015em;
+    font-weight: 400;
+}
+
+h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 17pt;
+    line-height: 1.2;
+    letter-spacing: -.01em;
+}
+
+h3 {
+    font-family: var(--sans);
+    font-size: 11pt;
+    font-weight: 600;
+    letter-spacing: -.005em;
+    margin: 1.5em 0 .35em;
+}
+
+h4 {
+    font-family: var(--sans);
+    font-size: 9.4pt;
+    font-weight: 600;
+    margin: 1.2em 0 .25em;
+}
+
+p { margin: 0 0 .75em; }
+p.lede { font-size: 11.4pt; color: var(--body); }
+strong { color: var(--ink); font-weight: 600; }
+
+.eyebrow {
+    font-family: var(--sans);
+    font-size: 7.4pt;
+    font-weight: 600;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+/* --- sections ----------------------------------------------------------- */
+
+section { break-before: page; }
+section:first-of-type { break-before: auto; }
+
+.head { border-top: 2.5pt solid var(--accent); padding-top: 3mm; margin-bottom: 6mm; }
+.head .eyebrow { display: block; margin-bottom: 1.5mm; }
+
+ul, ol { margin: 0 0 .8em; padding-left: 1.15em; }
+li { margin-bottom: .3em; }
+li::marker { color: var(--faint); }
+
+/* --- chips -------------------------------------------------------------- */
+
+.chip {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    padding: .18em .5em;
+    border-radius: 2px;
+    vertical-align: .12em;
+    white-space: nowrap;
+}
+.chip.live   { color: var(--ok);   background: var(--ok-bg);   border: .5pt solid #BBF7D0; }
+.chip.hidden { color: var(--warn); background: var(--warn-bg); border: .5pt solid #FDE68A; }
+.chip.off    { color: var(--off);  background: var(--off-bg);  border: .5pt solid var(--rule-2); }
+
+/* --- tables ------------------------------------------------------------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin: 0 0 1em;
+    break-inside: auto;
+}
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+
+th {
+    text-align: left;
+    font-size: 7.4pt;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1pt solid var(--rule-2);
+    padding: 0 .7em .45em 0;
+    vertical-align: bottom;
+}
+td {
+    padding: .5em .7em .5em 0;
+    border-bottom: .5pt solid var(--rule);
+    vertical-align: top;
+}
+td:last-child, th:last-child { padding-right: 0; }
+th.narrow, td.narrow { width: 21%; }
+td.name { color: var(--ink); font-weight: 600; }
+.num-col { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+code {
+    font-family: var(--mono);
+    font-size: .88em;
+    background: var(--surface);
+    border: .5pt solid var(--rule);
+    border-radius: 2px;
+    padding: .05em .3em;
+    color: var(--deep);
+}
+
+/* --- boxes -------------------------------------------------------------- */
+
+.note {
+    break-inside: avoid;
+    background: var(--wash);
+    border-left: 2.5pt solid var(--accent);
+    padding: 3.5mm 4mm;
+    margin: 0 0 1em;
+    font-size: 9.4pt;
+}
+.note p:last-child { margin-bottom: 0; }
+.note .eyebrow { display: block; color: var(--deep); margin-bottom: 1mm; }
+
+.plain {
+    break-inside: avoid;
+    background: var(--surface);
+    border: .5pt solid var(--rule-2);
+    padding: 3.5mm 4mm;
+    margin: 0 0 1em;
+    font-size: 9.4pt;
+}
+.plain p:last-child, .plain ul:last-child { margin-bottom: 0; }
+
+/* --- cover -------------------------------------------------------------- */
+
+.cover { break-after: page; padding-top: 34mm; }
+.cover .bar { width: 26mm; height: 3pt; background: var(--accent); margin-bottom: 7mm; }
+.cover h1 { max-width: 135mm; }
+.cover .sub {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 13pt;
+    color: var(--muted);
+    margin: 4mm 0 0;
+    max-width: 120mm;
+}
+.cover dl {
+    margin: 30mm 0 0;
+    display: grid;
+    grid-template-columns: 30mm 1fr;
+    row-gap: 1.6mm;
+    font-size: 9pt;
+    max-width: 120mm;
+}
+.cover dt { color: var(--muted); font-size: 7.4pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; padding-top: .3em; }
+.cover dd { margin: 0; color: var(--ink); }
+
+/* --- contents ----------------------------------------------------------- */
+
+.toc { break-after: page; }
+.toc ol { list-style: none; padding: 0; margin: 6mm 0 0; counter-reset: toc; }
+.toc li {
+    display: grid;
+    grid-template-columns: 9mm 1fr;
+    column-gap: 3mm;
+    padding: 1.7mm 0;
+    border-bottom: .5pt solid var(--rule);
+    counter-increment: toc;
+    break-inside: avoid;
+}
+.toc li::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: var(--mono);
+    font-size: 8pt;
+    color: var(--accent);
+    padding-top: .15em;
+}
+.toc .t { color: var(--ink); font-weight: 600; font-size: 10pt; }
+.toc .d { color: var(--muted); font-size: 8.6pt; display: block; }
+
+/* --- flow diagram ------------------------------------------------------- */
+
+.steps { display: grid; gap: 0; margin: 0 0 1.2em; break-inside: avoid; }
+.step {
+    display: grid;
+    grid-template-columns: 6mm 1fr;
+    column-gap: 3.5mm;
+    padding: 2mm 0;
+    border-left: .5pt solid var(--rule-2);
+    margin-left: 2.5mm;
+    padding-left: 4mm;
+    position: relative;
+}
+.step::before {
+    content: "";
+    position: absolute;
+    left: -1.5mm;
+    top: 4.2mm;
+    width: 2.6mm;
+    height: 2.6mm;
+    border-radius: 50%;
+    background: var(--accent);
+}
+.step > span:first-child {
+    font-family: var(--mono);
+    font-size: 7.6pt;
+    color: var(--muted);
+    padding-top: .25em;
+}
+.step b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+    <div class="bar"></div>
+    <p class="eyebrow">Operations guide</p>
+    <h1>How Eswachh works, end to end</h1>
+    <p class="sub">Everything the platform does today, who can do it, what runs by
+    itself overnight, and what is built but deliberately switched off.</p>
+
+    <dl>
+        <dt>For</dt><dd>Owners, administrators, and anyone explaining the system to a client</dd>
+        <dt>Covers</dt><dd>The public site, the office, the customer portal and the cleaner's round</dd>
+        <dt>Companion</dt><dd>developer-guide.pdf, for how any of it is changed</dd>
+        <dt>Revised</dt><dd>15 August 2026</dd>
+    </dl>
+</div>
+
+<nav class="toc">
+    <div class="head">
+        <span class="eyebrow">Contents</span>
+        <h2>What is in this guide</h2>
+    </div>
+    <ol>
+        <li><div><span class="t">The shape of the thing</span><span class="d">Three doors into one system, and what a franchise is</span></div></li>
+        <li><div><span class="t">What a customer can do</span><span class="d">The four choices, and what each one sets off</span></div></li>
+        <li><div><span class="t">Inside a customer's account</span><span class="d">Plans, adding a second car, payments, complaints</span></div></li>
+        <li><div><span class="t">The office, screen by screen</span><span class="d">All seventeen pages and what each is for</span></div></li>
+        <li><div><span class="t">Who is allowed to do what</span><span class="d">Four roles, and custom roles for the rest</span></div></li>
+        <li><div><span class="t">Money</span><span class="d">How a price is worked out, and what counts as paid</span></div></li>
+        <li><div><span class="t">Messages</span><span class="d">All fifteen, when they fire, and the delivery switch</span></div></li>
+        <li><div><span class="t">What happens overnight</span><span class="d">Six jobs, and the order they run in</span></div></li>
+        <li><div><span class="t">Built, but switched off</span><span class="d">What is hidden today and what turning it on involves</span></div></li>
+        <li><div><span class="t">What you can change yourself</span><span class="d">Every setting, without needing a developer</span></div></li>
+        <li><div><span class="t">Keeping the data safe</span><span class="d">Backups, retention, and what a franchise cannot see</span></div></li>
+    </ol>
+</nav>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 01</span>
+    <h2>The shape of the thing</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">1.1</div></div>
+    <div class="flow">
+        <p class="lede">There is one system and one database. What changes is which
+        door you came in through, and each door shows a different building.</p>
+
+        <table>
+            <thead><tr><th class="narrow">Door</th><th>Address</th><th>Who uses it</th></tr></thead>
+            <tbody>
+                <tr><td class="name">The public site</td><td><code>/</code></td><td>Anybody. Prices, packages, advice articles, the team, questions, contact, and the signup and renewal forms.</td></tr>
+                <tr><td class="name">The office</td><td><code>/app</code></td><td>Administrators, franchise owners and cleaners. Everything operational.</td></tr>
+                <tr><td class="name">A customer's account</td><td><code>/my</code></td><td>Customers only. Their cars, their money, their complaints.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Signing in at <code>/login</code> sends a person to whichever of the last
+        two is theirs. Nobody chooses; the role decides. A customer who reaches an
+        office address is returned to their own pages, and the reverse is also true.</p>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">1.2</div></div>
+    <div class="flow">
+        <h3>Franchises</h3>
+        <p>The business is divided into <strong>branches</strong>, and every branch owns
+        a set of <strong>sectors</strong> — the societies and neighbourhoods it services.
+        A franchise owner sees their branch and nothing else: not another franchise's
+        customers, not their payments, not their complaints, not even the fact that
+        they exist. Asking for a record that belongs to another branch produces the same
+        answer as asking for one that was never created.</p>
+
+        <p>A franchise with several sectors needs no special treatment. Sectors are
+        assigned to a branch, so a franchise covering four societies simply has four
+        sectors attached. That assignment is made by an administrator, on the sector
+        record itself.</p>
+
+        <p>Only an <strong>administrator</strong> sees across every branch, and there is
+        a branch selector in the top bar for switching between them.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 02</span>
+    <h2>What a customer can do</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">2.1</div></div>
+    <div class="flow">
+        <p class="lede">Four things, and they are the four the requirements document
+        asks for. Everything else on the public site is reading material.</p>
+
+        <table>
+            <thead><tr><th class="narrow">Choice</th><th>What it does</th><th style="width:20%">Status</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td class="name">Subscribe</td>
+                    <td>A new customer takes out a plan on a car.</td>
+                    <td><span class="chip live">Live</span></td>
+                </tr>
+                <tr>
+                    <td class="name">Renew</td>
+                    <td>An existing customer extends a plan that is running out, by car number.</td>
+                    <td><span class="chip live">Live</span></td>
+                </tr>
+                <tr>
+                    <td class="name">Cloth top-up</td>
+                    <td>Buys more ironing cloths against a running plan.</td>
+                    <td><span class="chip hidden">Hidden</span></td>
+                </tr>
+                <tr>
+                    <td class="name">Raise a complaint</td>
+                    <td>Reports a problem, which reaches the cleaner the same minute.</td>
+                    <td><span class="chip live">Live</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            <span class="eyebrow">On the cloth service</span>
+            <p>It is built, tested and working on both sides — the customer's top-up
+            page, the cleaner's pickup and delivery screens, the balance ledger and the
+            low-balance warning. It is switched off business-wide while the business
+            decides whether to run it. Section 09 covers what turning it on involves.</p>
+        </div>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">2.2</div></div>
+    <div class="flow">
+        <h3>Subscribing, step by step</h3>
+
+        <div class="steps">
+            <div class="step"><span>01</span><div><b>They enter their mobile number</b> and we send a code to it. Nothing is created yet.</div></div>
+            <div class="step"><span>02</span><div><b>The code proves the number.</b> A number we already hold is turned away with an invitation to sign in — one person, one account.</div></div>
+            <div class="step"><span>03</span><div><b>They give their details and their car:</b> name, address, society, car number, model, package, how much interior cleaning, and for how long.</div></div>
+            <div class="step"><span>04</span><div><b>A price appears</b> as they choose. It is a quote for display only; the real figure is worked out again on our side when they pay.</div></div>
+            <div class="step"><span>05</span><div><b>They pay.</b> The plan is created as <em>pending</em> and a payment record is opened before the payment window appears, so an abandoned checkout still leaves something to chase.</div></div>
+            <div class="step"><span>06</span><div><b>The gateway confirms.</b> Only then does the plan become active. Two messages go out: a welcome to the customer, and an alert to the office that a new car needs a cleaner.</div></div>
+        </div>
+
+        <p>The new car now sits on the <strong>unassigned</strong> list until somebody
+        gives it to a cleaner. That list is the first thing the office sees.</p>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">2.3</div></div>
+    <div class="flow">
+        <h3>Renewing</h3>
+        <p>From the public site a customer types their car number, sees the plan and
+        what it will cost, and pays. From inside their account they press Renew on the
+        plan itself, and — as in the previous system — may change the package, the
+        amount of interior cleaning and the length before paying.</p>
+
+        <p>Changing any of those <strong>reprices the plan before the payment window
+        opens</strong>. A customer who switches from one month to six is charged for six.</p>
+
+        <p>A renewal extends from the current end date, not from today, so renewing early
+        never costs a customer the days they have already paid for.</p>
+
+        <h3>Raising a complaint</h3>
+        <p>A signed-in customer picks the plan, a category and a priority, and writes
+        what is wrong. The complaint is logged against the plan, and the cleaner
+        assigned to that car is messaged immediately. The office can hand it to somebody
+        else, mark it resolved, and close it — though closing is treated as the
+        customer's word to give, so a cleaner may resolve but not close.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 03</span>
+    <h2>Inside a customer's account</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">3.1</div></div>
+    <div class="flow">
+        <table>
+            <thead><tr><th class="narrow">Page</th><th>What it holds</th></tr></thead>
+            <tbody>
+                <tr><td class="name">My plans</td><td>Every car they have with us, what each is on, when it runs out, and the buttons to renew, add a car, or top up cloths.</td></tr>
+                <tr><td class="name">My payments</td><td>Everything they have paid, with an invoice they can open and print for each one.</td></tr>
+                <tr><td class="name">My complaints</td><td>What they have raised and where each one has got to.</td></tr>
+                <tr><td class="name">My details</td><td>Name, address, contact number, and changing their own password.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">3.2</div></div>
+    <div class="flow">
+        <h3>A household with two cars</h3>
+        <p>Adding a second car is done from <strong>My plans</strong>, not from the public
+        signup form. The form asks only for the car and what they want done to it: the
+        address, the society and the phone number are already known, and there is no
+        code to wait for, because being signed in is stronger proof than a code sent to a
+        phone.</p>
+
+        <p>Two refusals are deliberate, and both explain themselves:</p>
+        <ul>
+            <li>A car <strong>already registered to somebody else</strong> — checked across
+            every franchise, because a car on another branch's books is still taken.
+            Finding that out at the payment step would be far worse.</li>
+            <li>A car that <strong>already has a running plan</strong>, which is sent to
+            renew instead. Two live plans on one car would be billed twice and cleaned once.</li>
+        </ul>
+
+        <div class="note">
+            <span class="eyebrow">Why not the public form</span>
+            <p>The public signup form proves a mobile number with a code and then refuses
+            numbers it already holds. An existing customer using it would be told their own
+            number was taken. The account route is the only one that can work.</p>
+        </div>
+
+        <h3>What a signed-in customer no longer sees</h3>
+        <p><span class="chip hidden">Hidden</span> The <strong>Renew</strong> and
+        <strong>Subscribe</strong> buttons are not shown in the header to a customer who
+        is signed in. They do both from their own pages, where their details are already
+        filled in. Staff still see them, and the pages themselves are untouched and still
+        reachable by address.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 04</span>
+    <h2>The office, screen by screen</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">4.1</div></div>
+    <div class="flow">
+        <p class="lede">Nobody sees all of these. The menu is filtered by what the person
+        signed in is allowed to do, so a cleaner's menu is four items long and an
+        administrator's is seventeen.</p>
+
+        <table>
+            <thead><tr><th class="narrow">Screen</th><th>What it is for</th><th style="width:22%">Who sees it</th></tr></thead>
+            <tbody>
+                <tr><td class="name">Dashboard</td><td>Today at a glance: money taken, plans running, what is unassigned, what is overdue, what is open.</td><td>Everyone</td></tr>
+                <tr><td class="name">My round</td><td>The cleaner's list of cars for today. Each is marked cleaned, skipped or not found, with a note.</td><td>Cleaners, owners, admin</td></tr>
+                <tr><td class="name">Subscriptions</td><td>Every plan. Filter, search by car number, assign a cleaner, edit, renew, put on hold, act on many at once.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">Customers</td><td>The people. Their cars, their address, their history.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">Payments</td><td>Every payment with its own detail page, linked to the plan and the invoice it belongs to.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">Complaints</td><td>The queue. Assign, resolve, close, with the full trail of who did what.</td><td>Everyone but customers</td></tr>
+                <tr><td class="name">Cloths</td><td>Balances, pickups, deliveries, top-ups.</td><td>Owners, cleaners, admin <span class="chip hidden">Hidden</span></td></tr>
+                <tr><td class="name">Coverage</td><td>Who turned up, and which rounds went out.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">Messages</td><td>What has been sent and to whom, plus sending one by hand — including society by society over WhatsApp.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">Reports</td><td>Money, renewals, cloth balances, service history, over any period.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">People</td><td>Staff accounts. A franchise owner may create cleaners; only an administrator creates owners or other administrators.</td><td>Owners, admin</td></tr>
+                <tr><td class="name">Masters</td><td>The price list and the geography: cities, areas, societies, sectors, car categories and models, packages, service types, durations, cloth bundles.</td><td>Admin</td></tr>
+                <tr><td class="name">Blog</td><td>The advice articles on the public site, with categories, tags and comments.</td><td>Admin</td></tr>
+                <tr><td class="name">Settings</td><td>Everything in section 10.</td><td>Admin</td></tr>
+                <tr><td class="name">Logs</td><td>The application log, readable without a server login.</td><td>Admin</td></tr>
+                <tr><td class="name">Backups</td><td>Last night's database copy, downloadable, with one on demand.</td><td>Admin</td></tr>
+                <tr><td class="name">Roles</td><td>Custom roles — see section 05.</td><td>Admin only</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">4.2</div></div>
+    <div class="flow">
+        <h3>The three lists the day starts with</h3>
+        <p>The requirements document names three things the office should land on. All
+        three exist as saved filters on the Subscriptions screen, reachable in one click
+        from the dashboard:</p>
+        <ul>
+            <li><strong>Cars with no cleaner</strong> — every new plan lands here until
+            somebody is given it. This is the landing view.</li>
+            <li><strong>Renewals due</strong> — plans running out, and plans already past
+            their date.</li>
+            <li><strong>Cloths below five</strong> — customers about to run out.
+            <span class="chip hidden">Hidden with the cloth service</span></li>
+        </ul>
+
+        <h3>Editing a plan</h3>
+        <p>An administrator can edit the whole plan: the customer, the address and
+        society, the package, service type and duration, the dates, the amount, the
+        cleaner, the status, and the details of the payment that was taken against it
+        (method, reference, when it was paid, a note).</p>
+
+        <div class="note">
+            <span class="eyebrow">Two rules on this screen</span>
+            <p><strong>The car number can only be changed by an administrator.</strong>
+            Everyone else sees it as fixed. A franchise owner who edits a plan and
+            attempts to change the registration is told plainly that the change was not
+            applied, rather than being left to assume it was.</p>
+            <p><strong>The amount already paid is never editable.</strong> The plan's
+            price can be corrected; what a customer actually handed over cannot be
+            rewritten after the fact.</p>
+        </div>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">4.3</div></div>
+    <div class="flow">
+        <h3>The cleaner's day</h3>
+        <div class="steps">
+            <div class="step"><span>01</span><div><b>My round</b> lists every car assigned to them with a running plan, in society order.</div></div>
+            <div class="step"><span>02</span><div><b>Each car is marked</b> cleaned, skipped, or not found — with a note for anything other than cleaned.</div></div>
+            <div class="step"><span>03</span><div><b>Marking a car cleaned messages the customer</b> that their car has been done today.</div></div>
+            <div class="step"><span>04</span><div><b>Cloths are collected and returned</b> from the same screen, each movement messaging the customer and adjusting the balance. <span class="chip hidden">Hidden</span></div></div>
+            <div class="step"><span>05</span><div><b>Complaints on their cars</b> appear in their queue, and they can mark one resolved.</div></div>
+        </div>
+
+        <p>Daily cleaning records are kept for <strong>fifty days</strong> and then removed
+        automatically, as the requirements document asks. The nightly backup runs
+        <em>before</em> the removal, so every deleted record is in that night's copy — a
+        retention rule can never be the reason something is unrecoverable.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 05</span>
+    <h2>Who is allowed to do what</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">5.1</div></div>
+    <div class="flow">
+        <table>
+            <thead><tr><th class="narrow">Role</th><th>Sees</th><th>Can</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td class="name">Administrator</td>
+                    <td>Every branch</td>
+                    <td>Everything, including settings, masters, the blog, backups, roles, and changing a car number.</td>
+                </tr>
+                <tr>
+                    <td class="name">Franchise owner</td>
+                    <td>Their branch only</td>
+                    <td>Plans, customers, cars, staff, payments and receipts, the complaint queue, the round, attendance, cloths, reports. They create cleaners and customers, not owners or administrators.</td>
+                </tr>
+                <tr>
+                    <td class="name">Cleaner</td>
+                    <td>Their branch only</td>
+                    <td>Their round, what happened at each car, their own attendance, cloth movements, and resolving a complaint. They cannot close one.</td>
+                </tr>
+                <tr>
+                    <td class="name">Customer</td>
+                    <td>Their own records only</td>
+                    <td>Their plans, renewing, their payments and invoices, raising and reading their complaints, buying cloths.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>Being allowed to use a feature and being allowed to see a particular record
+        are separate questions, and the second is always answered by asking whose record
+        it is. A customer and a franchise owner both hold "view payments"; they see
+        entirely different payments.</p>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">5.2</div></div>
+    <div class="flow">
+        <h3>Custom roles</h3>
+        <p>Where the four above are not the right shape — a supervisor who runs the
+        round but must not touch money, an office assistant who answers complaints and
+        nothing else — an administrator can build a role on the Roles screen.</p>
+
+        <p>A custom role always <strong>refines</strong> one of the four: it starts from
+        that role's permissions and takes things away or adds from within what that role
+        could already do. It can never grant sight of another branch. That limit is not
+        a setting; there is no way to express it.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 06</span>
+    <h2>Money</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">6.1</div></div>
+    <div class="flow">
+        <h3>How a price is worked out</h3>
+        <p>Exactly as in the previous system, so historic amounts still reproduce:</p>
+
+        <div class="plain">
+            <p style="font-family:var(--mono); font-size:9pt; color:var(--ink); margin:0;">
+            ( car category + package + service type + society surcharge ) &times; months<br>
+            &nbsp;&nbsp;&minus; duration discount<br>
+            &nbsp;&nbsp;+ cloth bundle
+            </p>
+        </div>
+
+        <ul>
+            <li>The <strong>car</strong> is priced by its category, so every hatchback costs
+            the same whatever the badge says.</li>
+            <li>The <strong>society surcharge</strong> is per society, because a basement in
+            a tower block takes longer to reach than a house on a lane.</li>
+            <li>The <strong>duration discount</strong> is per duration, because committing to
+            six months is worth something.</li>
+            <li>The <strong>cloth bundle</strong> is added after the multiplication, because
+            it is a one-off purchase and not a monthly charge.</li>
+        </ul>
+
+        <p>All of these are edited on the Masters screen and take effect immediately.
+        Withdrawing a package from sale does not break the plans already on it; those
+        plans are flagged so somebody can move them, rather than being quietly
+        under-priced.</p>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">6.2</div></div>
+    <div class="flow">
+        <div class="note">
+            <span class="eyebrow">The two rules that are not negotiable</span>
+            <p><strong>No price ever comes from the browser.</strong> The figure a
+            customer sees is a quote and is thrown away; the amount charged is worked out
+            fresh on our side at the moment of charging. The previous system accepted
+            whatever price the browser posted back, checking only that it was at least one
+            rupee.</p>
+            <p><strong>Nothing is marked paid except a confirmed payment.</strong> Signup,
+            renewal and top-up all open a payment and stop. A plan becomes active only
+            after the gateway's signature has been verified and the gateway has confirmed
+            what it is holding.</p>
+        </div>
+
+        <h3>Cash and offline payments</h3>
+        <p>A franchise owner can record a payment taken in cash. That is recording money
+        that has already changed hands, not taking one — the amount still comes from the
+        plan, and who recorded it is kept.</p>
+
+        <h3>Invoices</h3>
+        <p>Every payment gets a numbered invoice, printable by both the office and the
+        customer. The prefix is a setting. The 492 payments carried over from the
+        previous system were numbered retrospectively so none is without one.</p>
+
+        <h3>Payments that never came back</h3>
+        <p>A customer who pays and then closes the browser before being redirected back
+        leaves a payment that looks unfinished. Every night the system asks the gateway
+        about the last seven days of these and settles the ones that did in fact go
+        through — before the morning's reminders go out, so nobody is chased for money
+        they have already handed over.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 07</span>
+    <h2>Messages</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">7.1</div></div>
+    <div class="flow">
+        <p class="lede">Fifteen messages. Twelve are the ones the requirements document
+        sets out; three more the previous system also sent for its own reasons. The
+        wording of every one is editable in the office, and both the automatic jobs and
+        anything sent by hand use the same edited wording.</p>
+
+        <table>
+            <thead><tr><th style="width:6%">#</th><th class="narrow">Message</th><th>Sent when</th><th style="width:17%">Goes to</th></tr></thead>
+            <tbody>
+                <tr><td class="num-col">1</td><td class="name">New plan started</td><td>A new plan is paid for</td><td>Customer</td></tr>
+                <tr><td class="num-col">2</td><td class="name">New plan, told the office</td><td>The same moment — a new car needs a cleaner</td><td>The office</td></tr>
+                <tr><td class="num-col">3</td><td class="name">Plan renewed</td><td>A renewal is paid for</td><td>Customer</td></tr>
+                <tr><td class="num-col">4</td><td class="name">Cloths topped up</td><td>A cloth top-up is paid for</td><td>Customer</td></tr>
+                <tr><td class="num-col">5</td><td class="name">Complaint raised</td><td>A customer raises a complaint</td><td>The assigned cleaner</td></tr>
+                <tr><td class="num-col">6</td><td class="name">Cleaner assigned</td><td>A car is given to a cleaner</td><td>Customer</td></tr>
+                <tr><td class="num-col">7</td><td class="name">A message of your own</td><td>Sent by hand from the Messages screen</td><td>Whoever is chosen</td></tr>
+                <tr><td class="num-col">8</td><td class="name">Cleaning done</td><td>A cleaner marks the car cleaned</td><td>Customer</td></tr>
+                <tr><td class="num-col">9</td><td class="name">Cloths collected</td><td>Cloths are picked up</td><td>Customer</td></tr>
+                <tr><td class="num-col">10</td><td class="name">Cloths returned</td><td>Cloths are delivered back</td><td>Customer</td></tr>
+                <tr><td class="num-col">11</td><td class="name">Renewal due</td><td>Nightly, as the end date approaches</td><td>Customer</td></tr>
+                <tr><td class="num-col">11</td><td class="name">Renewal overdue</td><td>Nightly, once the date has passed</td><td>Customer</td></tr>
+                <tr><td class="num-col">12</td><td class="name">Cloths running low</td><td>The balance falls below the threshold</td><td>Customer</td></tr>
+                <tr><td class="num-col">&mdash;</td><td class="name">Plan paused</td><td>A plan is put on hold for being unpaid</td><td>Customer</td></tr>
+                <tr><td class="num-col">&mdash;</td><td class="name">Payment received</td><td>A payment is confirmed</td><td>Customer</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">7.2</div></div>
+    <div class="flow">
+        <h3>Nobody gets told the same thing twice</h3>
+        <p>Reminders are kept to one per customer per day, however many times a job runs.
+        Messages about a specific event — a car cleaned, a payment taken — are keyed to
+        that event instead, so a household with two cars correctly gets one message for
+        each.</p>
+
+        <h3>The delivery switch</h3>
+        <div class="note">
+            <span class="eyebrow">Important for demonstrations</span>
+            <p>Messages only actually leave the building when the system is running as
+            the live site <em>and</em> delivery is switched on. Anywhere else — a test
+            copy, a demonstration, a developer's machine — every message is written to
+            the record exactly as it would have been sent, with the reason it was held
+            back, and nothing reaches a customer's phone.</p>
+            <p>This means a demonstration can be given against real data without a single
+            customer being messaged, and the Messages screen will still show precisely
+            what would have gone out.</p>
+        </div>
+
+        <h3>Society by society</h3>
+        <p>The Messages screen can send to everybody in a chosen society over WhatsApp —
+        for a price change, a holiday, or a note about the water supply.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 08</span>
+    <h2>What happens overnight</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">8.1</div></div>
+    <div class="flow">
+        <p class="lede">Six jobs, and the order matters. Each runs on one server only and
+        never twice at once, because an unattended job that runs twice is worse than one
+        that does not run at all.</p>
+
+        <table>
+            <thead><tr><th style="width:14%">Time</th><th class="narrow">Job</th><th>What it does, and why then</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td class="num-col">00:10</td>
+                    <td class="name">Back up</td>
+                    <td>Copies and verifies the database. First of the lot on purpose: if a later job goes wrong, this copy is from before it did. Keeps fourteen days. A failure raises an alert rather than only writing to a log.</td>
+                </tr>
+                <tr>
+                    <td class="num-col">00:20</td>
+                    <td class="name">Settle payments</td>
+                    <td>Asks the gateway about the last seven days of unfinished payments. Nothing else will ever settle these; the browser that would have told us is long closed.</td>
+                </tr>
+                <tr>
+                    <td class="num-col">00:40</td>
+                    <td class="name">Clear old rounds</td>
+                    <td>Removes daily cleaning records older than fifty days. After the backup, so the night's copy always contains what is about to go.</td>
+                </tr>
+                <tr>
+                    <td class="num-col">09:30</td>
+                    <td class="name">Renewal reminders</td>
+                    <td>Chases plans running out and plans overdue. After settlement, so a customer who paid last night is not chased for it.</td>
+                </tr>
+                <tr>
+                    <td class="num-col">10:00</td>
+                    <td class="name">Pause the unpaid</td>
+                    <td>Puts plans a week past their date on hold. Last, so it acts on a picture that settlement has corrected and the customer has already been reminded about.</td>
+                </tr>
+                <tr>
+                    <td class="num-col">Mon 06:00</td>
+                    <td class="name">Check cloth balances</td>
+                    <td>Weekly, and silent unless a balance and its ledger disagree.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>The grace period before pausing, and the cloth warning threshold, are both
+        settings — see section 10.</p>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 09</span>
+    <h2>Built, but switched off</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">9.1</div></div>
+    <div class="flow">
+        <p class="lede">Nothing here is missing or half-finished. Each is complete and
+        tested, and hidden because the business asked for it to be. This is the section
+        to read out when a client asks "what about…".</p>
+
+        <h3><span class="chip hidden">Hidden</span> The cloth ironing service</h3>
+        <p><strong>What exists:</strong> the customer's top-up page and the top-up button
+        on each plan; the cloth choice on the signup and renewal forms; the cleaner's
+        pickup and delivery screens; a balance held as an append-only ledger; the
+        below-five warning list; the low-balance message; the weekly consistency check;
+        and cloth bundles on the price list.</p>
+        <p><strong>What being off does:</strong> hides the top-up page, the cloth screens
+        and the cloth choice on the forms. It does not touch a single existing balance or
+        ledger entry.</p>
+        <p><strong>To turn it on:</strong> Settings &rarr; Service &rarr; <em>Offer the
+        cloth ironing service</em>. Everything resumes exactly where it left off.</p>
+
+        <h3><span class="chip hidden">Hidden</span> Renew and Subscribe for signed-in customers</h3>
+        <p>Not shown in the header to a customer who is already signed in, because they
+        do both from their own pages. Staff still see them; the pages still work by
+        address. Reversing this is a one-line change and the developer guide says where.</p>
+
+        <h3><span class="chip hidden">Hidden</span> Cloth top-up in the header</h3>
+        <p>Moved to sit beside the plan it tops up. Somebody thinking about cloths is
+        looking at their car, not at a navigation bar. The page and its address are
+        unchanged.</p>
+    </div>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">9.2</div></div>
+    <div class="flow">
+        <h3><span class="chip off">Off by default</span> Only administrators may change a plan</h3>
+        <p>A business-wide switch, for when franchises should stop altering what
+        customers are on. It never restricts an administrator — somebody has to be able
+        to correct a plan, and if this locked everyone out the only way back would be the
+        database.</p>
+        <p>There is a finer answer as well: a custom role can take plan editing away from
+        one franchise. Use the switch when the policy is "nobody but the office, everywhere,
+        from today", because expressing that by editing each franchise's role one at a
+        time is how one gets missed.</p>
+
+        <h3><span class="chip off">Off by default</span> Live payments and live messaging</h3>
+        <p>Both the payment gateway and WhatsApp delivery are switched off until the
+        credentials are in place on the live server. This is what makes it safe to run a
+        copy of the system against real data.</p>
+
+        <h3><span class="chip live">On by default</span> Let search engines list this site</h3>
+        <p>On for the real site; switch it off on any staging copy, or that copy will
+        compete with the real site for its own name in search results.</p>
+
+        <h3>Things the requirements document asks for that are not yet built</h3>
+        <ul>
+            <li>Choosing the number of cloths while renewing on the <em>public</em> renew
+            page. Inside the account it is already there.</li>
+            <li>Pending renewals and cloths-below-five as pages of their own rather than
+            saved filters. The information is all present; only the shortcut differs.</li>
+            <li>An "are you sure?" step before a cleaner marks a car cleaned.</li>
+        </ul>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 10</span>
+    <h2>What you can change yourself</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">10.1</div></div>
+    <div class="flow">
+        <p class="lede">Settings &rarr; everything below. No developer, no release, no
+        downtime. Nothing secret lives here: gateway keys and access tokens are kept on
+        the server, where they are not in a database copy an administrator can download.</p>
+
+        <table>
+            <thead><tr><th class="narrow">Group</th><th>Setting</th><th style="width:26%">Default</th></tr></thead>
+            <tbody>
+                <tr><td class="name" rowspan="4">Business</td><td>Business name</td><td>Eswachh</td></tr>
+                <tr><td>Registered name</td><td>&mdash;</td></tr>
+                <tr><td>GSTIN</td><td>&mdash;</td></tr>
+                <tr><td>Address</td><td>&mdash;</td></tr>
+
+                <tr><td class="name" rowspan="4">Contact</td><td>Phone</td><td>&mdash;</td></tr>
+                <tr><td>Email</td><td>&mdash;</td></tr>
+                <tr><td>WhatsApp number</td><td>&mdash;</td></tr>
+                <tr><td>Office hours</td><td>9am to 6pm, Mon&ndash;Sat</td></tr>
+
+                <tr><td class="name" rowspan="2">Billing</td><td>Invoice prefix</td><td>ESW</td></tr>
+                <tr><td>Invoice footer note</td><td>&mdash;</td></tr>
+
+                <tr><td class="name" rowspan="5">Service</td><td>Days overdue before pausing</td><td>7</td></tr>
+                <tr><td>Warn when cloths fall below</td><td>5</td></tr>
+                <tr><td>Number for new plan alerts</td><td>&mdash;</td></tr>
+                <tr><td>Only administrators may change a plan</td><td>Off</td></tr>
+                <tr><td>Offer the cloth ironing service</td><td>Off</td></tr>
+
+                <tr><td class="name" rowspan="5">Search &amp; sharing</td><td>Page title</td><td>Eswachh · Doorstep car cleaning, every day</td></tr>
+                <tr><td>Description</td><td>Set</td></tr>
+                <tr><td>Keywords</td><td>Set</td></tr>
+                <tr><td>Sharing image</td><td>&mdash;</td></tr>
+                <tr><td>Let search engines list this site</td><td>On</td></tr>
+
+                <tr><td class="name" rowspan="3">Policies</td><td>Privacy policy</td><td>Written, editable</td></tr>
+                <tr><td>Terms of service</td><td>Written, editable</td></tr>
+                <tr><td>Cancellation and refunds</td><td>Written, editable</td></tr>
+            </tbody>
+        </table>
+
+        <p>The three policy pages are edited with a formatting toolbar and appear in the
+        footer of the public site. A payment gateway will not approve a business whose
+        site cannot show them, and a customer should not have to ask.</p>
+
+        <h3>The search and sharing settings</h3>
+        <p>These are what a search engine lists and what appears when somebody pastes a
+        link into WhatsApp. They are written into the page by the server, not added
+        afterwards by the browser, which is the only way a search engine reliably reads
+        them.</p>
+
+        <h3>Elsewhere, not in Settings</h3>
+        <ul>
+            <li><strong>The home page banner</strong> — images, headings and the button on
+            each, managed as its own list. The image runs the full width of the page.</li>
+            <li><strong>Prices and geography</strong> — the Masters screen.</li>
+            <li><strong>Message wording</strong> — the Messages screen.</li>
+            <li><strong>Advice articles, the team, and questions</strong> — their own screens.</li>
+        </ul>
+    </div>
+</div>
+</section>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Section 11</span>
+    <h2>Keeping the data safe</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">11.1</div></div>
+    <div class="flow">
+        <h3>Backups</h3>
+        <p>Taken every night at ten past midnight, before anything else touches the
+        database, verified after being written, and kept for fourteen days. They are
+        listed on the Backups screen where an administrator can download one or take
+        another on demand. A failed backup raises an alert on the bell in the top bar,
+        because a backup quietly failing for three months is how a restore turns out to
+        be impossible on the day it is needed.</p>
+
+        <h3>What is kept, and for how long</h3>
+        <table>
+            <thead><tr><th class="narrow">Record</th><th>Kept</th></tr></thead>
+            <tbody>
+                <tr><td class="name">Daily cleaning records</td><td>Fifty days, then removed automatically</td></tr>
+                <tr><td class="name">Payments and invoices</td><td>Indefinitely</td></tr>
+                <tr><td class="name">Plans, customers, cars</td><td>Indefinitely. Deleting hides rather than erases, so history stays intact</td></tr>
+                <tr><td class="name">Messages sent</td><td>Indefinitely</td></tr>
+                <tr><td class="name">Cloth ledger</td><td>Indefinitely, and never edited &mdash; corrections are new entries</td></tr>
+                <tr><td class="name">Backups</td><td>Fourteen days</td></tr>
+            </tbody>
+        </table>
+
+        <h3>What a franchise cannot see</h3>
+        <p>Branch separation is enforced at the point every query is made, not by
+        remembering to filter each screen. It is closed by default: a query that has not
+        been told which branch it belongs to returns nothing rather than everything. A
+        record belonging to another branch produces the same response as one that does
+        not exist, so refusing an answer never confirms that there was something to
+        refuse.</p>
+
+        <h3>Signing in</h3>
+        <p>Every account carried over from the previous system — customers, franchises
+        and administrators — signs in with the credentials they already had. Customers
+        can sign in with a code sent to their phone instead. Those codes expire, and a
+        wrong guess does not extend one.</p>
+    </div>
+</div>
+
+<div class="sheet" style="margin-top:10mm;">
+    <div class="rail"></div>
+    <div class="flow">
+        <div class="plain">
+            <p style="margin:0;"><strong>Where to go next.</strong> Anything in this guide
+            that needs changing — a flag flipped, wording altered, a rule adjusted — is
+            covered in <em>developer-guide.pdf</em>, beside this file, which names the exact
+            file and line for each.</p>
+        </div>
+    </div>
+</div>
+</section>
+
+</body>
+</html>

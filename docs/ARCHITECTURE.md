@@ -1,5 +1,9 @@
 # How this code is arranged
 
+> This is the short version. [`developer-guide.pdf`](developer-guide.pdf)
+> beside this file covers the same ground plus every flag, what to edit for a
+> given change, and the bugs this codebase has already had.
+
 Everything is filed by **who it is for**, not by what kind of file it is. There
 are three audiences and one shared middle, and the same four names appear on
 both sides of the wire.
@@ -48,6 +52,22 @@ two apart by role, not by ability:
 if (auth.isCustomer !== (to.meta.customer === true)) return home;
 ```
 
+Which shell a URL gets is decided once, in `routes/web.php`:
+
+```php
+Route::view('/app/{any?}', 'app')->where('any', '.*');
+Route::view('/my/{any?}',  'app')->where('any', '.*');
+
+Route::view('/{any?}', 'site')
+    ->where('any', '^(?!api|sanctum|up|storage|login|app|my).*');
+```
+
+Anything not excluded there falls through to the **public** bundle, whose
+catch-all redirects to the home page. When `/my` was missing from that list,
+every reload of a customer's page bounced them home and it looked like a session
+bug. A new URL space has to be added in both places: its own `Route::view`, and
+the negative lookahead.
+
 ## Where logic goes
 
 Not in `.vue` files. Anything with a decision in it — the signup flow, row
@@ -56,6 +76,11 @@ it (`site/signup.ts`, `admin/shared/useRowSelection.ts`,
 `admin/shared/subscriptions.api.ts`, `portal/portal.api.ts`). A component binds
 and renders; it does not decide.
 
+This applies to new work and to components as they are touched, not
+retrospectively to all of them at once. A bulk extraction was attempted and
+reverted — it broke 190 type checks in a single pass. One component at a time,
+with `vue-tsc` green in between.
+
 ## Two rules that are not negotiable
 
 **No amount ever comes from a request.** Every price is worked out from the
@@ -63,10 +88,29 @@ masters by `Domain\Pricing\PriceBook`, on the server, at the moment it is
 charged. The figure the browser shows is a quote and is thrown away. The
 previous system read `final_price` from the form.
 
-**Nothing is marked paid except a verified callback.** Signup, renewal and
-top-up all open a payment and stop. `Domain\Billing\RecordPayment` moves it, and
-only after the Razorpay signature checks out and the gateway confirms what it
-holds.
+**Nothing is marked paid except a verified callback.** Signup, renewal, top-up
+and add-a-car all open a payment and stop. `Domain\Billing\RecordPayment` moves
+it, and only after the Razorpay signature checks out and the gateway confirms
+what it holds.
+
+## Where a switch lives
+
+Three kinds, and which one a thing belongs to is a design decision, not a
+preference.
+
+| Kind | For | Where |
+|---|---|---|
+| Environment | Credentials, and anything that differs per server | `.env` — `RAZORPAY_ENABLED`, `WHATSAPP_ENABLED`, `APP_TIMEZONE` |
+| Setting | Anything the business should change without a release | `Support\Settings\SiteSettings::definitions()`, edited on the Settings screen |
+| A condition in code | What the business asked to hide | Named, commented, and left reversible in one line |
+
+Nothing secret goes in settings. Gateway keys and tokens stay in `.env`, where
+they are not inside a database dump an administrator can download from the
+Backups screen.
+
+Currently off: `cloth_service_enabled` (the whole cloth ironing service, built
+and tested on both sides), `lock_plan_edits_to_admin`, and both integrations.
+The full list is section 07 of the developer guide.
 
 ## Adding a route
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Shared\PricingController;
 use App\Http\Controllers\Api\V1\Shared\RenewalController;
 use App\Http\Controllers\Api\V1\Site\BlogController;
 use App\Http\Controllers\Api\V1\Site\CatalogueController;
+use App\Http\Controllers\Api\V1\Site\ClothTopUpController;
 use App\Http\Controllers\Api\V1\Site\SignupController;
 use Illuminate\Support\Facades\Route;
 
@@ -66,6 +67,10 @@ Route::middleware('throttle:120,1')->prefix('public')->group(function () {
      */
     Route::post('signup/code', [SignupController::class, 'requestCode'])->middleware('throttle:10,5');
     Route::post('signup', [SignupController::class, 'store'])->middleware('throttle:10,5');
+
+    // Topping up cloths by quoting a car number, as v1 had it.
+    Route::post('cloth/lookup', [ClothTopUpController::class, 'lookup'])->middleware('throttle:10,5');
+    Route::post('cloth/pay', [ClothTopUpController::class, 'pay'])->middleware('throttle:10,5');
 
     Route::post('renew/lookup', [RenewalController::class, 'lookup'])->middleware('throttle:10,5');
     Route::post('renew/pay', [RenewalController::class, 'payWithoutSigningIn'])->middleware('throttle:10,5');

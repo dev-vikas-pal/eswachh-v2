@@ -86,3 +86,15 @@ Schedule::command('eswachh:backup --keep=14')
     ->dailyAt('00:10')
     ->withoutOverlapping()
     ->onOneServer();
+
+/*
+ * Fifty days of daily cleaning records, as the requirements document asks for.
+ *
+ * Runs after the backup, deliberately: the night's backup therefore always
+ * contains the data that is about to be deleted, so a retention rule can never
+ * be the reason something is unrecoverable.
+ */
+Schedule::command('eswachh:prune-service-history')
+    ->dailyAt('00:40')
+    ->withoutOverlapping()
+    ->onOneServer();

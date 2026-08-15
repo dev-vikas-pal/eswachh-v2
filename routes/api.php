@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Admin\AlertController;
 use App\Http\Controllers\Api\V1\Admin\BackupController;
+use App\Http\Controllers\Api\V1\Admin\ClothController;
 use App\Http\Controllers\Api\V1\Admin\ComplaintController;
 use App\Http\Controllers\Api\V1\Admin\CustomerController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
@@ -16,8 +17,10 @@ use App\Http\Controllers\Api\V1\Admin\SiteSettingsController;
 use App\Http\Controllers\Api\V1\Admin\SubscriptionActionController;
 use App\Http\Controllers\Api\V1\Admin\SubscriptionBulkController;
 use App\Http\Controllers\Api\V1\Admin\SubscriptionEditController;
+use App\Http\Controllers\Api\V1\Admin\UploadController;
 use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\Admin\VehicleController;
+use App\Http\Controllers\Api\V1\Portal\AddPlanController;
 use App\Http\Controllers\Api\V1\Portal\PortalController;
 use App\Http\Controllers\Api\V1\Shared\AccountController;
 use App\Http\Controllers\Api\V1\Shared\AuthController;
@@ -104,6 +107,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('roles/{role}', [RoleController::class, 'destroy']);
     Route::post('users/{user}/role', [RoleController::class, 'assign']);
 
+    // Uploading a picture for a banner, the team page or a post.
+    Route::post('uploads', [UploadController::class, 'store']);
+
     // The application log, a day at a time. Administrator only: logs carry
     // phone numbers and payment references.
     Route::get('logs', [LogController::class, 'index']);
@@ -124,6 +130,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('portal/overview', [PortalController::class, 'overview']);
     Route::get('portal/payments', [PortalController::class, 'payments']);
     Route::patch('portal/profile', [PortalController::class, 'updateProfile']);
+
+    // A second car for somebody who already has an account. No code step: they
+    // are signed in, which proves more than a code sent to a phone does.
+    Route::post('portal/plans', [AddPlanController::class, 'store']);
 
     // Your own interface settings. Always yours: there is no user id here.
     Route::get('me/settings', [SettingsController::class, 'show']);
@@ -213,6 +223,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('round/vehicles/{vehicle}', [RoundController::class, 'recordService']);
     Route::post('round/vehicles/{vehicle}/cloth', [RoundController::class, 'recordCloth']);
     Route::get('cloth-movements', [RoundController::class, 'clothLedger']);
+
+    // The two cloth screens the requirements document asks for: collect a car
+    // at a time, deliver from a list ordered by society.
+    Route::post('cloth/lookup', [ClothController::class, 'lookup']);
+    Route::get('cloth/outstanding', [ClothController::class, 'outstanding']);
     Route::post('attendance', [RoundController::class, 'markAttendance']);
     Route::get('attendance/coverage', [RoundController::class, 'coverage']);
 
