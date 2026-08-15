@@ -124,6 +124,32 @@ class ComplaintController extends Controller
         );
     }
 
+    /**
+     * What a complaint can be about, and how urgent it can be.
+     *
+     * Served rather than hard-coded in the front end, so the enum exists once.
+     * A category added here appears on the form without a second edit, and a
+     * category removed cannot be posted by a stale page.
+     */
+    public function options(): JsonResponse
+    {
+        $this->authorize('view.complaint');
+
+        return response()->json([
+            'data' => [
+                'categories' => array_map(fn (ComplaintCategory $c) => [
+                    'value' => $c->value,
+                    'label' => $c->label(),
+                ], ComplaintCategory::cases()),
+
+                'priorities' => array_map(fn (ComplaintPriority $p) => [
+                    'value' => $p->value,
+                    'label' => $p->label(),
+                ], ComplaintPriority::cases()),
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

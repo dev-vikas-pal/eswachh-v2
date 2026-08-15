@@ -51,7 +51,7 @@ class UserController extends Controller
          * somebody create a customer with no address and no vehicle.
          */
         $query = User::query()
-            ->with('branch')
+            ->with('branch', 'customRole')
             ->where('role', '!=', UserRole::Customer);
 
         /*
@@ -321,6 +321,20 @@ class UserController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'role' => ['value' => $user->role?->value, 'label' => $user->role?->label()],
+            /*
+             * The role the business defined, if this account has one. Sent as
+             * well as the built-in role rather than instead of it: the built-in
+             * one still decides branch scoping, so hiding it would make the
+             * People screen unable to explain what somebody can see.
+             */
+            'custom_role' => $user->relationLoaded('customRole') && $user->customRole
+                ? [
+                    'id' => $user->customRole->id,
+                    'name' => $user->customRole->name,
+                    'status' => $user->customRole->status,
+                ]
+                : null,
+            'custom_role_id' => $user->custom_role_id,
             'branch' => $user->branch ? ['id' => $user->branch->id, 'name' => $user->branch->name] : null,
             'status' => (bool) $user->status,
             // Access removed, as opposed to switched off. Different things:

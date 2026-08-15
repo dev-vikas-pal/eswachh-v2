@@ -688,6 +688,19 @@ class ImportLegacyData extends Command
             );
         }
 
+        /*
+         * Imported payments arrive already captured, so they never pass the
+         * point where a number is normally issued. Without this every one of
+         * them has a blank invoice column: no receipt can be printed, and the
+         * payments screen shows a dash where a number belongs.
+         *
+         * Run as its own command so it can also be used on a database that was
+         * imported before this existed.
+         */
+        if (! $this->dryRun) {
+            $this->call('eswachh:backfill-invoice-numbers');
+        }
+
         return true;
     }
 

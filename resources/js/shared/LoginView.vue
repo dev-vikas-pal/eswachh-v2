@@ -4,6 +4,7 @@ import { LOGO } from '@/shared/branding';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/shared/stores/auth';
 import { describeError, type ValidationErrors } from '@/shared/api/client';
+import { useCodeCooldown } from '@/shared/useCodeCooldown';
 
 /**
  * Two ways in, because there are two kinds of person signing in here.
@@ -27,6 +28,9 @@ const remember = ref(false);
 const phone = ref('');
 const code = ref('');
 const codeSent = ref(false);
+
+/** Stops a slow message turning into four spent codes. */
+const cooldown = useCodeCooldown();
 
 const busy = ref(false);
 const message = ref('');
@@ -69,6 +73,7 @@ const submit = () => run(async () => {
 const sendCode = () => run(async () => {
     await auth.requestCode(phone.value);
     codeSent.value = true;
+    cooldown.start();
     // Worded so it is true whether or not the number is on our books: the
     // form must not be usable to find out who is a customer.
     notice.value = 'If that number is on our books, a code is on its way. It lasts five minutes.';
@@ -200,14 +205,29 @@ const signInWithCode = () => run(async () => {
                         {{ busy ? 'Please wait…' : codeSent ? 'Sign in' : 'Send me a code' }}
                     </button>
 
-                    <button
-                        v-if="codeSent"
-                        type="button"
-                        class="mt-3 w-full text-center text-xs text-muted underline hover:text-ink"
-                        @click="codeSent = false; code = ''; notice = ''"
-                    >
-                        Use a different number
-                    </button>
+                    <div v-if="codeSent" class="mt-3 flex flex-wrap items-center justify-center gap-3 text-xs">
+                        <!--
+                            Disabled rather than hidden while it counts down, so
+                            it is obvious the option exists and simply is not
+                            ready - a button that vanishes reads as a bug.
+                        -->
+                        <button
+                            type="button"
+                            class="text-accent underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+                            :disabled="busy || cooldown.remaining.value > 0"
+                            @click="sendCode"
+                        >
+                            {{ cooldown.remaining.value > 0 ? `Resend in ${cooldown.remaining.value}s` : 'Send it again' }}
+                        </button>
+
+                        <button
+                            type="button"
+                            class="text-muted underline hover:text-ink"
+                            @click="codeSent = false; code = ''; notice = ''; cooldown.stop()"
+                        >
+                            Use a different number
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

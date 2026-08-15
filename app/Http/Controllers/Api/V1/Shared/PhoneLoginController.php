@@ -105,7 +105,13 @@ class PhoneLoginController extends Controller
      */
     private function throttle(Request $request, string $phone): void
     {
-        foreach (['otp:phone:'.$phone => 3, 'otp:ip:'.$request->ip() => 10] as $key => $limit) {
+        /*
+         * Five per number, not three. Asking again is a supported thing to do -
+         * there is a Send it again button - and a message that arrives slowly
+         * is exactly when somebody presses it twice. Three left an honest
+         * person locked out for ten minutes.
+         */
+        foreach (['otp:phone:'.$phone => 5, 'otp:ip:'.$request->ip() => 15] as $key => $limit) {
             if (RateLimiter::tooManyAttempts($key, $limit)) {
                 throw ValidationException::withMessages([
                     'phone' => 'Too many requests. Try again in '.RateLimiter::availableIn($key).' seconds.',

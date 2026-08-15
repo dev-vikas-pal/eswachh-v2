@@ -3,9 +3,17 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Tests\Concerns\MigratesOnlyWhenStale;
 
 abstract class TestCase extends BaseTestCase
 {
+    /*
+     * Skips the two and a half minute rebuild when the test database already
+     * has every migration. Isolation is unchanged - each test still runs in a
+     * transaction that is rolled back.
+     */
+    use MigratesOnlyWhenStale;
+
     /**
      * Make the next request look like it came from the SPA.
      *

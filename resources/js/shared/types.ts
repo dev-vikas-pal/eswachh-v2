@@ -36,6 +36,8 @@ export interface AuthUser {
 }
 
 export interface DashboardData {
+    /** The only block a date range applies to. */
+    period: { from: string; to: string; revenue_paise: number; payments: number; new_plans: number };
     subscriptions: {
         active: number;
         current: number;
@@ -71,6 +73,22 @@ export interface Subscription {
     };
     customer?: { id: string; name: string; phone: string | null };
     package?: string | null;
+    /**
+     * The most recent payment against this plan.
+     *
+     * One payment, not the list: a plan renewed six times has six, and sending
+     * all of them on every row of a paginated list to show the newest would be
+     * waste. The rest are a click away.
+     */
+    last_payment?: {
+        id: string;
+        invoice_number: string | null;
+        amount: number;
+        method: string | null;
+        paid_at: string | null;
+        order_type: 'online' | 'offline';
+        recorded_by_hand: boolean;
+    } | null;
     created_at: string | null;
 }
 

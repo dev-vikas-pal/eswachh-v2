@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
-use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -31,7 +31,7 @@ class DashboardController extends Controller
 
         $branchId = $this->resolveBranch($request);
 
-        return BranchContext::forBranchOrAll($branchId, function () {
+        return BranchContext::forBranchOrAll($branchId, function () use ($request) {
             $today = Carbon::today();
 
             return response()->json([
@@ -60,10 +60,57 @@ class DashboardController extends Controller
                     'vehicles' => [
                         'total' => Vehicle::count(),
                     ],
+
+                    /*
+                     * The only part of this screen a date range means anything
+                     * to. Everything above is a count of how things stand right
+                     * now - "how many plans are active last Tuesday" is not a
+                     * question the data can answer - so the filter is attached
+                     * to this block alone rather than to the whole screen.
+                     */
+                    'period' => $this->periodFigures($request),
+
                     'as_at' => $today->toDateString(),
                 ],
             ]);
         });
+    }
+
+    /**
+     * What happened in the chosen period, as opposed to how things stand.
+     *
+     * Defaults to this month, which is the window somebody opening a dashboard
+     * has in mind. Only captured payments count towards the money: an opened
+     * checkout that nobody finished is not revenue.
+     *
+     * @return array<string, mixed>
+     */
+    private function periodFigures(Request $request): array
+    {
+        $filters = $request->validate([
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date', 'after_or_equal:from'],
+        ]);
+
+        $from = isset($filters['from'])
+            ? Carbon::parse($filters['from'])->startOfDay()
+            : Carbon::today()->startOfMonth();
+
+        $to = isset($filters['to'])
+            ? Carbon::parse($filters['to'])->endOfDay()
+            : Carbon::today()->endOfDay();
+
+        $captured = Payment::query()->revenue()->between($from, $to);
+
+        return [
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'revenue_paise' => (int) (clone $captured)->sum('amount_paise'),
+            'payments' => (clone $captured)->count(),
+            // Plans that began in this window, which is the growth figure the
+            // revenue number on its own does not tell you.
+            'new_plans' => Subscription::query()->whereBetween('period_start', [$from, $to])->count(),
+        ];
     }
 
     /**

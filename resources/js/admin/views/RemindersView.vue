@@ -4,6 +4,7 @@ import { useQuery, keepPreviousData } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/stores/auth';
 import SortableHeader from '@/admin/components/SortableHeader.vue';
+import DateRangeFilter from '@/shared/DateRangeFilter.vue';
 
 /**
  * What has been said to customers.
@@ -47,6 +48,13 @@ const { data, isPending, isError, error, isFetching } = useQuery({
 
 const rows = computed(() => data.value?.data ?? []);
 const meta = computed(() => data.value?.meta);
+
+/** One filter, one pair of dates, shared with every other list. */
+function onPeriod(range: { from: string; to: string }) {
+    from.value = range.from;
+    to.value = range.to;
+    page.value = 1;
+}
 
 /** The day, short enough to sit in a narrow column. */
 function onDay(iso: string | null | undefined): string {
@@ -116,14 +124,7 @@ const statusClass: Record<string, string> = {
                     <option value="suppressed">Not delivered</option>
                 </select>
             </label>
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">From</span>
-                <input v-model="from" type="date" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-            </label>
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">To</span>
-                <input v-model="to" type="date" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-            </label>
+            <DateRangeFilter label="Sent" @change="onPeriod" />
         </div>
 
         <p v-if="isError" class="rounded border border-crit bg-crit-soft px-3 py-2 text-sm text-crit">

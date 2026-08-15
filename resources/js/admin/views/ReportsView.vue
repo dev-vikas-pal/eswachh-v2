@@ -3,12 +3,24 @@ import { computed, ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/stores/auth';
+import DateRangeFilter from '@/shared/DateRangeFilter.vue';
 
 const auth = useAuthStore();
 
 const selected = ref('revenue');
 const from = ref('');
 const to = ref('');
+
+/**
+ * The shared filter, so "last 3 months" here is the same three months it is on
+ * Payments. Leaving it on "Any date" hands the server no bounds, and the server
+ * then falls back to the financial year to date - which is the window these
+ * questions are actually asked in.
+ */
+function onPeriod(range: { from: string; to: string }) {
+    from.value = range.from;
+    to.value = range.to;
+}
 
 const { data: catalogue } = useQuery({
     queryKey: ['reports'],
@@ -77,15 +89,11 @@ function toneClass(tone: string): string {
 
             <div class="min-w-0 flex-1">
                 <div v-if="selected !== 'renewals'" class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3">
-                    <label>
-                        <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">From</span>
-                        <input v-model="from" type="date" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-                    </label>
-                    <label>
-                        <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">To</span>
-                        <input v-model="to" type="date" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-                    </label>
-                    <p class="pb-1.5 text-xs text-muted">Defaults to this financial year so far.</p>
+                    <DateRangeFilter label="Period" @change="onPeriod" />
+
+                    <p v-if="!from" class="pb-1.5 text-xs text-muted">
+                        Showing this financial year so far.
+                    </p>
                 </div>
 
                 <p v-if="isError" class="rounded border border-crit bg-crit-soft px-3 py-2 text-sm text-crit">

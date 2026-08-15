@@ -30,8 +30,20 @@ return new class extends Migration
             // of attempts is small.
             $table->unsignedTinyInteger('attempts')->default(0);
 
-            $table->timestamp('expires_at');
-            $table->timestamp('consumed_at')->nullable();
+            /*
+             * datetime, not timestamp.
+             *
+             * MySQL gives the first TIMESTAMP column in a table an implicit
+             * "ON UPDATE CURRENT_TIMESTAMP" when explicit_defaults_for_timestamp
+             * is off, which is the default in a lot of installations. That
+             * would silently reset the expiry every time the row was updated -
+             * and the row is updated on every wrong guess, so each guess would
+             * extend the life of the code being guessed at.
+             *
+             * datetime carries no such behaviour: it stores what it is given.
+             */
+            $table->dateTime('expires_at');
+            $table->dateTime('consumed_at')->nullable();
 
             // Who asked, for the abuse trail.
             $table->string('requested_ip', 45)->nullable();

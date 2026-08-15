@@ -1,18 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
-import { RouterLink } from 'vue-router';
 import { api } from '@/shared/api/client';
-
-interface Banner {
-    id: string;
-    eyebrow: string | null;
-    headline: string;
-    subheadline: string | null;
-    cta: { label: string; route: string } | null;
-    image: string | null;
-    secondary: { label: string; route: string } | null;
-}
+import BannerSlider, { type Banner } from '@/site/BannerSlider.vue';
 
 const { data } = useQuery({
     queryKey: ['public-catalogue'],
@@ -30,7 +20,13 @@ const { data: content } = useQuery({
     staleTime: 5 * 60 * 1000,
 });
 
-const banner = computed<Banner | null>(() => content.value?.banners?.[0] ?? null);
+/**
+ * Every live banner, in the order the master gives them.
+ *
+ * The slider handles none, one and many - so an office that has not set any up
+ * still gets a working home page with the default headline.
+ */
+const banners = computed<Banner[]>(() => content.value?.banners ?? []);
 
 /** The cheapest plan on sale, so the headline price is never out of date. */
 const from = computed<number | null>(() => {
@@ -48,56 +44,14 @@ const steps = [
 
 <template>
     <div>
-        <section class="border-b border-line bg-surface">
-            <div class="mx-auto grid max-w-6xl gap-8 px-4 py-14 md:grid-cols-2 md:items-center md:py-20">
-                <div>
-                    <p v-if="banner?.eyebrow" class="text-sm font-semibold uppercase tracking-widest text-accent">
-                        {{ banner.eyebrow }}
-                    </p>
-                    <h1 class="mt-3 text-4xl font-bold leading-tight tracking-tight text-ink md:text-5xl" style="text-wrap: balance">
-                        {{ banner?.headline ?? 'Doorstep car cleaning, every day.' }}
-                    </h1>
-                    <p v-if="banner?.subheadline" class="mt-4 max-w-prose text-lg text-body">
-                        {{ banner.subheadline }}
-                    </p>
-
-                    <div class="mt-7 flex flex-wrap items-center gap-3">
-                        <RouterLink
-                            :to="{ name: banner?.cta?.route || 'subscribe' }"
-                            class="rounded bg-accent px-6 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-accent"
-                        >
-                            {{ banner?.cta?.label ?? 'See your price' }}
-                        </RouterLink>
-                        <RouterLink
-                            v-if="banner?.secondary"
-                            :to="{ name: banner.secondary.route || 'packages' }"
-                            class="rounded border border-line-strong px-6 py-3 text-sm font-semibold text-body transition hover:bg-sunk"
-                        >
-                            {{ banner.secondary.label }}
-                        </RouterLink>
-                    </div>
-
-                    <p v-if="from !== null" class="mt-4 text-sm text-muted">
-                        Plans from <strong class="tabular-nums text-ink">&#8377;{{ from }}</strong> a month.
-                    </p>
-                </div>
-
-                <!--
-                    The banner's own image when one is set, otherwise the three
-                    steps. A home page with a picture of the actual service
-                    says more than a list, but a missing file must not leave a
-                    hole where the hero should be.
-                -->
-                <div v-if="banner?.image" class="overflow-hidden rounded-lg border border-line">
-                    <img
-                        :src="banner.image"
-                        :alt="banner.headline"
-                        class="h-full w-full object-cover"
-                        loading="eager"
-                    />
-                </div>
-
-                <div v-else class="rounded-lg border border-line bg-sunk p-6">
+        <BannerSlider :banners="banners" :price-from="from">
+            <!--
+                Shown in place of the picture when no live banner has one. A
+                home page with nothing beside the headline looks broken, and the
+                three steps are the next most useful thing to put there.
+            -->
+            <template #aside>
+                <div class="rounded-lg border border-line bg-sunk p-6">
                     <ol class="flex flex-col gap-5">
                         <li v-for="(step, i) in steps" :key="step.title" class="flex gap-4">
                             <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-bold tabular-nums text-accent-ink">
@@ -110,10 +64,10 @@ const steps = [
                         </li>
                     </ol>
                 </div>
-            </div>
-        </section>
+            </template>
+        </BannerSlider>
 
-        <section v-if="banner?.image" class="mx-auto max-w-6xl px-4 pt-12">
+        <section v-if="banners.some((b) => b.image)" class="mx-auto max-w-6xl px-4 pt-12">
             <ol class="grid gap-5 sm:grid-cols-3">
                 <li v-for="(step, i) in steps" :key="step.title" class="flex gap-4">
                     <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-bold tabular-nums text-accent-ink">

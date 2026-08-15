@@ -241,6 +241,43 @@ class CustomerPortalTest extends TestCase
         $this->assertAuthenticatedAs($this->account);
     }
 
+    public function test_asking_again_replaces_the_previous_code(): void
+    {
+        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210'])->assertOk();
+
+        LoginCode::query()->latest('created_at')->firstOrFail()
+            ->forceFill(['code_hash' => Hash::make('111111')])->save();
+
+        // Send it again, as the Resend button does.
+        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210'])->assertOk();
+
+        LoginCode::query()->whereNull('consumed_at')->latest('created_at')->firstOrFail()
+            ->forceFill(['code_hash' => Hash::make('222222')])->save();
+
+        // The first is spent the moment a second is asked for, so a slow
+        // message cannot be typed in after its replacement has arrived.
+        $this->fromSpa()
+            ->postJson('/api/v1/login/code/verify', ['phone' => '9876543210', 'code' => '111111'])
+            ->assertStatus(422);
+
+        $this->fromSpa()
+            ->postJson('/api/v1/login/code/verify', ['phone' => '9876543210', 'code' => '222222'])
+            ->assertOk();
+
+        $this->assertAuthenticatedAs($this->account);
+    }
+
+    public function test_there_is_room_to_resend_a_few_times(): void
+    {
+        // Three was too tight: a slow message is exactly when somebody presses
+        // the button twice, and they were then locked out for ten minutes.
+        for ($i = 0; $i < 5; $i++) {
+            $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210'])->assertOk();
+        }
+
+        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210'])->assertStatus(429);
+    }
+
     public function test_a_code_only_works_once(): void
     {
         $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210']);

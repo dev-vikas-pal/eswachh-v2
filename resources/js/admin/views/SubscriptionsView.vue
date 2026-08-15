@@ -9,6 +9,9 @@ import SubscriptionActions from '@/admin/components/SubscriptionActions.vue';
 import SubscriptionForm from '@/admin/components/SubscriptionForm.vue';
 import SortableHeader from '@/admin/components/SortableHeader.vue';
 import BulkActionBar from '@/admin/components/BulkActionBar.vue';
+import DateRangeFilter from '@/shared/DateRangeFilter.vue';
+import PaymentDetailPanel from '@/shared/PaymentDetailPanel.vue';
+import SubscriptionPaymentsPanel from '@/shared/SubscriptionPaymentsPanel.vue';
 import { useRowSelection } from '@/admin/shared/useRowSelection';
 
 const auth = useAuthStore();
@@ -113,7 +116,27 @@ const { data: cleaners } = useQuery({
     staleTime: 5 * 60 * 1000,
 });
 
+/**
+ * Bumped to remount the date filter when Clear is pressed.
+ *
+ * The filter owns its own dropdown, so clearing the two dates behind its back
+ * would leave it still reading "This month" above a list that is no longer
+ * filtered by anything.
+ */
+const filterEpoch = ref(0);
+
+/** Which payment is open, and which plan has its history open. */
+const paymentFor = ref<string | null>(null);
+const historyFor = ref<{ id: string; car: string | null } | null>(null);
+
+function onRenewalPeriod(range: { from: string; to: string }) {
+    renewFrom.value = range.from;
+    renewTo.value = range.to;
+    page.value = 1;
+}
+
 function clearFilters() {
+    filterEpoch.value++;
     search.value = '';
     status.value = '';
     expiredOnly.value = false;
@@ -202,15 +225,12 @@ function statusLabel(row: Subscription): string {
                 </select>
             </label>
 
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Renews from</span>
-                <input v-model="renewFrom" type="date" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-            </label>
-
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">to</span>
-                <input v-model="renewTo" type="date" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
-            </label>
+            <!--
+                Renewal dates run forwards as often as backwards - "renewing
+                this week" is the morning's work - so this one keeps the same
+                presets but is labelled for what it filters.
+            -->
+            <DateRangeFilter :key="filterEpoch" label="Renews" @change="onRenewalPeriod" />
 
             <label class="flex items-center gap-2 pb-1.5 text-sm text-body">
                 <input v-model="expiredOnly" type="checkbox" class="rounded border-line-strong" />
@@ -298,8 +318,34 @@ function statusLabel(row: Subscription): string {
                         <td class="px-3 py-2 whitespace-nowrap text-body tabular-nums">
                             {{ row.period.end ?? '—' }}
                         </td>
+                        <!--
+                            The total, then the way into how it was made up.
+                            A plan renewed six times has six payments behind one
+                            figure, and "which one was the ₹949 in March" is the
+                            question this column gets asked.
+                        -->
                         <td class="px-3 py-2 text-right tabular-nums text-body">
                             {{ row.paid.formatted }}
+
+                            <span v-if="row.last_payment" class="mt-0.5 block text-xs">
+                                <button
+                                    type="button"
+                                    class="text-accent underline-offset-2 hover:underline"
+                                    :title="'Last payment on ' + (row.last_payment.paid_at ?? 'an unknown date')"
+                                    @click="paymentFor = row.last_payment!.id"
+                                >
+                                    {{ row.last_payment.paid_at ?? 'latest' }}
+                                </button>
+                                <button
+                                    type="button"
+                                    class="ms-2 text-muted underline-offset-2 hover:text-ink hover:underline"
+                                    @click="historyFor = { id: row.id, car: row.vehicle?.registration ?? null }"
+                                >
+                                    History
+                                </button>
+                            </span>
+
+                            <span v-else class="mt-0.5 block text-xs text-faint">nothing yet</span>
                         </td>
                         <td class="px-3 py-2">
                             <span class="rounded px-2 py-0.5 text-xs font-medium" :class="statusClass(row)">
@@ -343,6 +389,20 @@ function statusLabel(row: Subscription): string {
                 Next
             </button>
         </div>
+        <PaymentDetailPanel
+            v-if="paymentFor"
+            :payment-id="paymentFor"
+            @close="paymentFor = null"
+            @open="paymentFor = $event"
+        />
+
+        <SubscriptionPaymentsPanel
+            v-if="historyFor"
+            :subscription-id="historyFor.id"
+            :registration="historyFor.car"
+            @close="historyFor = null"
+        />
+
         <SubscriptionForm
             v-if="creating || editingId"
             :subscription-id="editingId"

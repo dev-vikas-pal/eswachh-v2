@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/vue-query';
 import { fetchOverview, type PortalPlan } from '@/portal/portal.api';
 import { payForRenewal } from '@/shared/api/checkout';
 import { describeError } from '@/shared/api/client';
+import SubscriptionPaymentsPanel from '@/shared/SubscriptionPaymentsPanel.vue';
 
 /**
  * What a customer signs in to see: their car, their plan, when it runs out.
@@ -20,6 +21,9 @@ const { data, isLoading, error, refetch } = useQuery({
 const busy = ref<string | null>(null);
 const problem = ref<string | null>(null);
 const outcome = ref<string | null>(null);
+
+/** Which plan has its payment history open. */
+const historyFor = ref<{ id: string; car: string | null } | null>(null);
 
 const plans = computed(() => data.value?.plans ?? []);
 
@@ -163,11 +167,31 @@ async function renew(plan: PortalPlan) {
                         {{ busy === plan.id ? 'Opening…' : 'Renew this plan' }}
                     </button>
 
+                    <!--
+                        A plan renewed several times has several payments behind
+                        one figure, and "what have I actually paid you" is the
+                        second thing a customer asks after "when does it run out".
+                    -->
+                    <button
+                        type="button"
+                        class="text-sm text-accent underline-offset-2 hover:underline"
+                        @click="historyFor = { id: plan.id, car: plan.vehicle?.registration ?? null }"
+                    >
+                        View payment history
+                    </button>
+
                     <p class="text-xs text-faint">
                         Paid so far: {{ plan.paid.formatted }} of {{ plan.amount.formatted }}
                     </p>
                 </div>
             </article>
         </template>
+
+        <SubscriptionPaymentsPanel
+            v-if="historyFor"
+            :subscription-id="historyFor.id"
+            :registration="historyFor.car"
+            @close="historyFor = null"
+        />
     </div>
 </template>

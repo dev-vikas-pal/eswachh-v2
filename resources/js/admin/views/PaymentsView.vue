@@ -1,122 +1,23 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { useQuery, keepPreviousData } from '@tanstack/vue-query';
-import { api } from '@/shared/api/client';
-import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/shared/stores/auth';
-import type { Payment, PaymentPage } from '@/shared/types';
 import SortableHeader from '@/admin/components/SortableHeader.vue';
+import DateRangeFilter from '@/shared/DateRangeFilter.vue';
 import InvoicePanel from '@/shared/InvoicePanel.vue';
 import PaymentDetailPanel from '@/shared/PaymentDetailPanel.vue';
-
-const auth = useAuthStore();
-const router = useRouter();
-
-/** Which payment the receipt is open for, if any. */
-const receiptFor = ref<string | null>(null);
-
-/** And which one the full detail is open for. */
-const detailFor = ref<string | null>(null);
-
-const search = ref('');
-const status = ref('');
-const from = ref('');
-const to = ref('');
-const page = ref(1);
-const sort = ref('created');
-const direction = ref<'asc' | 'desc'>('asc');
+import { usePaymentsScreen } from '@/admin/views/PaymentsView';
 
 /**
- * What the server says it sorted by, falling back to what we asked for while
- * the first response is in flight - otherwise the arrow flickers on every click.
- */
-const activeSort = computed(() => meta.value?.sort ?? sort.value);
-const activeDirection = computed<'asc' | 'desc'>(() => meta.value?.direction ?? direction.value);
-
-function onSort(field: string, next: 'asc' | 'desc') {
-    sort.value = field;
-    direction.value = next;
-    page.value = 1;
-}
-
-watch([search, status, from, to, () => auth.selectedBranchId], () => {
-    page.value = 1;
-});
-
-const { data, isPending, isError, isFetching } = useQuery({
-    queryKey: computed(() => [
-        'payments', auth.selectedBranchId, search.value, status.value, from.value, to.value, page.value, sort.value, direction.value,
-    ]),
-    placeholderData: keepPreviousData,
-    queryFn: async (): Promise<PaymentPage> => {
-        const { data } = await api.get('/payments', {
-            params: {
-                page: page.value,
-                search: search.value || undefined,
-                status: status.value || undefined,
-                from: from.value || undefined,
-                to: to.value || undefined,
-                sort: sort.value,
-                direction: direction.value,
-            },
-        });
-        return data;
-    },
-});
-
-const rows = computed(() => data.value?.data ?? []);
-const meta = computed(() => data.value?.meta);
-
-/**
- * The one figure people act on, so it is stated in full rather than
- * abbreviated, and it always describes exactly the rows below it.
- */
-const captured = computed(() =>
-    new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 0,
-    }).format((meta.value?.total_captured_paise ?? 0) / 100),
-);
-
-function money(paise: number): string {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
-}
-
-function statusValue(row: Payment): string {
-    return typeof row.status === 'string' ? row.status : row.status.value;
-}
-
-function statusClass(row: Payment): string {
-    switch (statusValue(row)) {
-        case 'captured':
-            return 'bg-ok-soft text-ok';
-        case 'failed':
-            return 'bg-crit-soft text-crit';
-        case 'refunded':
-            return 'bg-info-soft text-info';
-        default:
-            // Still in flight, or abandoned. Amber, because it is neither good
-            // news nor a failure yet.
-            return 'bg-warn-soft text-warn';
-    }
-}
-
-/**
- * Follow a payment back to the order it paid for.
+ * Payments.
  *
- * The subscriptions list opens filtered to that one plan, rather than a
- * separate screen: the row there already carries every action somebody would
- * want next - edit it, record another payment, message the customer.
+ * The logic is in PaymentsView.ts beside this file; what is left here is the
+ * markup and what it binds to.
  */
-async function openSubscription(id: string) {
-    detailFor.value = null;
-    await router.push({ name: 'subscriptions', query: { plan: id } });
-}
-
-function when(iso: string | null): string {
-    return iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-}
+const {
+    receiptFor, detailFor, search, status, page,
+    rows, meta, captured, isPending, isError, isFetching,
+    activeSort, activeDirection,
+    onSort, onPeriod, openSubscription,
+    money, statusValue, statusClass, when,
+} = usePaymentsScreen();
 </script>
 
 <template>
@@ -156,23 +57,7 @@ function when(iso: string | null): string {
                 </select>
             </label>
 
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">From</span>
-                <input
-                    v-model="from"
-                    type="date"
-                    class="rounded border border-line-strong px-2 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-            </label>
-
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">To</span>
-                <input
-                    v-model="to"
-                    type="date"
-                    class="rounded border border-line-strong px-2 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                />
-            </label>
+            <DateRangeFilter label="Paid" @change="onPeriod" />
         </div>
 
         <p v-if="isError" class="rounded border border-crit bg-crit-soft px-3 py-2 text-sm text-crit">

@@ -70,7 +70,8 @@ class SignupController extends Controller
             throw ValidationException::withMessages(['phone' => 'That does not look like a mobile number.']);
         }
 
-        foreach (['signup:phone:'.$phone => 3, 'signup:ip:'.$request->ip() => 10] as $key => $limit) {
+        // Room for a couple of resends, as on the sign in form.
+        foreach (['signup:phone:'.$phone => 5, 'signup:ip:'.$request->ip() => 15] as $key => $limit) {
             if (RateLimiter::tooManyAttempts($key, $limit)) {
                 throw ValidationException::withMessages([
                     'phone' => 'Too many requests. Try again in '.RateLimiter::availableIn($key).' seconds.',
@@ -147,7 +148,7 @@ class SignupController extends Controller
             ]);
         }
 
-        $quote = $this->quote($data, $branchId);
+        $quote = $this->quote($data);
 
         return DB::transaction(function () use ($data, $phone, $registration, $branchId, $quote) {
             $account = User::create([
@@ -231,11 +232,17 @@ class SignupController extends Controller
     /**
      * @param  array<string, mixed>  $data
      */
-    private function quote(array $data, string $branchId)
+    private function quote(array $data)
     {
         try {
-            // Priced inside the branch that will service them, because the
-            // masters a franchise sells from are its own.
+            /*
+             * Scopes off because nobody is signed in, not because of anything
+             * to do with branches: the masters a price is built from - package,
+             * cleaning type, duration, car size - are one list for the whole
+             * business and are not branch scoped at all. The society surcharge
+             * is the only part that varies by where they live, and that comes
+             * from the society they picked.
+             */
             return BranchContext::withoutScope(fn () => $this->book->quote(
                 $data['vehicle_model_id'],
                 $data['package_id'],

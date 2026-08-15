@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/stores/auth';
+import { assignRole, fetchRoles } from '@/admin/shared/roles.api';
 
 interface UserRow {
     id: string;
@@ -10,6 +11,9 @@ interface UserRow {
     email: string | null;
     phone: string | null;
     role: { value: string; label: string };
+    /** The role the business defined, if this account has been given one. */
+    custom_role: { id: string; name: string; status: boolean } | null;
+    custom_role_id: string | null;
     branch: { id: string; name: string } | null;
     status: boolean;
     removed: boolean;
@@ -17,6 +21,36 @@ interface UserRow {
 
 const auth = useAuthStore();
 const queryClient = useQueryClient();
+
+/**
+ * Custom roles, for the picker on each row.
+ *
+ * Only an administrator may read or apply these, so the query is switched off
+ * for everybody else rather than firing and failing with a 403.
+ */
+const isAdmin = computed(() => auth.user?.role.value === 'super_admin');
+
+const { data: customRoles } = useQuery({
+    queryKey: ['roles'],
+    enabled: isAdmin,
+    queryFn: fetchRoles,
+    staleTime: 5 * 60 * 1000,
+});
+
+const roleNotice = ref<string | null>(null);
+
+async function applyRole(userId: string, event: Event) {
+    const roleId = (event.target as HTMLSelectElement).value;
+
+    roleNotice.value = null;
+
+    try {
+        roleNotice.value = await assignRole(userId, roleId || null);
+        await queryClient.invalidateQueries({ queryKey: ['users'] });
+    } catch (e) {
+        roleNotice.value = describeError(e).message;
+    }
+}
 
 const search = ref('');
 const roleFilter = ref('');
@@ -141,6 +175,7 @@ const roleFilters = [
         <div class="mb-4 flex flex-wrap items-center gap-3">
             <h1 class="text-xl font-semibold tracking-tight text-ink">People</h1>
             <span v-if="isFetching" class="text-xs text-faint">updating…</span>
+            <span v-if="roleNotice" class="text-xs text-ok" role="status">{{ roleNotice }}</span>
 
             <button
                 v-if="assignableRoles.length"
@@ -213,7 +248,31 @@ const roleFilters = [
                             {{ row.email ?? '—' }}
                             <div class="text-xs text-faint tabular-nums">{{ row.phone }}</div>
                         </td>
-                        <td class="px-3 py-2 text-body">{{ row.role.label }}</td>
+                        <td class="px-3 py-2 text-body">
+                            {{ row.role.label }}
+
+                            <!--
+                                The built-in role stays visible above the custom
+                                one: it is what decides which branch somebody
+                                sees, and hiding it would leave the screen
+                                unable to explain what they can look at.
+                            -->
+                            <select
+                                v-if="isAdmin && row.role.value !== 'super_admin' && !row.removed"
+                                :value="row.custom_role_id ?? ''"
+                                class="mt-1 block w-full rounded border border-line bg-surface px-1.5 py-1 text-xs text-body focus:border-accent focus:outline-none"
+                                @change="applyRole(row.id, $event)"
+                            >
+                                <option value="">Built-in permissions</option>
+                                <option
+                                    v-for="r in (customRoles ?? []).filter((cr) => cr.base_role === row.role.value)"
+                                    :key="r.id"
+                                    :value="r.id"
+                                >
+                                    {{ r.name }}{{ r.status ? '' : ' (off)' }}
+                                </option>
+                            </select>
+                        </td>
                         <td class="px-3 py-2 text-body">{{ row.branch?.name ?? 'All branches' }}</td>
                         <td class="px-3 py-2">
                             <span

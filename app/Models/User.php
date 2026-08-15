@@ -99,10 +99,22 @@ class User extends Authenticatable
         return $merged;
     }
 
-    /** Only a super admin sees every branch. */
+    /**
+     * Only a super admin sees every branch.
+     *
+     * Read from the built-in role and nowhere else. A custom role deliberately
+     * cannot affect this: it is the one thing that, granted by accident from a
+     * permissions screen, would show one franchise another's customers.
+     */
     public function seesAllBranches(): bool
     {
         return $this->role?->seesAllBranches() ?? false;
+    }
+
+    /** The role the business defined, if this account has been given one. */
+    public function customRole(): BelongsTo
+    {
+        return $this->belongsTo(CustomRole::class);
     }
 
     public function hasRole(UserRole $role): bool
@@ -111,11 +123,19 @@ class User extends Authenticatable
     }
 
     /**
-     * Read straight from the role enum. There is no cache in front of this,
-     * on purpose.
+     * Read straight from the role, with no cache in front of it, on purpose.
+     *
+     * A custom role replaces the built-in list rather than adding to it, which
+     * is what makes it useful for a Supervisor: the whole point is to grant
+     * *fewer* things than a franchise owner, and a role that could only ever
+     * add would not be able to express that.
      */
     public function hasAbility(string $ability): bool
     {
+        if ($custom = $this->activeCustomRole()) {
+            return $custom->can($ability);
+        }
+
         return $this->role?->can($ability) ?? false;
     }
 
@@ -124,7 +144,31 @@ class User extends Authenticatable
      */
     public function abilities(): array
     {
+        if ($custom = $this->activeCustomRole()) {
+            return $custom->grants();
+        }
+
         return $this->role?->abilities() ?? [];
+    }
+
+    /**
+     * The custom role, if it is one that should be honoured.
+     *
+     * A switched-off or deleted role is ignored and the account falls back to
+     * its built-in role. Somebody whose role was disabled overnight should
+     * arrive to a smaller set of screens, not a locked account and a phone
+     * call - and the built-in role is always a safe thing to fall back to
+     * because it is what they had before anybody customised anything.
+     */
+    private function activeCustomRole(): ?CustomRole
+    {
+        if (! $this->custom_role_id) {
+            return null;
+        }
+
+        $role = $this->relationLoaded('customRole') ? $this->customRole : $this->customRole()->first();
+
+        return $role && $role->status ? $role : null;
     }
 
     public function scopeInBranch($query, ?string $branchId)

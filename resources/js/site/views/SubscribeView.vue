@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 import { useSignup } from '@/site/signup';
+import { useSiteSession } from '@/site/session';
 
 /**
  * The signup form.
@@ -123,6 +124,15 @@ function money(value: number): string {
  * The order is placed by id, never by price. Whatever is on screen is a quote;
  * the server works the amount out again from these same choices.
  */
+/**
+ * Signed in already? Then this form is almost certainly the wrong page, so it
+ * is replaced by a way through to their own plans - with a way past it for the
+ * rare case of buying for somebody else.
+ */
+const { session: signedIn } = useSiteSession();
+const startAnyway = ref(false);
+const session = computed(() => (startAnyway.value ? null : signedIn.value));
+
 const signup = useSignup(form);
 
 const buttonLabel = computed(() => {
@@ -148,7 +158,38 @@ function submit() {
             Tell us where the car is kept and how often you want it cleaned. The price updates as you choose.
         </p>
 
-        <div v-if="loadingCatalogue" class="mt-8 text-muted">Loading the price list…</div>
+        <!--
+            Somebody already signed in gets sent to their own pages instead of a
+            blank form. The server would refuse the signup anyway - their number
+            is registered - but finding that out after filling the whole thing
+            in reads as though the site had forgotten them.
+        -->
+        <div v-if="session" class="mt-8 rounded-lg border border-line bg-surface p-6">
+            <h2 class="text-lg font-semibold text-ink">You are already signed in</h2>
+            <p class="mt-1 max-w-prose text-body">
+                Adding another car or renewing a plan is quicker from your own pages, and the
+                details we already hold are filled in for you.
+            </p>
+
+            <div class="mt-4 flex flex-wrap gap-3">
+                <a
+                    :href="session.home"
+                    class="rounded bg-accent px-5 py-2.5 text-sm font-semibold text-on-accent transition hover:brightness-110"
+                >
+                    Go to my plans
+                </a>
+
+                <button
+                    type="button"
+                    class="rounded border border-line-strong px-5 py-2.5 text-sm font-semibold text-body transition hover:bg-sunk"
+                    @click="startAnyway = true"
+                >
+                    Start a plan for somebody else
+                </button>
+            </div>
+        </div>
+
+        <div v-else-if="loadingCatalogue" class="mt-8 text-muted">Loading the price list…</div>
 
         <form v-else class="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]" @submit.prevent="submit">
             <div class="flex flex-col gap-6">
@@ -353,14 +394,24 @@ function submit() {
                         {{ buttonLabel }}
                     </button>
 
-                    <button
-                        v-if="signup.stage.value === 'code'"
-                        type="button"
-                        class="mt-2 w-full text-center text-xs text-muted underline hover:text-ink"
-                        @click="signup.stage.value = 'details'; signup.code.value = ''"
-                    >
-                        Change my details
-                    </button>
+                    <div v-if="signup.stage.value === 'code'" class="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs">
+                        <button
+                            type="button"
+                            class="text-accent underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+                            :disabled="signup.busy.value || signup.cooldown.remaining.value > 0"
+                            @click="signup.sendCode()"
+                        >
+                            {{ signup.cooldown.remaining.value > 0 ? `Resend in ${signup.cooldown.remaining.value}s` : 'Send it again' }}
+                        </button>
+
+                        <button
+                            type="button"
+                            class="text-muted underline hover:text-ink"
+                            @click="signup.stage.value = 'details'; signup.code.value = ''; signup.cooldown.stop()"
+                        >
+                            Change my details
+                        </button>
+                    </div>
 
                     <p v-if="signup.error.value" class="mt-3 rounded bg-crit-soft px-3 py-2 text-sm text-crit" role="alert">
                         {{ signup.error.value }}

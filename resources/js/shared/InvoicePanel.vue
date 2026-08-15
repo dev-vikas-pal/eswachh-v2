@@ -28,6 +28,54 @@ function money(rupees: number): string {
 function print(): void {
     window.print();
 }
+
+/**
+ * Download it.
+ *
+ * The browser's own "print to PDF" rather than a PDF built on the server: a
+ * receipt is read once and filed, and a PDF pipeline is a dependency, a font
+ * problem and a temp directory to keep clean in exchange for nothing the
+ * customer can tell apart. The print dialog offers "Save as PDF" everywhere.
+ *
+ * The plain-text copy beside it is for the case that actually comes up -
+ * somebody needing the figures in an email or a WhatsApp message.
+ */
+function download(): void {
+    if (!data.value) return;
+
+    const lines = [
+        data.value.from.name,
+        data.value.from.address,
+        data.value.from.gstin ? `GSTIN ${data.value.from.gstin}` : '',
+        '',
+        `Receipt ${data.value.number}`,
+        `Date    ${data.value.issued_on ?? ''}`,
+        '',
+        `Billed to: ${data.value.to.name}`,
+        data.value.to.address,
+        data.value.to.phone,
+        '',
+        ...data.value.lines.map((line: { description: string; amount: number }) =>
+            `${line.description}   ${money(line.amount)}`),
+        '',
+        `Total paid: ${data.value.total_formatted}`,
+        data.value.reference ? `Reference: ${data.value.reference}` : '',
+        '',
+        data.value.footer ?? '',
+    ].filter((line) => line !== '' || true);
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `receipt-${data.value.number.replace(/\//g, '-')}.txt`;
+    link.click();
+
+    // Released straight away: the download has already been handed to the
+    // browser, and holding the object URL leaks the blob for the session.
+    URL.revokeObjectURL(url);
+}
 </script>
 
 <template>
@@ -38,11 +86,22 @@ function print(): void {
 
                 <button
                     type="button"
-                    class="ms-auto rounded bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110"
+                    class="ms-auto rounded bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:opacity-60"
                     :disabled="!data"
+                    title="The print dialog offers Save as PDF"
                     @click="print"
                 >
-                    Print
+                    Print or save as PDF
+                </button>
+
+                <button
+                    type="button"
+                    class="rounded border border-line-strong px-3 py-1.5 text-sm text-body transition hover:bg-sunk disabled:opacity-60"
+                    :disabled="!data"
+                    title="A plain text copy, for pasting into an email"
+                    @click="download"
+                >
+                    Download
                 </button>
 
                 <button

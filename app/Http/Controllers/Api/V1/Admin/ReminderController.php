@@ -24,12 +24,16 @@ class ReminderController extends Controller
 
     private const SORTABLE = [
         /*
-         * sent_on is a date, so a day's worth of messages all tie on it and the
-         * order within the day is whatever the database felt like - which reads
-         * as "sorting does nothing" when most of the list was sent today.
-         * created_at breaks the tie and puts them in the order they went out.
+         * Three columns for one heading, and each one earns its place.
+         *
+         * sent_on is a date, so a day's worth of messages all tie on it - which
+         * reads as "sorting does nothing" when most of the list went out today.
+         * created_at breaks that, but a nightly job writes its whole batch
+         * inside one second, so it ties too. The key is a UUIDv7 and therefore
+         * sorts by creation time, which settles the rest and makes ascending
+         * and descending true mirrors of each other.
          */
-        'sent' => 'sent_on,created_at',
+        'sent' => 'sent_on,created_at,id',
         'status' => 'status',
         'purpose' => 'purpose',
         'recipient' => 'recipient',

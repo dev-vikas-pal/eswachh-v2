@@ -32,6 +32,13 @@ const router = createRouter({
                 { path: 'blog', name: 'blog-admin', component: () => import('@/admin/views/BlogAdminView.vue'), meta: { ability: 'manage.master' } },
                 { path: 'backups', name: 'backups', component: () => import('@/admin/views/BackupsView.vue'), meta: { ability: 'manage.master' } },
                 { path: 'settings', name: 'settings', component: () => import('@/admin/views/SiteSettingsView.vue'), meta: { ability: 'manage.master' } },
+                { path: 'logs', name: 'logs', component: () => import('@/admin/views/LogsView.vue'), meta: { ability: 'manage.master' } },
+                /*
+                 * Roles are administrator only, and that is not an ability -
+                 * see RoleController. The guard here uses the role directly for
+                 * the same reason the server does.
+                 */
+                { path: 'roles', name: 'roles', component: () => import('@/admin/views/RolesView.vue'), meta: { superAdmin: true } },
             ],
         },
 
@@ -50,6 +57,7 @@ const router = createRouter({
                 { path: '', redirect: { name: 'portal-home' } },
                 { path: 'plans', name: 'portal-home', component: () => import('@/portal/views/MyPlansView.vue') },
                 { path: 'payments', name: 'portal-payments', component: () => import('@/portal/views/MyPaymentsView.vue') },
+                { path: 'complaints', name: 'portal-complaints', component: () => import('@/portal/views/MyComplaintsView.vue') },
                 { path: 'details', name: 'portal-profile', component: () => import('@/portal/views/MyProfileView.vue') },
             ],
         },
@@ -84,6 +92,10 @@ router.beforeEach(async (to) => {
      * not about what they may do, so it is answered separately.
      */
     if (auth.isCustomer !== (to.meta.customer === true)) {
+        return home;
+    }
+
+    if (to.meta.superAdmin && auth.user?.role.value !== 'super_admin') {
         return home;
     }
 

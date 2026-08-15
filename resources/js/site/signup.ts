@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { api, describeError, type ValidationErrors } from '@/shared/api/client';
 import { completeCheckout, type Checkout } from '@/shared/api/checkout';
+import { useCodeCooldown } from '@/shared/useCodeCooldown';
 
 /**
  * Placing an order from the public site.
@@ -42,6 +43,9 @@ export function useSignup(form: Ref<SignupForm>) {
     const notice = ref<string | null>(null);
     const fieldErrors = ref<ValidationErrors>({});
 
+    /** How long before "send it again" is allowed. */
+    const cooldown = useCodeCooldown();
+
     function fail(e: unknown) {
         const described = describeError(e);
         error.value = described.message;
@@ -64,6 +68,7 @@ export function useSignup(form: Ref<SignupForm>) {
         try {
             await api.post('/public/signup/code', { phone: form.value.phone });
             stage.value = 'code';
+            cooldown.start();
             notice.value = `We have sent a code to ${form.value.phone}. It lasts five minutes.`;
         } catch (e) {
             fail(e);
@@ -136,5 +141,5 @@ export function useSignup(form: Ref<SignupForm>) {
             : result.message + ' Your details are saved, so please do not fill the form in again.';
     }
 
-    return { stage, code, busy, error, notice, fieldErrors, sendCode, placeOrder };
+    return { stage, code, busy, error, notice, fieldErrors, cooldown, sendCode, placeOrder };
 }

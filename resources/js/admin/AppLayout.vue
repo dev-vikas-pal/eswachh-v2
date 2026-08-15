@@ -31,7 +31,11 @@ const navigation = computed(() =>
         { name: 'Masters', to: { name: 'masters' }, ability: 'manage.master', icon: 'sliders' },
         { name: 'Blog', to: { name: 'blog-admin' }, ability: 'manage.master', icon: 'pen' },
         { name: 'Settings', to: { name: 'settings' }, ability: 'manage.master', icon: 'cog' },
-    ].filter((item) => auth.can(item.ability)),
+        { name: 'Logs', to: { name: 'logs' }, ability: 'manage.master', icon: 'chat' },
+        // Administrator only, and that is a role rather than an ability - see
+        // RoleController for why managing roles is not itself grantable.
+        { name: 'Roles', to: { name: 'roles' }, ability: 'manage.master', superAdmin: true, icon: 'people' },
+    ].filter((item) => auth.can(item.ability) && (!item.superAdmin || auth.user?.role.value === 'super_admin')),
 );
 
 const sideways = computed(() => settings.menuPosition === 'left');
