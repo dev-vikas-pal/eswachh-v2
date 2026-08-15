@@ -65,7 +65,20 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    /*
+     * The business runs in one country and thinks in Indian days.
+     *
+     * This is not a display preference. "Today" has to mean the same thing to
+     * the database, the scheduled jobs and the screen, and with UTC it did not:
+     * a payment taken at 5am on the 14th was stored as 23:45 on the 13th, the
+     * list rendered it as the 14th in the browser's timezone, and the date
+     * filter then failed to find it under either date.
+     *
+     * v1 also ran on Asia/Kolkata, so every imported timestamp is already
+     * Indian wall-clock time. Reading them as UTC was mislabelling them by five
+     * and a half hours; this reads them as what they are.
+     */
+    'timezone' => env('APP_TIMEZONE', 'Asia/Kolkata'),
 
     /*
     |--------------------------------------------------------------------------

@@ -5,10 +5,12 @@ use App\Http\Controllers\Api\V1\Admin\BackupController;
 use App\Http\Controllers\Api\V1\Admin\ComplaintController;
 use App\Http\Controllers\Api\V1\Admin\CustomerController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
+use App\Http\Controllers\Api\V1\Admin\LogController;
 use App\Http\Controllers\Api\V1\Admin\MasterController;
 use App\Http\Controllers\Api\V1\Admin\PostController;
 use App\Http\Controllers\Api\V1\Admin\ReminderController;
 use App\Http\Controllers\Api\V1\Admin\ReportController;
+use App\Http\Controllers\Api\V1\Admin\RoleController;
 use App\Http\Controllers\Api\V1\Admin\RoundController;
 use App\Http\Controllers\Api\V1\Admin\SiteSettingsController;
 use App\Http\Controllers\Api\V1\Admin\SubscriptionActionController;
@@ -87,6 +89,25 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Who am I, what may I do, which branches may I look at.
     Route::get('me', MeController::class);
+
+    /*
+     * Roles the business defines for itself, and the log viewer.
+     *
+     * Roles are super admin only, asked inside the controller rather than with
+     * an ability: if managing roles were itself an ability it could be put on a
+     * role, and that role could grant itself the rest.
+     */
+    Route::get('roles/catalogue', [RoleController::class, 'catalogue']);
+    Route::get('roles', [RoleController::class, 'index']);
+    Route::post('roles', [RoleController::class, 'store']);
+    Route::patch('roles/{role}', [RoleController::class, 'update']);
+    Route::delete('roles/{role}', [RoleController::class, 'destroy']);
+    Route::post('users/{user}/role', [RoleController::class, 'assign']);
+
+    // The application log, a day at a time. Administrator only: logs carry
+    // phone numbers and payment references.
+    Route::get('logs', [LogController::class, 'index']);
+    Route::get('logs/{date}', [LogController::class, 'show']);
 
     // Your own password. No user id in the route: the account being changed is
     // the one signed in.
@@ -176,6 +197,8 @@ Route::middleware('auth:sanctum')->group(function () {
      * why it happened. A generic update would let a client jump a complaint
      * straight from open to closed with nothing written down.
      */
+    // Before the {complaint} route, or the literal segment is swallowed.
+    Route::get('complaints/options', [ComplaintController::class, 'options'])->middleware('can:view.complaint');
     Route::get('complaints', [ComplaintController::class, 'index'])->middleware('can:view.complaint');
     Route::post('complaints', [ComplaintController::class, 'store'])->middleware('can:create.complaint');
     Route::get('complaints/{complaint}', [ComplaintController::class, 'show'])->middleware('can:view.complaint');

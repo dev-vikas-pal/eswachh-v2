@@ -54,7 +54,9 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            // One file per day by default. A single ever-growing laravel.log is
+            // unreadable by the time anybody needs it, and cannot be pruned.
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 
@@ -69,7 +71,9 @@ return [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
-            'days' => env('LOG_DAILY_DAYS', 14),
+            // Ten days, matching what the log screen offers. Older files are
+            // deleted by Monolog itself, so the directory cannot fill a disk.
+            'days' => env('LOG_DAILY_DAYS', 10),
             'replace_placeholders' => true,
         ],
 
