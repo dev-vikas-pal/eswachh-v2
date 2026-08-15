@@ -1,0 +1,174 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.vue';
+
+/*
+|------------------------------------------------------------------------------
+| Theme tokens
+|------------------------------------------------------------------------------
+|
+| Screens name a role - surface, ink, muted, line - never a shade. That is what
+| makes a dark theme possible without editing every view: the role stays put and
+| only the value behind it changes.
+|
+| Three states have to work, because the viewer's theme has three:
+|
+|   :root                     the light values, and the ones that apply when
+|                             nothing has said otherwise
+|   prefers-color-scheme      the operating system's choice, which only applies
+|                             when the user has NOT picked one explicitly
+|   [data-theme]              an explicit choice, which beats the system in
+|                             both directions
+|
+| The guard on the media query is what makes "light" stick on a machine set to
+| dark. Without it, choosing light would be silently overridden.
+*/
+
+:root {
+    --ground: #F5F5F4;
+    --surface: #FFFFFF;
+    --sunk: #FAFAF9;
+    --ink: #1C1917;
+    --body: #44403C;
+    --muted: #79716B;
+    --faint: #A8A29E;
+    --line: #E7E5E4;
+    --line-strong: #D6D3D1;
+
+    --accent: #EA580C;
+    --accent-ink: #C2410C;
+    --accent-soft: #FFF7ED;
+    --on-accent: #FFFFFF;
+
+    --ok: #15803D;
+    --ok-soft: #F0FDF4;
+    --warn: #B45309;
+    --warn-soft: #FFFBEB;
+    --crit: #B91C1C;
+    --crit-soft: #FEF2F2;
+    --info: #6D28D9;
+    --info-soft: #F5F3FF;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        --ground: #1C1917;
+        --surface: #262322;
+        --sunk: #201D1C;
+        --ink: #FAFAF9;
+        --body: #D6D3D1;
+        --muted: #A8A29E;
+        --faint: #79716B;
+        --line: #3A3533;
+        --line-strong: #4A4441;
+
+        --accent: #FB923C;
+        --accent-ink: #FDBA74;
+        --accent-soft: #3A2312;
+        --on-accent: #1C1917;
+
+        --ok: #4ADE80;
+        --ok-soft: #14271A;
+        --warn: #FBBF24;
+        --warn-soft: #2E2410;
+        --crit: #F87171;
+        --crit-soft: #2E1616;
+        --info: #C4B5FD;
+        --info-soft: #241E38;
+    }
+}
+
+:root[data-theme='dark'] {
+    --ground: #1C1917;
+    --surface: #262322;
+    --sunk: #201D1C;
+    --ink: #FAFAF9;
+    --body: #D6D3D1;
+    --muted: #A8A29E;
+    --faint: #79716B;
+    --line: #3A3533;
+    --line-strong: #4A4441;
+
+    --accent: #FB923C;
+    --accent-ink: #FDBA74;
+    --accent-soft: #3A2312;
+    --on-accent: #1C1917;
+
+    --ok: #4ADE80;
+    --ok-soft: #14271A;
+    --warn: #FBBF24;
+    --warn-soft: #2E2410;
+    --crit: #F87171;
+    --crit-soft: #2E1616;
+    --info: #C4B5FD;
+    --info-soft: #241E38;
+}
+
+@theme inline {
+    --color-ground: var(--ground);
+    --color-surface: var(--surface);
+    --color-sunk: var(--sunk);
+    --color-ink: var(--ink);
+    --color-body: var(--body);
+    --color-muted: var(--muted);
+    --color-faint: var(--faint);
+    --color-line: var(--line);
+    --color-line-strong: var(--line-strong);
+
+    --color-accent: var(--accent);
+    --color-accent-ink: var(--accent-ink);
+    --color-accent-soft: var(--accent-soft);
+    --color-on-accent: var(--on-accent);
+
+    --color-ok: var(--ok);
+    --color-ok-soft: var(--ok-soft);
+    --color-warn: var(--warn);
+    --color-warn-soft: var(--warn-soft);
+    --color-crit: var(--crit);
+    --color-crit-soft: var(--crit-soft);
+    --color-info: var(--info);
+    --color-info-soft: var(--info-soft);
+}
+
+/*
+| The page paints its own background rather than inheriting one. A transparent
+| body borrows whatever is behind it, which is how a dark page ends up with
+| light text on a light ground.
+*/
+html {
+    background: var(--ground);
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) { color-scheme: dark; }
+}
+
+html[data-theme='dark'] { color-scheme: dark; }
+html[data-theme='light'] { color-scheme: light; }
+
+body {
+    background: var(--ground);
+    color: var(--body);
+}
+
+/*
+| Compact density tightens the table rows and nothing else. It is for people
+| working a long list on a laptop, so it buys back vertical space where the
+| rows are, and leaves the reading parts of the interface alone.
+*/
+html[data-density='compact'] table :is(td, th) {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
+}
