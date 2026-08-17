@@ -7,7 +7,7 @@ use App\Models\Branch;
 use App\Models\CustomRole;
 use App\Models\User;
 use App\Support\Access\Abilities;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -32,7 +32,7 @@ class CustomRoleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
         $this->admin = User::factory()->superAdmin()->create();
@@ -41,7 +41,7 @@ class CustomRoleTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -147,7 +147,7 @@ class CustomRoleTest extends TestCase
         $role = $this->role(['abilities' => Abilities::all()]);
         $this->owner->forceFill(['custom_role_id' => $role->id])->save();
 
-        $this->assertFalse($this->owner->fresh()->seesAllBranches());
+        $this->assertFalse($this->owner->fresh()->seesAllSectors());
     }
 
     public function test_a_role_built_for_one_kind_of_account_cannot_be_put_on_another(): void

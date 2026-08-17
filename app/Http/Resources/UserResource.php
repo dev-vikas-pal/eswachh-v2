@@ -27,7 +27,7 @@ class UserResource extends JsonResource
                 'label' => $this->role?->label(),
             ],
             'abilities' => $this->abilities(),
-            'sees_all_branches' => $this->seesAllBranches(),
+            'sees_all_sectors' => $this->seesAllSectors(),
 
             // Sent with the session so the interface can draw itself correctly
             // on the very first paint, rather than rendering the default and

@@ -11,9 +11,12 @@ use App\Models\Complaint;
 use App\Models\Payment;
 use App\Models\ServiceLog;
 use App\Models\Subscription;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Http\FiltersBySector;
+use App\Support\Tenancy\SectorContext;
+use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -24,12 +27,44 @@ use Illuminate\Support\Facades\DB;
  * worked out by hand from spreadsheets. These answer the questions the business
  * actually asks at month end.
  *
- * Every one is branch scoped by the models themselves, so a franchise owner
- * sees their own figures and a super admin sees whichever branch is selected.
- * There is no branch parameter to widen it with.
+ * Every one is sector scoped by the models themselves, so a franchise user sees
+ * their own figures and there is no parameter that widens it.
  */
-class ReportController extends Controller
+class ReportController extends Controller implements HasMiddleware
 {
+    use FiltersBySector;
+
+    /**
+     * The sector picker, applied to every report at once.
+     *
+     * Six reports, a dozen queries between them, and each would otherwise need
+     * its own filter - which is a dozen chances to forget one and quietly show
+     * the whole business's figures while the header says a single sector.
+     *
+     * Narrowing the context instead lets the models' own scope do it, so a
+     * report added tomorrow is filtered without anybody remembering. It only
+     * ever narrows: the sector is checked against what this person covers
+     * before it is applied.
+     */
+    public static function middleware(): array
+    {
+        return [
+            function (Request $request, Closure $next) {
+                $sector = $request->query('sector_id');
+
+                if (! $sector) {
+                    return $next($request);
+                }
+
+                $mine = SectorContext::currentSectorIds($request->user());
+
+                abort_if($mine !== null && ! in_array($sector, $mine, true), 403, 'That sector is not yours.');
+
+                return SectorContext::forSectors([$sector], fn () => $next($request));
+            },
+        ];
+    }
+
     /** What reports exist, so the screen builds its own menu. */
     public function index(): JsonResponse
     {
@@ -253,11 +288,18 @@ class ReportController extends Controller
         $entries = DB::table('cloth_entries')
             ->whereBetween('created_at', [$from, $to]);
 
-        if (BranchContext::isRestricted() && $branch = BranchContext::currentBranchId()) {
-            $entries->where('branch_id', $branch);
-        } elseif (BranchContext::isRestricted()) {
-            // Restricted with no branch sees nothing, matching the model scope.
-            $entries->whereRaw('1 = 0');
+        if (SectorContext::isRestricted()) {
+            $sectorIds = SectorContext::currentSectorIds();
+
+            // Covering nothing sees nothing, matching the model scope.
+            if ($sectorIds === null || $sectorIds === []) {
+                $entries->whereRaw('1 = 0');
+            } else {
+                $entries->whereIn(
+                    'customer_id',
+                    DB::table('customers')->select('id')->whereIn('sector_id', $sectorIds),
+                );
+            }
         }
 
         $byType = (clone $entries)

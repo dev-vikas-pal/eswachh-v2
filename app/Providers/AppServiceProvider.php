@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
          * everything here rather than by listing every ability on the role.
          */
         Gate::before(function ($user, string $ability) {
-            return $user->seesAllBranches() ? true : null;
+            return $user->seesAllSectors() ? true : null;
         });
 
         Gate::after(function ($user, string $ability) {

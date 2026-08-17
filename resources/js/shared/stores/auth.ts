@@ -2,23 +2,23 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { api, primeCsrf } from '@/shared/api/client';
 import { useSettingsStore } from '@/shared/stores/settings';
-import type { AuthUser, Branch } from '@/shared/types';
+import type { AuthUser, Sector } from '@/shared/types';
 
 /**
- * Session and branch context.
+ * Session and territory.
  *
- * The selected branch is a view preference: it narrows what the screens ask
- * for. It grants nothing - the server decides what this user may see, and
- * rejects a branch that is not theirs.
+ * The selected sector is a view preference: it narrows what the screens ask
+ * for. It grants nothing - the server decides what this user may see from their
+ * user_sector assignments, and rejects a sector that is not theirs.
  */
 export const useAuthStore = defineStore('auth', () => {
     const user = ref<AuthUser | null>(null);
-    const branches = ref<Branch[]>([]);
-    const selectedBranchId = ref<string | null>(null);
+    const sectors = ref<Sector[]>([]);
+    const selectedSectorId = ref<string | null>(null);
     const ready = ref(false);
 
     const isSignedIn = computed(() => user.value !== null);
-    const canSwitchBranch = computed(() => branches.value.length > 1);
+    const canSwitchSector = computed(() => sectors.value.length > 1);
 
     /**
      * Which application this person belongs in.
@@ -38,20 +38,20 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             const { data } = await api.get('/me');
             user.value = data.data;
-            branches.value = data.branches;
+            sectors.value = data.sectors ?? [];
 
             // Their theme and layout arrive with the session, so the interface
             // draws itself correctly on the first paint instead of flashing the
             // default and rearranging.
             useSettingsStore().hydrate(data.data?.settings);
 
-            if (!selectedBranchId.value && branches.value.length === 1) {
-                selectedBranchId.value = branches.value[0].id;
+            if (!selectedSectorId.value && sectors.value.length === 1) {
+                selectedSectorId.value = sectors.value[0].id;
             }
         } catch {
             // A failure here just means "not signed in".
             user.value = null;
-            branches.value = [];
+            sectors.value = [];
         } finally {
             ready.value = true;
         }
@@ -85,21 +85,21 @@ export const useAuthStore = defineStore('auth', () => {
             await api.post('/logout');
         } finally {
             user.value = null;
-            branches.value = [];
-            selectedBranchId.value = null;
+            sectors.value = [];
+            selectedSectorId.value = null;
             // Back to the defaults: the next person to sign in on this machine
             // should not inherit the last one's theme.
             useSettingsStore().reset();
         }
     }
 
-    function selectBranch(id: string | null): void {
-        selectedBranchId.value = id;
+    function selectSector(id: string | null): void {
+        selectedSectorId.value = id;
     }
 
     return {
-        user, branches, selectedBranchId, ready,
-        isSignedIn, canSwitchBranch, isCustomer,
-        can, loadSession, signIn, signOut, signInWithCode, requestCode, selectBranch,
+        user, sectors, selectedSectorId, ready,
+        isSignedIn, canSwitchSector, isCustomer,
+        can, loadSession, signIn, signOut, signInWithCode, requestCode, selectSector,
     };
 });

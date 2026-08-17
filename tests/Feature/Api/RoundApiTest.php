@@ -10,7 +10,7 @@ use App\Models\ServiceLog;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,7 +25,7 @@ class RoundApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->ourBranch = Branch::factory()->create();
         $this->theirBranch = Branch::factory()->create();
@@ -33,7 +33,7 @@ class RoundApiTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -42,7 +42,7 @@ class RoundApiTest extends TestCase
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
         $other = User::factory()->cleaner($this->ourBranch)->create();
 
-        BranchContext::withoutScope(function () use ($cleaner, $other) {
+        SectorContext::withoutScope(function () use ($cleaner, $other) {
             $this->carFor($cleaner);
             $this->carFor($cleaner);
             $this->carFor($other);
@@ -59,7 +59,7 @@ class RoundApiTest extends TestCase
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
         $other = User::factory()->cleaner($this->ourBranch)->create();
 
-        BranchContext::withoutScope(function () use ($cleaner, $other) {
+        SectorContext::withoutScope(function () use ($cleaner, $other) {
             $this->carFor($cleaner);
             $this->carFor($other);
             $this->carFor($other);
@@ -95,7 +95,7 @@ class RoundApiTest extends TestCase
     public function test_recording_a_stop_twice_corrects_it(): void
     {
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
-        $vehicle = BranchContext::withoutScope(fn () => $this->carFor($cleaner));
+        $vehicle = SectorContext::withoutScope(fn () => $this->carFor($cleaner));
 
         $this->actingAs($cleaner)->postJson("/api/v1/round/vehicles/{$vehicle->id}", [
             'outcome' => ServiceOutcome::Missed->value,
@@ -107,14 +107,14 @@ class RoundApiTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.outcome.value', 'cleaned');
 
         // A slow connection and a second tap must not inflate the day.
-        $this->assertSame(1, BranchContext::withoutScope(fn () => ServiceLog::query()->count()));
+        $this->assertSame(1, SectorContext::withoutScope(fn () => ServiceLog::query()->count()));
     }
 
     public function test_a_stop_cannot_be_recorded_on_another_branchs_car(): void
     {
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
         $theirCleaner = User::factory()->cleaner($this->theirBranch)->create();
-        $theirCar = BranchContext::withoutScope(fn () => $this->carFor($theirCleaner));
+        $theirCar = SectorContext::withoutScope(fn () => $this->carFor($theirCleaner));
 
         $this->actingAs($cleaner)
             ->postJson("/api/v1/round/vehicles/{$theirCar->id}", [
@@ -127,13 +127,24 @@ class RoundApiTest extends TestCase
     {
         $customer = User::factory()->customer($this->ourBranch)->create();
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
-        $vehicle = BranchContext::withoutScope(fn () => $this->carFor($cleaner));
+        $vehicle = SectorContext::withoutScope(fn () => $this->carFor($cleaner));
 
+        /*
+         * 404 rather than 403, and that is a tightening rather than a change of
+         * mind.
+         *
+         * Under branch scoping a customer could see every car in their branch,
+         * so the ability check was the only thing stopping them and the answer
+         * was "you may not". Under sector scoping somebody else's car is not
+         * theirs to see at all, so the honest answer is "there is no such car" -
+         * which is the rule the rest of this codebase already follows, because
+         * refusing must not confirm that the record exists.
+         */
         $this->actingAs($customer)
             ->postJson("/api/v1/round/vehicles/{$vehicle->id}", [
                 'outcome' => ServiceOutcome::Cleaned->value,
             ])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_a_cleaner_can_only_mark_their_own_attendance(): void
@@ -183,7 +194,7 @@ class RoundApiTest extends TestCase
         $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
 
-        $cars = BranchContext::withoutScope(
+        $cars = SectorContext::withoutScope(
             fn () => collect(range(1, 3))->map(fn () => $this->carFor($cleaner))
         );
 

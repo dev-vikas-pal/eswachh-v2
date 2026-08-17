@@ -30,13 +30,15 @@ watch([search, status, from, to, sort, direction], () => { page.value = 1; });
 const { data, isPending, isError, error, isFetching } = useQuery({
     queryKey: computed(() => [
         'reminders', search.value, status.value, from.value, to.value,
-        page.value, sort.value, direction.value, auth.selectedBranchId,
+        page.value, sort.value, direction.value, auth.selectedSectorId,
     ]),
     placeholderData: keepPreviousData,
     queryFn: async () => (await api.get('/reminders', {
         params: {
             page: page.value,
             search: search.value || undefined,
+            // The picker in the top bar.
+            sector_id: auth.selectedSectorId || undefined,
             status: status.value || undefined,
             from: from.value || undefined,
             to: to.value || undefined,

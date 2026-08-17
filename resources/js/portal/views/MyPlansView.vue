@@ -2,9 +2,13 @@
 import { computed, ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { fetchOverview, type PortalPlan } from '@/portal/portal.api';
-import { payForRenewal } from '@/shared/api/checkout';
 import { describeError } from '@/shared/api/client';
 import SubscriptionPaymentsPanel from '@/shared/SubscriptionPaymentsPanel.vue';
+import RenewPlanPanel from '@/portal/RenewPlanPanel.vue';
+import ClothTopUpPanel from '@/portal/ClothTopUpPanel.vue';
+import AddCarPanel from '@/portal/AddCarPanel.vue';
+import { api } from '@/shared/api/client';
+import { useQuery as useQ } from '@tanstack/vue-query';
 
 /**
  * What a customer signs in to see: their car, their plan, when it runs out.
@@ -24,6 +28,25 @@ const outcome = ref<string | null>(null);
 
 /** Which plan has its payment history open. */
 const historyFor = ref<{ id: string; car: string | null } | null>(null);
+
+/** Which plan is being renewed, and which is topping up cloths. */
+const renewing = ref<PortalPlan | null>(null);
+const toppingUp = ref<PortalPlan | null>(null);
+const addingCar = ref(false);
+
+/**
+ * Whether the cloth service is being offered at all.
+ *
+ * A business-wide switch. Everything to do with cloths reads it, so turning the
+ * service on or off is one checkbox in the settings rather than a release.
+ */
+const { data: siteContent } = useQ({
+    queryKey: ['public-content'],
+    queryFn: async () => (await api.get('/public/content')).data.data,
+    staleTime: 5 * 60 * 1000,
+});
+
+const clothServiceOn = computed(() => Boolean(siteContent.value?.cloth_service));
 
 const plans = computed(() => data.value?.plans ?? []);
 
@@ -50,39 +73,6 @@ function standing(plan: PortalPlan): { label: string; tone: string } {
     return { label: 'Running', tone: 'text-ok' };
 }
 
-async function renew(plan: PortalPlan) {
-    busy.value = plan.id;
-    problem.value = null;
-    outcome.value = null;
-
-    /*
-     * Through the shared checkout, not a dialog of this page's own. It handles
-     * the machine with no gateway configured, posts the result to the callback
-     * that verifies the signature, and words a failed callback carefully -
-     * money may well have left the account even when the last step failed.
-     */
-    const result = await payForRenewal(plan.id, {
-        name: data.value?.profile.name ?? '',
-        email: data.value?.profile.email ?? '',
-        phone: data.value?.profile.phone ?? '',
-    });
-
-    busy.value = null;
-
-    if (result.ok) {
-        outcome.value = result.message;
-        await refetch();
-        return;
-    }
-
-    // A cancelled dialog is not a problem, so it does not get the red box.
-    if (result.cancelled) {
-        outcome.value = result.message;
-        return;
-    }
-
-    problem.value = result.message;
-}
 </script>
 
 <template>
@@ -112,6 +102,28 @@ async function renew(plan: PortalPlan) {
             <p v-if="!plans.length" class="rounded border border-line bg-surface px-4 py-6 text-center text-sm text-muted">
                 There is nothing on your account yet. Once the office sets up your plan it will appear here.
             </p>
+
+            <!--
+                A household with two cars buys two plans. v1 let somebody do
+                that and v2 sent them back to the public signup form, which then
+                refused them because their number was already registered.
+            -->
+            <div class="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-line-strong bg-surface p-4">
+                <div>
+                    <p class="font-medium text-ink">Another car?</p>
+                    <p class="text-sm text-muted">
+                        Start a second plan without typing your details again.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="ms-auto rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:brightness-110"
+                    @click="addingCar = true"
+                >
+                    Add a car
+                </button>
+            </div>
 
             <article
                 v-for="plan in plans"
@@ -162,9 +174,24 @@ async function renew(plan: PortalPlan) {
                         type="button"
                         class="rounded bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:opacity-90 disabled:opacity-60"
                         :disabled="busy === plan.id"
-                        @click="renew(plan)"
+                        @click="renewing = plan"
                     >
-                        {{ busy === plan.id ? 'Opening…' : 'Renew this plan' }}
+                        Renew this plan
+                    </button>
+
+                    <!--
+                        Topping up sits next to the plan it tops up: somebody
+                        thinking about cloths is looking at their car, not at a
+                        navigation bar. Hidden entirely when the service is off.
+                    -->
+                    <button
+                        v-if="clothServiceOn && plan.cloth.enabled && plan.status.value !== 'ended'"
+                        type="button"
+                        class="rounded border border-line-strong px-3 py-1.5 text-sm text-body transition hover:bg-sunk"
+                        @click="toppingUp = plan"
+                    >
+                        Top up cloths
+                        <span class="ms-1 text-xs text-muted">{{ plan.cloth.balance }} left</span>
                     </button>
 
                     <!--
@@ -192,6 +219,29 @@ async function renew(plan: PortalPlan) {
             :subscription-id="historyFor.id"
             :registration="historyFor.car"
             @close="historyFor = null"
+        />
+
+        <RenewPlanPanel
+            v-if="renewing"
+            :plan="renewing"
+            :cloth-service-on="clothServiceOn"
+            @close="renewing = null"
+            @done="renewing = null; refetch()"
+        />
+
+        <ClothTopUpPanel
+            v-if="toppingUp"
+            :plan="toppingUp"
+            @close="toppingUp = null"
+            @done="toppingUp = null; refetch()"
+        />
+
+        <AddCarPanel
+            v-if="addingCar"
+            :cloth-service-on="clothServiceOn"
+            :profile="data?.profile"
+            @close="addingCar = false"
+            @done="addingCar = false; refetch()"
         />
     </div>
 </template>

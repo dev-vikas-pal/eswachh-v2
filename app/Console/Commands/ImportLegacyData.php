@@ -25,7 +25,7 @@ use App\Models\Vehicle;
 use App\Models\VehicleCategory;
 use App\Models\VehicleModel;
 use App\Support\Legacy\LegacyMap;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -100,7 +100,7 @@ class ImportLegacyData extends Command
 
         // The import runs outside the branch scope: it is creating the
         // branches, so there is nobody to be scoped to yet.
-        BranchContext::withoutScope(function () use ($steps) {
+        SectorContext::withoutScope(function () use ($steps) {
             foreach ($steps as $step) {
                 $method = 'import'.ucfirst($step);
 
@@ -415,7 +415,7 @@ class ImportLegacyData extends Command
             // catch-all. Written as two steps because the sector lookup can
             // come back empty even when a sector id exists.
             $branchId = $sectorUuid
-                ? Sector::withoutGlobalScope('branch')->where('id', $sectorUuid)->value('branch_id')
+                ? Sector::withoutGlobalScope('sector')->where('id', $sectorUuid)->value('branch_id')
                 : null;
 
             $branchId ??= LegacyMap::find('branch', 'unassigned');
@@ -513,7 +513,7 @@ class ImportLegacyData extends Command
 
             // withTrashed: v1 has live subscriptions belonging to customers who
             // were soft deleted, and their cars still need a home.
-            $branchId = Customer::withoutGlobalScope('branch')->withTrashed()
+            $branchId = Customer::withoutGlobalScope('sector')->withTrashed()
                 ->where('id', $customerId)->value('branch_id');
 
             $this->upsert('vehicle', $row->id, fn () => Vehicle::create([
@@ -546,7 +546,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            $vehicle = Vehicle::withoutGlobalScope('branch')->withTrashed()->find($vehicleId);
+            $vehicle = Vehicle::withoutGlobalScope('sector')->withTrashed()->find($vehicleId);
 
             if (! $vehicle) {
                 continue;
@@ -593,7 +593,7 @@ class ImportLegacyData extends Command
             return;
         }
 
-        $subscription = Subscription::withoutGlobalScope('branch')->withTrashed()->find($subscriptionId);
+        $subscription = Subscription::withoutGlobalScope('sector')->withTrashed()->find($subscriptionId);
 
         if (! $subscription) {
             return;
@@ -642,7 +642,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            $subscription = Subscription::withoutGlobalScope('branch')
+            $subscription = Subscription::withoutGlobalScope('sector')
                 ->withTrashed()
                 ->find($subscriptionId);
 

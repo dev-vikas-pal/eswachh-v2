@@ -29,11 +29,11 @@ function onPeriod(range: { from: string; to: string }) {
  * switching branch refetches rather than showing the previous one's numbers.
  */
 const { data, isPending, isError } = useQuery({
-    queryKey: computed(() => ['dashboard', auth.selectedBranchId, from.value, to.value]),
+    queryKey: computed(() => ['dashboard', auth.selectedSectorId, from.value, to.value]),
     queryFn: async (): Promise<DashboardData> => {
         const { data } = await api.get('/dashboard', {
             params: {
-                ...(auth.selectedBranchId ? { branch_id: auth.selectedBranchId } : {}),
+                ...(auth.selectedSectorId ? { sector_id: auth.selectedSectorId } : {}),
                 from: from.value || undefined,
                 to: to.value || undefined,
             },

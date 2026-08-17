@@ -4,7 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Branch;
 use App\Models\User;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -28,7 +28,7 @@ class LogViewerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->admin = User::factory()->superAdmin()->create();
     }
@@ -40,7 +40,7 @@ class LogViewerTest extends TestCase
             File::delete($path);
         }
 
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -131,11 +131,28 @@ class LogViewerTest extends TestCase
 
     public function test_the_daily_channel_is_what_actually_runs(): void
     {
-        // The screen can only show what the application writes. If the log
-        // channel goes back to a single ever-growing file, this fails.
-        $this->assertContains('daily', config('logging.channels.stack.channels'));
+        /*
+         * The screen can only show what the application writes, and it reads
+         * laravel-*.log. If the daily channel goes back to a single
+         * ever-growing file, or stops pruning, this fails.
+         *
+         * The stack is deliberately not asserted: under tests it is redirected
+         * to a file of its own, because the suite provokes failures on purpose
+         * and two hundred of them were landing in the log this screen reads.
+         */
+        $this->assertSame('daily', config('logging.channels.daily.driver'));
+        $this->assertStringEndsWith('laravel.log', config('logging.channels.daily.path'));
         // Loosely compared: it arrives as a string from the environment.
         $this->assertEquals(10, config('logging.channels.daily.days'));
+    }
+
+    public function test_the_suite_does_not_write_to_the_log_this_screen_reads(): void
+    {
+        // The guard for the thing that actually went wrong: a test run left two
+        // hundred alarming entries against nine real ones, and every one of
+        // them was a test doing its job.
+        $this->assertSame('testing', config('logging.default'));
+        $this->assertStringEndsWith('testing.log', config('logging.channels.testing.path'));
     }
 
     private function writeLog(string $date, string $contents): void

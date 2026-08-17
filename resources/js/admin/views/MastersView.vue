@@ -3,7 +3,11 @@ import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api } from '@/shared/api/client';
 import { describeError } from '@/shared/api/client';
+import { useAuthStore } from '@/shared/stores/auth';
 import RichTextEditor from '@/admin/components/RichTextEditor.vue';
+import ImageField from '@/admin/components/ImageField.vue';
+
+const auth = useAuthStore();
 
 interface MasterMeta {
     key: string;
@@ -16,8 +20,11 @@ interface MasterMeta {
     rich: string[];
     long: string[];
     dates: string[];
+    images: string[];
     title_field: string;
     fields: string[];
+    /** Whether this master is assigned to people, so the form shows the picker. */
+    staff: boolean;
 }
 
 interface MasterRow {
@@ -57,6 +64,35 @@ const groups = computed(() => {
     return out;
 });
 
+const isSectors = computed(() => selected.value === 'sectors');
+
+/**
+ * "On sale" is right for a package and wrong for a sector, a state or a blog
+ * tag - none of which are sold.
+ */
+const onLabel = computed(() => (current.value?.group === 'Price list' ? 'On sale' : 'Active'));
+
+/**
+ * The line under the table.
+ *
+ * It used to say "prices here feed every quote" on all twenty lists, including
+ * the ones with no price on them at all - which read as a warning about
+ * something the screen was not doing.
+ */
+const footnote = computed(() => {
+    if (isSectors.value) {
+        return 'A sector is the territory. Whoever is ticked here sees the customers in it — that is '
+            + 'the whole rule, and changing it takes effect immediately without moving any customer.';
+    }
+
+    if (current.value?.group === 'Price list') {
+        return 'Prices here feed every quote. Changing one changes what new plans and renewals cost, '
+            + 'for every branch — running plans keep the price they were sold at.';
+    }
+
+    return null;
+});
+
 /** The parent list, when this master hangs off another one. */
 const { data: parentRows } = useQuery({
     queryKey: computed(() => ['masters', current.value?.parent?.master, 'options']),
@@ -85,11 +121,12 @@ const rows = computed(() => data.value?.data ?? []);
 const titleField = computed(() => current.value?.title_field ?? 'name');
 
 /**
- * Fields the form asks for: everything except the parent key, which has its
- * own control, and branch_id, which is set elsewhere.
+ * Fields the form asks for: everything except the title, which has its own
+ * control, and the parent key. Who covers a sector is not a field at all - it
+ * is rows in a pivot - so it gets a picker of its own below.
  */
 const formFields = computed(() =>
-    (current.value?.fields ?? []).filter((f) => f !== 'branch_id' && f !== titleField.value),
+    (current.value?.fields ?? []).filter((f) => f !== titleField.value),
 );
 
 /**
@@ -99,7 +136,15 @@ const formFields = computed(() =>
 const tableColumns = computed(() => {
     const named = current.value?.columns ?? [];
     const fields = named.length ? named : (current.value?.fields ?? []);
-    return fields.filter((f) => f !== 'branch_id' && f !== titleField.value);
+    const columns = fields.filter((f) => f !== titleField.value);
+
+    /*
+     * Who covers a sector belongs in the table, not only in the form.
+     *
+     * "Which sectors has nobody got" is the question this screen exists to
+     * answer, and it should be readable without opening every row.
+     */
+    return current.value?.staff ? [...columns, 'staff_names'] : columns;
 });
 
 // A different list means the old parent filter is meaningless.
@@ -157,13 +202,19 @@ async function save() {
     if (current.value.parent) payload[current.value.parent.key] = form.value[current.value.parent.key];
 
     try {
+        let notice: string | null = null;
+
         if (editing.value.id) {
-            await api.patch(`/masters/${selected.value}/${editing.value.id}`, payload);
+            const { data } = await api.patch(`/masters/${selected.value}/${editing.value.id}`, payload);
+            notice = data.notice ?? null;
         } else {
             await api.post(`/masters/${selected.value}`, payload);
         }
         editing.value = null;
+
+        if (notice) alert(notice);
         await queryClient.invalidateQueries({ queryKey: ['masters'] });
+        await refreshOwnSectors();
     } catch (e) {
         formError.value = describeError(e).message;
     } finally {
@@ -171,14 +222,37 @@ async function save() {
     }
 }
 
-async function withdraw(row: MasterRow) {
-    // Said plainly: this is a withdrawal from sale, not a delete, and running
-    // plans that use it carry on.
-    if (!confirm(`Withdraw "${row.name}" from sale? Plans already using it are unaffected.`)) return;
+/**
+ * An administrator can assign a sector to themselves, and the session they are
+ * reading it through was fetched at sign-in.
+ *
+ * Without this, changing your own assignment leaves every other screen showing
+ * the old territory until a reload nobody would think to do.
+ */
+async function refreshOwnSectors(): Promise<void> {
+    if (isSectors.value) await auth.loadSession();
+}
 
-    const { data } = await api.delete(`/masters/${selected.value}/${row.id}`);
-    if (data.in_use > 0) alert(data.message);
-    await queryClient.invalidateQueries({ queryKey: ['masters'] });
+async function withdraw(row: MasterRow) {
+    const question = isSectors.value
+        // Withdrawing a sector is not a withdrawal from sale, and the question
+        // should not imply that plans carry on as though nothing happened.
+        ? `Withdraw the sector "${row.name}"? This is refused while customers still live in it.`
+        : `Withdraw "${row.name}" from sale? Plans already using it are unaffected.`;
+
+    if (!confirm(question)) return;
+
+    try {
+        const { data } = await api.delete(`/masters/${selected.value}/${row.id}`);
+        if (data.in_use > 0) alert(data.message);
+        await queryClient.invalidateQueries({ queryKey: ['masters'] });
+        await refreshOwnSectors();
+    } catch (e) {
+        // The server refuses some of these with a reason worth reading - a
+        // sector that still has customers in it. Swallowing it left the row
+        // sitting there with no explanation.
+        alert(describeError(e).message);
+    }
 }
 
 async function restore(row: MasterRow) {
@@ -264,7 +338,10 @@ async function restore(row: MasterRow) {
                             <th class="px-3 py-2 font-medium">Name</th>
                             <th v-for="f in tableColumns"
                                 :key="f" class="px-3 py-2 font-medium">
-                                {{ current?.money.includes(f) ? rupeeField(f).replace('_', ' ') + ' (₹)' : f.replace('_', ' ') }}
+                                <template v-if="f === 'staff_names'">Covered by</template>
+                                <template v-else>
+                                    {{ current?.money.includes(f) ? rupeeField(f).replace('_', ' ') + ' (₹)' : f.replace('_', ' ') }}
+                                </template>
                             </th>
                             <th class="px-3 py-2 font-medium">Status</th>
                             <th class="px-3 py-2 text-right font-medium">Actions</th>
@@ -290,6 +367,15 @@ async function restore(row: MasterRow) {
                                     {{ row[f + '_text'] || '—' }}
                                 </span>
                                 <template v-else-if="current?.money.includes(f)">{{ row[rupeeField(f)] }}</template>
+
+                                <!-- Nobody assigned is worth noticing, not a dash. -->
+                                <span
+                                    v-else-if="f === 'staff_names'"
+                                    :class="row.staff_names ? 'text-body' : 'rounded bg-warn-soft px-2 py-0.5 text-xs text-warn'"
+                                >
+                                    {{ row.staff_names || 'Nobody' }}
+                                </span>
+
                                 <template v-else>{{ row[f] ?? '—' }}</template>
                             </td>
                             <td class="px-3 py-2">
@@ -299,7 +385,7 @@ async function restore(row: MasterRow) {
                                         ? 'bg-crit-soft text-crit'
                                         : row.status ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'"
                                 >
-                                    {{ row.withdrawn ? 'Withdrawn' : row.status ? 'On sale' : 'Off' }}
+                                    {{ row.withdrawn ? 'Removed' : row.status ? onLabel : 'Off' }}
                                 </span>
                             </td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
@@ -325,7 +411,7 @@ async function restore(row: MasterRow) {
                                     class="rounded px-2 py-1 text-xs font-medium text-ok hover:bg-ok-soft"
                                     @click="restore(row)"
                                 >
-                                    Put back on sale
+                                    {{ isSectors ? 'Put back' : 'Put back on sale' }}
                                 </button>
                             </td>
                         </tr>
@@ -333,10 +419,7 @@ async function restore(row: MasterRow) {
                 </table>
             </div>
 
-            <p class="mt-3 text-xs text-muted">
-                Prices here feed every quote. Changing one changes what new plans and renewals cost,
-                for every branch — running plans keep the price they were sold at.
-            </p>
+            <p v-if="footnote" class="mt-3 text-xs text-muted">{{ footnote }}</p>
         </div>
 
         <!-- Edit panel -->
@@ -373,11 +456,31 @@ async function restore(row: MasterRow) {
                         />
                     </label>
 
+                    <!--
+                        Who covers this sector is shown, not edited.
+
+                        Territory is assigned on the person, under People,
+                        because that is the moment it matters: an account
+                        created without one signs in to empty screens. Here it
+                        is just the answer to "has anybody got this sector".
+                    -->
+                    <p v-if="current?.staff" class="rounded border border-line bg-sunk px-3 py-2 text-xs text-muted">
+                        <template v-if="editing?.staff_names">
+                            Covered by <span class="text-ink">{{ editing.staff_names }}</span>.
+                        </template>
+                        <template v-else>
+                            Nobody covers this sector yet, so its customers are invisible to every
+                            franchise user and cleaner.
+                        </template>
+                        Assign it on the <span class="text-ink">People</span> screen.
+                    </p>
+
                     <label v-for="f in formFields" :key="f">
                         <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
                             {{ current?.money.includes(f) ? rupeeField(f).replace('_', ' ') + ' (₹)' : f.replace('_', ' ') }}
                         </span>
-                        <RichTextEditor v-if="current?.rich.includes(f)" v-model="form[f]" />
+                        <ImageField v-if="current?.images?.includes(f)" v-model="form[f]" :folder="selected" />
+                        <RichTextEditor v-else-if="current?.rich.includes(f)" v-model="form[f]" />
                         <textarea
                             v-else-if="current?.long.includes(f)"
                             v-model="form[f]"

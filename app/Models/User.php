@@ -5,8 +5,9 @@ namespace App\Models;
 use App\Enums\UserRole;
 use App\Models\Concerns\HasAuditColumns;
 use App\Support\Preferences\UserPreferences;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -100,15 +101,41 @@ class User extends Authenticatable
     }
 
     /**
-     * Only a super admin sees every branch.
+     * The territory this person covers.
+     *
+     * Many to many, because a franchise user commonly runs several sectors and
+     * a sector may be covered by more than one person - an owner and the
+     * cleaners working it. This is the only thing that decides which customers
+     * they can see; there is no franchise entity above it and nothing is copied
+     * onto the customer.
+     */
+    public function sectors(): BelongsToMany
+    {
+        /*
+         * Read outside the sector scope, deliberately.
+         *
+         * Sector is itself scoped, so without this the relation answers "which
+         * of your sectors can *I* see" - which is empty for an administrator
+         * looking at somebody else's assignments, and empty again for the scope
+         * that is trying to establish what this person covers in the first
+         * place. What somebody is assigned is a fact about them, not a view of
+         * the world from where the reader happens to stand.
+         */
+        return $this->belongsToMany(Sector::class, 'user_sector')
+            ->withoutGlobalScope('sector')
+            ->withTimestamps();
+    }
+
+    /**
+     * Only a super admin sees every sector.
      *
      * Read from the built-in role and nowhere else. A custom role deliberately
      * cannot affect this: it is the one thing that, granted by accident from a
      * permissions screen, would show one franchise another's customers.
      */
-    public function seesAllBranches(): bool
+    public function seesAllSectors(): bool
     {
-        return $this->role?->seesAllBranches() ?? false;
+        return $this->role?->seesAllSectors() ?? false;
     }
 
     /** The role the business defined, if this account has been given one. */
@@ -171,9 +198,33 @@ class User extends Authenticatable
         return $role && $role->status ? $role : null;
     }
 
-    public function scopeInBranch($query, ?string $branchId)
+    /**
+     * People covering any of these sectors.
+     *
+     * @param  array<int, string>|string|null  $sectorIds
+     */
+    public function scopeInSectors($query, array|string|null $sectorIds)
     {
-        return $branchId === null ? $query : $query->where('branch_id', $branchId);
+        /*
+         * Null and empty mean opposite things, and confusing them is a leak.
+         *
+         * Null is "no territory filter", which is what an administrator gets.
+         * An empty array is "covers nothing", and must return nobody - the same
+         * fail-closed rule as the global scope. Treating the second as the
+         * first would show somebody with no sectors every member of staff.
+         */
+        if ($sectorIds === null) {
+            return $query;
+        }
+
+        if ($sectorIds === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn(
+            'id',
+            DB::table('user_sector')->select('user_id')->whereIn('sector_id', (array) $sectorIds),
+        );
     }
 
     public function scopeRole($query, UserRole $role)
@@ -184,8 +235,8 @@ class User extends Authenticatable
     /**
      * People the signed in user is allowed to see.
      *
-     * User deliberately does NOT carry the branch global scope, unlike every
-     * other branch-owned model. Authentication looks a user up by email before
+     * User deliberately does NOT carry the sector global scope, unlike every
+     * other scoped model. Authentication looks a user up by email before
      * anybody is signed in, and a fail-closed scope in that moment matches
      * nobody - so adding the trait here would lock every account out of the
      * site, including the one needed to fix it.
@@ -196,16 +247,28 @@ class User extends Authenticatable
      */
     public function scopeVisible($query)
     {
-        if (! BranchContext::isRestricted()) {
+        if (! SectorContext::isRestricted()) {
             return $query;
         }
 
-        $branchId = BranchContext::currentBranchId();
+        $sectorIds = SectorContext::currentSectorIds();
 
-        // Same rule as the global scope: restricted with no branch sees
-        // nobody, never everybody.
-        return $branchId === null
-            ? $query->whereRaw('1 = 0')
-            : $query->where('branch_id', $branchId);
+        // Same rule as the global scope: restricted while covering nothing
+        // sees nobody, never everybody.
+        if ($sectorIds === null || $sectorIds === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        /*
+         * Colleagues, plus yourself.
+         *
+         * Yourself explicitly, because somebody has to be able to open their
+         * own account page, and a person newly created with no sectors yet
+         * would otherwise be unable to see the record they are signed in as.
+         */
+        return $query->where(function ($q) use ($sectorIds) {
+            $q->whereIn('id', DB::table('user_sector')->select('user_id')->whereIn('sector_id', $sectorIds))
+                ->orWhere('id', auth()->id());
+        });
     }
 }

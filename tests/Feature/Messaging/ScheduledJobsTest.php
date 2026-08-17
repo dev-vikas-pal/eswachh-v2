@@ -14,7 +14,7 @@ use App\Models\Duration;
 use App\Models\Message;
 use App\Models\Subscription;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -32,7 +32,7 @@ class ScheduledJobsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
 
@@ -43,7 +43,7 @@ class ScheduledJobsTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         Carbon::setTestNow();
         parent::tearDown();
     }
@@ -59,7 +59,7 @@ class ScheduledJobsTest extends TestCase
         $this->assertFalse($messenger->deliveryEnabled());
         $this->assertSame('Running tests.', $messenger->suppressionReason());
 
-        BranchContext::withoutScope(function () use ($messenger) {
+        SectorContext::withoutScope(function () use ($messenger) {
             $subscription = $this->subscription();
 
             $message = $messenger->send($subscription, MessagePurpose::RenewalDue, 'Your plan is due.');
@@ -74,7 +74,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_a_customer_is_not_told_the_same_thing_twice_in_a_day(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $messenger = app(Messenger::class);
             $subscription = $this->subscription();
 
@@ -90,7 +90,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_a_different_purpose_on_the_same_day_still_goes(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $messenger = app(Messenger::class);
             $subscription = $this->subscription();
 
@@ -104,7 +104,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_reminders_go_out_on_the_offsets_and_no_others(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             // Due in 7 days, 5 days, 3 days, today, and 3 days overdue.
             foreach ([7, 5, 3, 0, -3] as $days) {
                 $this->subscription(['period_end' => Carbon::today()->addDays($days)]);
@@ -120,7 +120,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_an_overdue_reminder_says_something_different(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->subscription(['period_end' => Carbon::today()->subDays(3)]);
 
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
@@ -133,7 +133,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_a_subscription_on_hold_is_not_chased(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->subscription([
                 'period_end' => Carbon::today(),
                 'status' => SubscriptionStatus::Hold,
@@ -149,7 +149,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_running_the_reminder_job_twice_messages_once(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->subscription(['period_end' => Carbon::today()]);
 
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
@@ -161,7 +161,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_a_dry_run_writes_nothing(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->subscription(['period_end' => Carbon::today()]);
 
             $this->artisan('eswachh:send-renewal-reminders --dry-run')->assertSuccessful();
@@ -172,7 +172,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_holding_respects_the_grace_period(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $justOverdue = $this->subscription(['period_end' => Carbon::today()->subDays(3)]);
             $longOverdue = $this->subscription(['period_end' => Carbon::today()->subDays(20)]);
 
@@ -186,7 +186,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_holding_refuses_to_run_beyond_the_safety_limit(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             collect(range(1, 5))->each(
                 fn () => $this->subscription(['period_end' => Carbon::today()->subDays(30)])
             );
@@ -204,7 +204,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_a_paused_subscription_has_its_cloths_written_off(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription([
                 'period_end' => Carbon::today()->subDays(20),
                 'cloth_service' => true,
@@ -230,7 +230,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_a_paused_customer_is_told(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->subscription(['period_end' => Carbon::today()->subDays(20)]);
 
             $this->artisan('eswachh:hold-overdue --grace=7')->assertSuccessful();
@@ -243,7 +243,7 @@ class ScheduledJobsTest extends TestCase
 
     public function test_the_hold_dry_run_changes_nothing(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['period_end' => Carbon::today()->subDays(20)]);
 
             $this->artisan('eswachh:hold-overdue --grace=7 --dry-run')->assertSuccessful();
@@ -257,7 +257,7 @@ class ScheduledJobsTest extends TestCase
     {
         $other = Branch::factory()->create();
 
-        BranchContext::withoutScope(function () use ($other) {
+        SectorContext::withoutScope(function () use ($other) {
             $this->subscription(['period_end' => Carbon::today()]);
             $this->subscription(['period_end' => Carbon::today()], $other);
 

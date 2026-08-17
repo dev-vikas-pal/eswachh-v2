@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\Duration;
 use App\Models\Subscription;
 use App\Models\Vehicle;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Carbon;
 
@@ -22,7 +23,10 @@ class SubscriptionFactory extends Factory
     {
         return [
             'branch_id' => Branch::factory(),
-            'customer_id' => Customer::factory(),
+            // A customer in the same territory - see ComplaintFactory for why.
+            'customer_id' => fn (array $attributes) => SectorContext::withoutScope(
+                fn () => Customer::factory()->create(['branch_id' => $attributes['branch_id'] ?? null])->id
+            ),
             'vehicle_id' => Vehicle::factory(),
             'duration_id' => Duration::factory(),
             'sequence' => 1,

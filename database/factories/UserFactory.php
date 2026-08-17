@@ -4,7 +4,9 @@ namespace Database\Factories;
 
 use App\Enums\UserRole;
 use App\Models\Branch;
+use App\Models\Sector;
 use App\Models\User;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 
@@ -62,11 +64,53 @@ class UserFactory extends Factory
         return $this->state(fn () => ['branch_id' => null]);
     }
 
+    /**
+     * Give this person some territory.
+     *
+     * @param  iterable<int, Sector|string>|Sector|string  $sectors
+     */
+    public function coveringSectors(iterable|Sector|string $sectors): static
+    {
+        $ids = collect(is_iterable($sectors) ? $sectors : [$sectors])
+            ->map(fn ($s) => $s instanceof Sector ? $s->id : $s)
+            ->all();
+
+        return $this->afterCreating(fn (User $user) => $user->sectors()->syncWithoutDetaching($ids));
+    }
+
     private function forRole(UserRole $role, Branch|string|null $branch): static
     {
-        return $this->state(fn () => [
+        $factory = $this->state(fn () => [
             'role' => $role,
             'branch_id' => $branch instanceof Branch ? $branch->id : $branch,
         ]);
+
+        /*
+         * Staff given a branch get that branch's sectors.
+         *
+         * Branches no longer decide anything - user_sector does - but the test
+         * suite says "a franchise owner of this branch" several hundred times,
+         * and it means "somebody who covers what this branch covers". Honouring
+         * that keeps the setup honest without rewriting every file to say the
+         * same thing a longer way.
+         *
+         * Customers are excluded: their territory comes from their address, and
+         * putting them in the pivot would let them see their neighbours.
+         */
+        if ($branch === null || $role === UserRole::Customer) {
+            return $factory;
+        }
+
+        $branchId = $branch instanceof Branch ? $branch->id : $branch;
+
+        return $factory->afterCreating(function (User $user) use ($branchId) {
+            $sectorIds = SectorContext::withoutScope(
+                fn () => Sector::query()->where('branch_id', $branchId)->pluck('id')->all()
+            );
+
+            if ($sectorIds !== []) {
+                $user->sectors()->syncWithoutDetaching($sectorIds);
+            }
+        });
     }
 }

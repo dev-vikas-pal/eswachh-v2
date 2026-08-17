@@ -8,6 +8,7 @@ use App\Enums\ComplaintStatus;
 use App\Models\Branch;
 use App\Models\Complaint;
 use App\Models\Customer;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -22,7 +23,19 @@ class ComplaintFactory extends Factory
     {
         return [
             'branch_id' => Branch::factory(),
-            'customer_id' => Customer::factory(),
+
+            /*
+             * A customer in the same territory as the complaint.
+             *
+             * The suite says ['branch_id' => $branch->id] in a hundred places
+             * and means "in that territory". A bare Customer::factory() would
+             * build one in a branch of its own, whose sector nobody in this
+             * test covers - so the row exists and is invisible, which reads as
+             * a broken scope rather than a mismatched fixture.
+             */
+            'customer_id' => fn (array $attributes) => SectorContext::withoutScope(
+                fn () => Customer::factory()->create(['branch_id' => $attributes['branch_id'] ?? null])->id
+            ),
             // Unique without going through the numbering series, which needs a
             // real branch row and a lock.
             'reference' => 'TST/CMP/2026-27/'.Str::upper(Str::random(8)),

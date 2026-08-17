@@ -3,7 +3,8 @@
  * compile error rather than a runtime surprise.
  */
 
-export interface Branch {
+/** A territory. Staff are assigned these; a customer sits in one. */
+export interface Sector {
     id: string;
     name: string;
 }
@@ -30,9 +31,9 @@ export interface AuthUser {
     role: { value: string; label: string };
     /** For rendering only. The server authorises every request regardless. */
     abilities: string[];
-    sees_all_branches: boolean;
+    sees_all_sectors: boolean;
     settings: UserSettings;
-    branch?: Branch;
+    branch?: { id: string; name: string };
 }
 
 export interface DashboardData {

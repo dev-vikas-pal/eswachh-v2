@@ -11,8 +11,9 @@ use App\Http\Resources\PaymentResource;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Support\Http\RestrictsToOwnRecords;
+use App\Support\Http\FiltersBySector;
 use App\Support\Http\SortsLists;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,7 @@ use Illuminate\Support\Carbon;
 class PaymentController extends Controller
 {
     use RestrictsToOwnRecords;
+    use FiltersBySector;
     use SortsLists;
 
     private const SORTABLE = [
@@ -87,6 +89,9 @@ class PaymentController extends Controller
                         ->orWhere('phone', 'like', "%{$search}%"));
             });
         }
+
+        // The sector picker in the top bar.
+        $this->applySectorFilter($query, $request, 'sector');
 
         $this->applySort($query, $request, self::SORTABLE, 'created');
 
@@ -270,7 +275,7 @@ class PaymentController extends Controller
         ]);
 
         $payment->forceFill([
-            'invoice_number' => \App\Domain\Billing\InvoiceNumber::next($payment->branch_id),
+            'invoice_number' => \App\Domain\Billing\InvoiceNumber::next(),
         ])->save();
 
         /*
@@ -327,7 +332,7 @@ class PaymentController extends Controller
                     ->where('status', PaymentStatus::Initiated)
                     ->whereBetween('created_at', [$from, $to])
                     ->count(),
-                'branch_id' => BranchContext::currentBranchId(),
+                'sector_ids' => SectorContext::currentSectorIds(),
             ],
         ]);
     }

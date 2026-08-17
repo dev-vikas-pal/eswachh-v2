@@ -23,6 +23,14 @@ export async function listSubscriptions(params: {
     page: number;
     sort: string;
     direction: string;
+    /**
+     * The picker in the top bar.
+     *
+     * Sent alongside the filters rather than inside them, so every list in the
+     * application answers the same parameter name and one shared check decides
+     * whether the sector is the caller's to ask for.
+     */
+    sectorId?: string | null;
 }) {
     const filter: Record<string, unknown> = {};
 
@@ -35,6 +43,7 @@ export async function listSubscriptions(params: {
     const { data } = await api.get('/subscriptions', {
         params: {
             filter,
+            sector_id: params.sectorId || undefined,
             page: params.page,
             sort: params.sort,
             direction: params.direction,
@@ -59,7 +68,7 @@ export async function bulkTemplates() {
     return data.data as Array<{ key: string; name: string; description: string | null; preview: string }>;
 }
 
-export async function cleanersForBranch() {
+export async function cleanersInSectors() {
     const { data } = await api.get('/users', { params: { role: 'cleaner', per_page: 100 } });
     return data.data as Array<{ id: string; name: string }>;
 }

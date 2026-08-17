@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -15,7 +15,13 @@ use Illuminate\Support\Carbon;
  */
 class ClothMovement extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
+
+    /** Reached through the plan, like the service log it sits beside. */
+    protected static function sectorScope(): array
+    {
+        return ['customer' => 'subscription_id', 'through' => 'subscriptions'];
+    }
 
     public const PICKUP = 'pickup';
 
@@ -65,10 +71,17 @@ class ClothMovement extends BaseModel
      * The number that matters: cloths sitting in a laundry somewhere are cloths
      * a customer has paid for and cannot use.
      */
-    public static function outstanding(?string $branchId = null): int
+    /**
+     * Cloths collected and not yet returned.
+     *
+     * Takes no scope of its own: the global sector scope has already narrowed
+     * both halves to what the caller may see, and a second filter here would
+     * be a second place to get it wrong.
+     */
+    public static function outstanding(): int
     {
-        $picked = static::query()->pickups()->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->sum('cloth_count');
-        $returned = static::query()->deliveries()->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->sum('cloth_count');
+        $picked = static::query()->pickups()->sum('cloth_count');
+        $returned = static::query()->deliveries()->sum('cloth_count');
 
         return (int) $picked - (int) $returned;
     }

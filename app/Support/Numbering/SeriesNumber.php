@@ -2,20 +2,26 @@
 
 namespace App\Support\Numbering;
 
-use App\Models\Branch;
+use App\Support\Settings\SiteSettings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Issues the next number in a per branch, per financial year series.
+ * Issues the next number in a per financial year series.
  *
  * Invoices and complaints both need a short number a person can read down a
- * phone. Both need it unbroken within a branch, and both need two simultaneous
- * requests not to get the same one. That is one problem, so it is one class.
+ * phone. Both need it unbroken, and both need two simultaneous requests not to
+ * get the same one. That is one problem, so it is one class.
  *
- * Locking the branch row serialises issuing within a branch and lets branches
- * run independently.
+ * One series for the business, not one per territory. It used to run per
+ * branch, keyed on the branch's code; sectors are the wrong replacement,
+ * because somebody covering three of them would have their invoices split
+ * across three runs and an accountant reading one would find gaps that are not
+ * gaps. The prefix now comes from the invoice_prefix setting, which existed all
+ * along and which nothing had ever read.
+ *
+ * A row in number_series is what two simultaneous requests queue behind.
  */
 class SeriesNumber
 {
@@ -24,16 +30,26 @@ class SeriesNumber
      * @param  string  $column               The column holding them
      * @param  string  $kind                 Letter block in the number: INV, CMP
      */
-    public static function next(?string $branchId, string $model, string $column, string $kind): string
+    public static function next(string $model, string $column, string $kind): string
     {
         $year = self::financialYear();
+        $prefix = sprintf(
+            '%s/%s/%s/',
+            strtoupper((string) (SiteSettings::get('invoice_prefix') ?: 'ESW')),
+            $kind,
+            $year,
+        );
 
-        return DB::transaction(function () use ($branchId, $model, $column, $kind, $year) {
-            $branch = $branchId
-                ? Branch::query()->lockForUpdate()->find($branchId)
-                : null;
-
-            $prefix = sprintf('%s/%s/%s/', strtoupper($branch?->code ?? 'ESW'), $kind, $year);
+        return DB::transaction(function () use ($model, $column, $kind, $prefix) {
+            /*
+             * Serialised on a row of its own.
+             *
+             * Locking the highest existing number cannot work: when there is no
+             * row yet there is nothing to lock, and that is exactly the moment
+             * two requests collide.
+             */
+            DB::table('number_series')->insertOrIgnore(['kind' => $kind]);
+            DB::table('number_series')->where('kind', $kind)->lockForUpdate()->first();
 
             // Zero padded to a fixed width, so ordering the strings orders the
             // numbers. Without that, 10 sorts before 9.

@@ -15,6 +15,9 @@ interface UserRow {
     custom_role: { id: string; name: string; status: boolean } | null;
     custom_role_id: string | null;
     branch: { id: string; name: string } | null;
+    /** The territory: what decides which customers this account can see. */
+    sector_ids: string[];
+    sector_names: string;
     status: boolean;
     removed: boolean;
 }
@@ -58,14 +61,17 @@ const includeRemoved = ref(false);
 const page = ref(1);
 
 const editing = ref<UserRow | null>(null);
-const form = ref({ name: '', email: '', phone: '', role: '', branch_id: '', password: '', status: true });
+const form = ref<{
+    name: string; email: string; phone: string; role: string;
+    branch_id: string; password: string; status: boolean; sector_ids: string[];
+}>({ name: '', email: '', phone: '', role: '', branch_id: '', password: '', status: true, sector_ids: [] });
 const formError = ref<string | null>(null);
 const saving = ref(false);
 
 watch([search, roleFilter, includeRemoved], () => { page.value = 1; });
 
 const { data, isPending, isError, error, isFetching } = useQuery({
-    queryKey: computed(() => ['users', search.value, roleFilter.value, includeRemoved.value, page.value, auth.selectedBranchId]),
+    queryKey: computed(() => ['users', search.value, roleFilter.value, includeRemoved.value, page.value, auth.selectedSectorId]),
     placeholderData: keepPreviousData,
     queryFn: async () => (await api.get('/users', {
         params: {
@@ -73,6 +79,8 @@ const { data, isPending, isError, error, isFetching } = useQuery({
             search: search.value || undefined,
             role: roleFilter.value || undefined,
             include_disabled: includeRemoved.value ? 1 : undefined,
+            // The picker in the top bar, narrowing to who covers it.
+            sector_id: auth.selectedSectorId || undefined,
         },
     })).data,
 });
@@ -93,8 +101,9 @@ function startNew() {
     form.value = {
         name: '', email: '', phone: '',
         role: assignableRoles.value[0]?.value ?? '',
-        branch_id: auth.user?.sees_all_branches ? '' : (auth.user?.branch?.id ?? ''),
+        branch_id: auth.user?.sees_all_sectors ? '' : (auth.user?.branch?.id ?? ''),
         password: '', status: true,
+        sector_ids: [],
     };
 }
 
@@ -110,6 +119,7 @@ function startEdit(row: UserRow) {
         // Left blank on purpose: an empty box means "leave it as it was".
         password: '',
         status: row.status,
+        sector_ids: [...(row.sector_ids ?? [])],
     };
 }
 
@@ -127,7 +137,19 @@ async function save() {
         status: form.value.status,
     };
 
-    if (auth.user?.sees_all_branches) payload.branch_id = form.value.branch_id || null;
+    if (auth.user?.sees_all_sectors) payload.branch_id = form.value.branch_id || null;
+
+    /*
+     * Sent as an empty array rather than omitted when nobody is ticked: the two
+     * mean different things to the server, and leaving it out would quietly
+     * keep the old territory instead of clearing it.
+     *
+     * Not sent at all for the roles that have no assignment - an administrator
+     * covers everything by role, and a customer by their address.
+     */
+    if (form.value.role !== 'super_admin' && form.value.role !== 'customer') {
+        payload.sector_ids = form.value.sector_ids;
+    }
     if (form.value.password) payload.password = form.value.password;
 
     try {
@@ -225,7 +247,7 @@ const roleFilters = [
                         <th class="px-3 py-2 font-medium">Name</th>
                         <th class="px-3 py-2 font-medium">Contact</th>
                         <th class="px-3 py-2 font-medium">Role</th>
-                        <th class="px-3 py-2 font-medium">Branch</th>
+                        <th class="px-3 py-2 font-medium">Sectors</th>
                         <th class="px-3 py-2 font-medium">Status</th>
                         <th class="px-3 py-2 text-right font-medium">Actions</th>
                     </tr>
@@ -273,7 +295,12 @@ const roleFilters = [
                                 </option>
                             </select>
                         </td>
-                        <td class="px-3 py-2 text-body">{{ row.branch?.name ?? 'All branches' }}</td>
+                        <td class="px-3 py-2 text-body">
+                            <span v-if="row.role.value === 'super_admin'" class="text-muted">All sectors</span>
+                            <!-- Covering nothing means an empty dashboard, so it is worth noticing. -->
+                            <span v-else-if="!row.sector_names" class="rounded bg-warn-soft px-2 py-0.5 text-xs text-warn">None</span>
+                            <span v-else>{{ row.sector_names }}</span>
+                        </td>
                         <td class="px-3 py-2">
                             <span
                                 class="rounded px-2 py-0.5 text-xs font-medium"
@@ -358,13 +385,48 @@ const roleFilters = [
                         </span>
                     </label>
 
-                    <label v-if="auth.user?.sees_all_branches && form.role !== 'super_admin'">
-                        <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Branch</span>
-                        <select v-model="form.branch_id" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent">
-                            <option value="">Choose…</option>
-                            <option v-for="b in auth.branches" :key="b.id" :value="b.id">{{ b.name }}</option>
-                        </select>
-                    </label>
+                    <!--
+                        The territory this person covers.
+
+                        Hidden for an administrator, who covers everything by
+                        role, and for a customer, whose sector comes from their
+                        address rather than an assignment.
+
+                        Checkboxes rather than a multi-select: several sectors
+                        per person is normal, and a native multi-select hides
+                        that behind a scroll and a modifier key.
+                    -->
+                    <div v-if="form.role !== 'super_admin' && form.role !== 'customer'">
+                        <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
+                            Sectors covered
+                        </span>
+
+                        <div v-if="auth.sectors.length" class="max-h-44 space-y-1 overflow-y-auto rounded border border-line-strong p-2">
+                            <label
+                                v-for="sector in auth.sectors"
+                                :key="sector.id"
+                                class="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-sunk"
+                            >
+                                <input
+                                    v-model="form.sector_ids"
+                                    type="checkbox"
+                                    :value="sector.id"
+                                    class="rounded border-line-strong"
+                                />
+                                <span class="text-ink">{{ sector.name }}</span>
+                            </label>
+                        </div>
+
+                        <p v-else class="rounded border border-line bg-sunk px-3 py-2 text-xs text-muted">
+                            There are no sectors yet. Add one under
+                            <span class="text-ink">Masters → Sectors</span> first.
+                        </p>
+
+                        <span class="mt-1 block text-xs text-faint">
+                            This is what they will see. An account covering nothing signs in to
+                            empty screens.
+                        </span>
+                    </div>
 
                     <label>
                         <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">

@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -29,9 +30,9 @@ class DashboardController extends Controller
     {
         $this->authorize('view.dashboard');
 
-        $branchId = $this->resolveBranch($request);
+        $sectorIds = $this->resolveSectors($request);
 
-        return BranchContext::forBranchOrAll($branchId, function () use ($request) {
+        return SectorContext::forSectorsOrOwn($sectorIds, function () use ($request) {
             $today = Carbon::today();
 
             return response()->json([
@@ -48,13 +49,18 @@ class DashboardController extends Controller
                             ->count(),
                     ],
                     'people' => [
-                        'customers' => User::query()
-                            ->role(UserRole::Customer)
-                            ->inBranch(BranchContext::currentBranchId())
-                            ->count(),
+                        /*
+                         * Counted from the customer record, not the login.
+                         *
+                         * A customer's territory is the sector on their address;
+                         * their user account holds no sectors at all, so asking
+                         * the users table which ones are "mine" has no answer.
+                         * Customer is already scoped, so this needs no filter.
+                         */
+                        'customers' => Customer::query()->count(),
                         'cleaners' => User::query()
                             ->role(UserRole::Cleaner)
-                            ->inBranch(BranchContext::currentBranchId())
+                            ->inSectors(SectorContext::currentSectorIds())
                             ->count(),
                     ],
                     'vehicles' => [
@@ -119,9 +125,17 @@ class DashboardController extends Controller
      * Null means "everything I am allowed to see", which for a franchise owner
      * is still only their own branch.
      */
-    private function resolveBranch(Request $request): ?string
+    /**
+     * Narrow the figures to one sector, when the screen asks for one.
+     *
+     * Null means "leave my own scope alone", which for a franchise user is
+     * every sector they cover and for an administrator is everything.
+     *
+     * @return array<int, string>|null
+     */
+    private function resolveSectors(Request $request): ?array
     {
-        $requested = $request->query('branch_id');
+        $requested = $request->query('sector_id');
 
         if (! $requested) {
             return null;
@@ -129,12 +143,19 @@ class DashboardController extends Controller
 
         $user = $request->user();
 
-        // The requested branch is never trusted. A franchise owner asking for
-        // somebody else's branch is refused outright.
-        if (! $user->seesAllBranches() && $requested !== $user->branch_id) {
-            abort(403, 'That branch is not yours.');
+        /*
+         * The requested sector is never trusted.
+         *
+         * Checked against what they actually cover rather than against
+         * anything on the request, so asking for somebody else's sector is
+         * refused outright instead of quietly widening the figures.
+         */
+        $mine = SectorContext::currentSectorIds($user);
+
+        if ($mine !== null && ! in_array($requested, $mine, true)) {
+            abort(403, 'That sector is not yours.');
         }
 
-        return $requested;
+        return [$requested];
     }
 }

@@ -74,9 +74,10 @@ const sendCode = () => run(async () => {
     await auth.requestCode(phone.value);
     codeSent.value = true;
     cooldown.start();
-    // Worded so it is true whether or not the number is on our books: the
-    // form must not be usable to find out who is a customer.
-    notice.value = 'If that number is on our books, a code is on its way. It lasts five minutes.';
+    // The server refuses an unknown number outright now, so reaching this line
+    // means a code really was sent. See PhoneLoginController for why the vague
+    // wording went.
+    notice.value = `A code is on its way to ${phone.value}. It lasts five minutes.`;
 });
 
 const signInWithCode = () => run(async () => {

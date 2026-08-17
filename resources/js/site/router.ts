@@ -20,6 +20,8 @@ const router = createRouter({
         { path: '/team', name: 'team', component: () => import('@/site/views/TeamView.vue') },
         { path: '/contact', name: 'contact', component: () => import('@/site/views/ContactView.vue') },
         { path: '/renew', name: 'renew', component: () => import('@/site/views/RenewView.vue') },
+        // One of the four things the requirements document puts on the home page.
+        { path: '/cloths', name: 'cloth-top-up', component: () => import('@/site/views/ClothTopUpView.vue') },
 
         /*
          * Privacy, terms and refunds. One route for the three, because they are

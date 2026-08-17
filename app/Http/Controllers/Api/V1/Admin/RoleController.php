@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CustomRole;
 use App\Models\User;
 use App\Support\Access\Abilities;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -52,7 +52,7 @@ class RoleController extends Controller
             'base_roles' => array_map(fn (UserRole $r) => [
                 'value' => $r->value,
                 'label' => $r->label(),
-                'sees_all_branches' => $r->seesAllBranches(),
+                'sees_all_sectors' => $r->seesAllSectors(),
                 // What they would get with no customisation, so somebody can
                 // start from a sensible set rather than an empty screen.
                 'abilities' => $r === UserRole::SuperAdmin ? Abilities::all() : $r->abilities(),

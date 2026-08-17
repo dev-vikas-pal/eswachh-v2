@@ -11,7 +11,7 @@ use App\Models\ServiceType;
 use App\Models\Society;
 use App\Models\VehicleCategory;
 use App\Models\VehicleModel;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;
@@ -31,13 +31,13 @@ class PriceBookTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
         $this->book = app(PriceBook::class);
     }
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 

@@ -59,7 +59,7 @@ class Alert extends Model
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        if ($user->seesAllBranches()) {
+        if ($user->seesAllSectors()) {
             return $query;
         }
 

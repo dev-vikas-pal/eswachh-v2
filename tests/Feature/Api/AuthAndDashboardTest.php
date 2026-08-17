@@ -5,10 +5,11 @@ namespace Tests\Feature\Api;
 use App\Enums\SubscriptionStatus;
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\Sector;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -24,7 +25,7 @@ class AuthAndDashboardTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->ourBranch = Branch::factory()->create(['name' => 'Franchise A']);
         $this->theirBranch = Branch::factory()->create(['name' => 'Franchise B']);
@@ -32,7 +33,7 @@ class AuthAndDashboardTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -99,27 +100,34 @@ class AuthAndDashboardTest extends TestCase
 
     // -------------------------------------------------------------------- me
 
-    public function test_me_returns_abilities_and_only_the_users_own_branch(): void
+    public function test_me_returns_abilities_and_only_the_users_own_sectors(): void
     {
         $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
 
         $response = $this->actingAs($owner)->getJson('/api/v1/me')->assertOk();
 
-        $response->assertJsonPath('data.branch.name', 'Franchise A');
         $this->assertContains('view.subscription', $response->json('data.abilities'));
-        $this->assertFalse($response->json('data.sees_all_branches'));
+        $this->assertFalse($response->json('data.sees_all_sectors'));
 
-        // The selector must offer their branch and nothing else.
-        $this->assertSame(['Franchise A'], array_column($response->json('branches'), 'name'));
+        // The filter must offer their own territory and nothing else.
+        $this->assertSame(
+            [$this->sectorOf($this->ourBranch)],
+            array_column($response->json('sectors'), 'id')
+        );
     }
 
-    public function test_me_offers_every_branch_to_a_super_admin(): void
+    public function test_me_offers_every_sector_to_a_super_admin(): void
     {
         $admin = User::factory()->superAdmin()->create();
 
-        $names = $this->actingAs($admin)->getJson('/api/v1/me')->assertOk()->json('branches.*.name');
+        $ids = $this->actingAs($admin)->getJson('/api/v1/me')->assertOk()->json('sectors.*.id');
 
-        $this->assertEqualsCanonicalizing(['Franchise A', 'Franchise B'], $names);
+        // An administrator holds no assignments at all - covering everything is
+        // a role, not a stack of pivot rows somebody has to maintain.
+        $this->assertEqualsCanonicalizing(
+            [$this->sectorOf($this->ourBranch), $this->sectorOf($this->theirBranch)],
+            $ids
+        );
     }
 
     public function test_me_requires_authentication(): void
@@ -160,7 +168,7 @@ class AuthAndDashboardTest extends TestCase
         $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
 
         $this->actingAs($owner)
-            ->getJson('/api/v1/dashboard?branch_id='.$this->theirBranch->id)
+            ->getJson('/api/v1/dashboard?sector_id='.$this->sectorOf($this->theirBranch))
             ->assertForbidden();
     }
 
@@ -172,7 +180,7 @@ class AuthAndDashboardTest extends TestCase
         $admin = User::factory()->superAdmin()->create();
 
         $this->actingAs($admin)
-            ->getJson('/api/v1/dashboard?branch_id='.$this->theirBranch->id)
+            ->getJson('/api/v1/dashboard?sector_id='.$this->sectorOf($this->theirBranch))
             ->assertOk()
             ->assertJsonPath('data.subscriptions.active', 1);
     }
@@ -229,15 +237,28 @@ class AuthAndDashboardTest extends TestCase
         $this->actingAs($cleaner)->getJson('/api/v1/subscriptions')->assertForbidden();
     }
 
+    /** The sector every factory-made branch is given. */
+    private function sectorOf(Branch $branch): ?string
+    {
+        return SectorContext::withoutScope(
+            fn () => Sector::query()->where('branch_id', $branch->id)->value('id')
+        );
+    }
+
     private function makeSubscription(
         Branch $branch,
         string $registration,
         SubscriptionStatus $status,
         ?Carbon $periodEnd = null
     ): Subscription {
-        return BranchContext::forBranch($branch->id, function () use ($branch, $registration, $status, $periodEnd) {
+        return SectorContext::withoutScope(function () use ($branch, $registration, $status, $periodEnd) {
+            // The sector every factory-made branch gets, so the owner created
+            // alongside it covers these customers.
+            $sectorId = $this->sectorOf($branch);
+
             $customer = Customer::create([
                 'branch_id' => $branch->id,
+                'sector_id' => $sectorId,
                 'name' => 'Customer '.$registration,
                 'phone' => (string) random_int(6000000000, 9999999999),
             ]);

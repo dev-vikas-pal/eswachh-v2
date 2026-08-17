@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { describeError } from '@/shared/api/client';
 import {
-    bulkAssignCleaner, bulkSendMessage, bulkTemplates, cleanersForBranch,
+    bulkAssignCleaner, bulkSendMessage, bulkTemplates, cleanersInSectors,
 } from '@/admin/shared/subscriptions.api';
 
 /**
@@ -23,7 +23,7 @@ const error = ref<string | null>(null);
 
 const { data: cleaners } = useQuery({
     queryKey: ['bulk', 'cleaners'],
-    queryFn: cleanersForBranch,
+    queryFn: cleanersInSectors,
     staleTime: 5 * 60 * 1000,
 });
 

@@ -6,6 +6,7 @@ use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Sector;
+use App\Support\Http\FiltersBySector;
 use App\Support\Http\SortsLists;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ use Illuminate\Validation\Rule;
  */
 class CustomerController extends Controller
 {
+    use FiltersBySector;
     use SortsLists;
 
     /** Columns this screen may be ordered by. */
@@ -70,6 +72,9 @@ class CustomerController extends Controller
         if ($filters['with_active'] ?? false) {
             $query->whereHas('subscriptions', fn ($q) => $q->where('status', SubscriptionStatus::Active));
         }
+
+        // The sector picker in the top bar.
+        $this->applySectorFilter($query, $request, 'sector');
 
         $this->applySort($query, $request, self::SORTABLE, 'name');
 
@@ -190,8 +195,30 @@ class CustomerController extends Controller
             'state_id' => ['nullable', 'string', 'exists:states,id'],
             'city_id' => ['nullable', 'string', 'exists:cities,id'],
             'area_id' => ['nullable', 'string', 'exists:areas,id'],
-            'sector_id' => [$sometimes, 'string', 'exists:sectors,id'],
-            'society_id' => ['nullable', 'string', 'exists:societies,id'],
+            /*
+             * Required, not optional.
+             *
+             * The sector is what decides who can see this customer. Without one
+             * they belong to no territory and are invisible to every franchise
+             * user and cleaner - a record that looks created and cannot be
+             * serviced, with nothing on any screen to explain why.
+             */
+            'sector_id' => [$sometimes, 'required', 'string', 'exists:sectors,id'],
+
+            /*
+             * And the society has to sit in that sector.
+             *
+             * Not for visibility - nothing reads the society for that any more -
+             * but for money: the society carries the monthly surcharge, so one
+             * borrowed from another sector charges the wrong rate every month
+             * for as long as nobody notices.
+             */
+            'society_id' => [
+                'nullable', 'string',
+                Rule::exists('societies', 'id')->where(
+                    fn ($q) => $q->where('sector_id', $request->input('sector_id', $existing?->sector_id))
+                ),
+            ],
             'house_no' => ['nullable', 'string', 'max:100'],
             'address' => ['nullable', 'string', 'max:500'],
             'preferred_time' => ['nullable', 'date_format:H:i'],

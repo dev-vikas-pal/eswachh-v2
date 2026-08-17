@@ -21,7 +21,6 @@ const search = ref('');
 const status = ref('');
 const expiredOnly = ref(false);
 const unassignedOnly = ref(false);
-const sectorId = ref('');
 const packageId = ref('');
 const cleanerId = ref('');
 const renewFrom = ref('');
@@ -62,14 +61,14 @@ watch(
 
 // Any change to the filters starts again at the first page, otherwise you can
 // land on page 4 of a two page result and see nothing.
-watch([search, status, expiredOnly, unassignedOnly, sectorId, packageId, cleanerId, renewFrom, renewTo, () => auth.selectedBranchId], () => {
+watch([search, status, expiredOnly, unassignedOnly, packageId, cleanerId, renewFrom, renewTo, () => auth.selectedSectorId], () => {
     page.value = 1;
 });
 
 const { data, isPending, isError, isFetching } = useQuery({
     queryKey: computed(() => [
-        'subscriptions', auth.selectedBranchId, search.value, status.value, expiredOnly.value,
-        unassignedOnly.value, sectorId.value, packageId.value, cleanerId.value,
+        'subscriptions', auth.selectedSectorId, search.value, status.value, expiredOnly.value,
+        unassignedOnly.value, packageId.value, cleanerId.value,
         renewFrom.value, renewTo.value, page.value, sort.value, direction.value,
     ]),
     // Keeps the table on screen while the next page loads, instead of blanking.
@@ -80,12 +79,14 @@ const { data, isPending, isError, isFetching } = useQuery({
             status: status.value,
             expired: expiredOnly.value,
             unassigned: unassignedOnly.value,
-            sector_id: sectorId.value,
             package_id: packageId.value,
             cleaner_id: cleanerId.value,
             renew_from: renewFrom.value,
             renew_to: renewTo.value,
         },
+        // The one in the top bar. Narrowing the screens is a single control,
+        // not one per page - see SectorSelector.
+        sectorId: auth.selectedSectorId,
         page: page.value,
         sort: sort.value,
         direction: direction.value,
@@ -97,22 +98,24 @@ const rows = computed(() => data.value?.data ?? []);
 const queryClient = useQueryClient();
 const selection = useRowSelection(rows);
 
-/** Filter options. Sectors and packages come from the masters. */
-const { data: sectors } = useQuery({
-    queryKey: ['masters', 'sectors', 'options'],
-    queryFn: async () => (await import('@/shared/api/client')).api.get('/masters/sectors').then((r) => r.data.data),
-    staleTime: 5 * 60 * 1000,
-});
-
+/*
+ * Filter options.
+ *
+ * Not from /masters: that screen is administrator-only, so every one of these
+ * lists 403'd for a franchise owner and the dropdowns rendered empty with
+ * nothing to say why. Packages are the public price list, which is exactly what
+ * this needs and is readable by anybody.
+ */
 const { data: packages } = useQuery({
-    queryKey: ['masters', 'packages', 'options'],
-    queryFn: async () => (await import('@/shared/api/client')).api.get('/masters/packages').then((r) => r.data.data),
+    queryKey: ['catalogue', 'packages'],
+    queryFn: async () => (await import('@/shared/api/client')).api.get('/public/catalogue')
+        .then((r) => r.data.data.packages as Array<{ id: string; name: string }>),
     staleTime: 5 * 60 * 1000,
 });
 
 const { data: cleaners } = useQuery({
     queryKey: ['bulk', 'cleaners'],
-    queryFn: async () => (await import('@/admin/shared/subscriptions.api')).cleanersForBranch(),
+    queryFn: async () => (await import('@/admin/shared/subscriptions.api')).cleanersInSectors(),
     staleTime: 5 * 60 * 1000,
 });
 
@@ -141,7 +144,6 @@ function clearFilters() {
     status.value = '';
     expiredOnly.value = false;
     unassignedOnly.value = false;
-    sectorId.value = '';
     packageId.value = '';
     cleanerId.value = '';
     renewFrom.value = '';
@@ -198,14 +200,6 @@ function statusLabel(row: Subscription): string {
                     <option value="hold">On hold</option>
                     <option value="pending">Pending</option>
                     <option value="ended">Ended</option>
-                </select>
-            </label>
-
-            <label>
-                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Sector</span>
-                <select v-model="sectorId" class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent">
-                    <option value="">All sectors</option>
-                    <option v-for="o in sectors ?? []" :key="o.id" :value="o.id">{{ o.name }}</option>
                 </select>
             </label>
 

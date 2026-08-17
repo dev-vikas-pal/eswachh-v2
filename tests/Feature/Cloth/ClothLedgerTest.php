@@ -18,7 +18,7 @@ use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
 use Tests\TestCase;
@@ -43,7 +43,7 @@ class ClothLedgerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         config()->set('services.razorpay.secret', self::SECRET);
         config()->set('services.razorpay.enabled', false);
@@ -54,13 +54,13 @@ class ClothLedgerTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
     public function test_buying_a_bundle_credits_the_balance_and_turns_the_service_on(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => false, 'cloth_balance' => 0]);
             $bundle = $this->bundle(100, 80000);
 
@@ -75,7 +75,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_a_clean_uses_exactly_one_cloth(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             [$vehicle, $subscription] = $this->carWithCloths(10);
 
             app(DailyRound::class)->record($vehicle, $this->cleaner(), ServiceOutcome::Cleaned);
@@ -87,7 +87,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_a_car_that_was_not_cleaned_uses_no_cloth(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             [$vehicle, $subscription] = $this->carWithCloths(10);
 
             app(DailyRound::class)->record($vehicle, $this->cleaner(), ServiceOutcome::CarAbsent);
@@ -98,7 +98,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_correcting_an_outcome_does_not_take_a_second_cloth(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             [$vehicle, $subscription] = $this->carWithCloths(10);
             $round = app(DailyRound::class);
             $cleaner = $this->cleaner();
@@ -116,7 +116,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_a_subscription_without_the_service_never_touches_the_ledger(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => false, 'cloth_balance' => 0]);
             $vehicle = Vehicle::query()->findOrFail($subscription->vehicle_id);
 
@@ -128,7 +128,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_running_out_does_not_stop_the_car_being_cleaned(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             [$vehicle, $subscription] = $this->carWithCloths(0);
 
             $log = app(DailyRound::class)->record($vehicle, $this->cleaner(), ServiceOutcome::Cleaned);
@@ -143,7 +143,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_the_balance_can_never_go_negative(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => true, 'cloth_balance' => 3]);
 
             $this->expectException(LogicException::class);
@@ -156,7 +156,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_an_adjustment_without_a_reason_is_refused(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => true, 'cloth_balance' => 5]);
 
             $this->expectException(LogicException::class);
@@ -169,7 +169,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_an_entry_cannot_be_edited_or_deleted(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => true, 'cloth_balance' => 0]);
             $entry = $this->ledger->purchase($subscription, $this->bundle(50, 50000));
 
@@ -191,7 +191,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_the_balance_always_equals_the_ledger(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             [$vehicle, $subscription] = $this->carWithCloths(0);
             $round = app(DailyRound::class);
             $cleaner = $this->cleaner();
@@ -220,7 +220,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_a_paid_top_up_actually_credits_the_cloths(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => false, 'cloth_balance' => 0]);
             $this->bundle(100, 80000);
 
@@ -250,7 +250,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_a_top_up_for_an_unknown_amount_still_banks_the_money(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => false, 'cloth_balance' => 0]);
             $this->bundle(100, 80000);
 
@@ -282,7 +282,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_the_check_command_notices_a_balance_written_behind_the_ledgers_back(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => true, 'cloth_balance' => 0]);
             $this->ledger->purchase($subscription, $this->bundle(50, 40000));
 
@@ -304,7 +304,7 @@ class ClothLedgerTest extends TestCase
 
     public function test_ending_a_subscription_writes_off_what_is_left(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $subscription = $this->subscription(['cloth_service' => true, 'cloth_balance' => 0]);
             $this->ledger->purchase($subscription, $this->bundle(30, 25000));
 

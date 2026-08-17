@@ -72,9 +72,27 @@ class MessageTemplate extends BaseModel
      *
      * @return array<string, string>
      */
-    public static function valuesFor(Subscription $subscription): array
+    /**
+     * @param  array<string, string>  $extra  Values only the caller knows
+     * @return array<string, string>
+     */
+    public static function valuesFor(Subscription $subscription, array $extra = []): array
     {
-        return [
+        /*
+         * Loaded here rather than left to each caller.
+         *
+         * This method reaches for five relations, and lazy loading is switched
+         * off outside production - so a caller that had not thought to load one
+         * would throw instead of sending. Putting it in the one place that
+         * reads them means every sender, present and future, is safe.
+         */
+        $subscription->loadMissing([
+            'customer', 'vehicle.cleaner', 'package', 'duration', 'clothBundle',
+        ]);
+
+        $cleaner = $subscription->vehicle?->cleaner;
+
+        return array_merge([
             'name' => $subscription->customer?->name ?? 'there',
             'car' => $subscription->vehicle?->registration ?? 'your car',
             'amount' => number_format($subscription->amount(), 0),
@@ -82,12 +100,36 @@ class MessageTemplate extends BaseModel
             'cloths' => (string) ($subscription->cloth_balance ?? 0),
             'business' => (string) \App\Support\Settings\SiteSettings::get('business_name', 'Eswachh'),
             'phone' => (string) \App\Support\Settings\SiteSettings::get('contact_phone', ''),
-        ];
+
+            /*
+             * Where to sign in. Read from the configured URL rather than
+             * written into the wording, so a template edited in the office
+             * cannot end up pointing at the wrong site.
+             */
+            'site' => rtrim((string) config('app.url'), '/'),
+
+            'package' => $subscription->package?->name ?? 'cleaning',
+            'months' => (string) ($subscription->duration?->months ?? ''),
+            // Reads as a sentence either way: "yes - Weekly 20" or "no".
+            'cloth_plan' => $subscription->cloth_service
+                ? 'yes - '.($subscription->clothBundle?->name ?? 'cloth plan')
+                : 'no',
+            'cleaner' => $cleaner?->name ?? '',
+            'cleaner_phone' => $cleaner?->phone ?? '',
+            'date' => now()->format('j M Y'),
+            // Filled by whoever is sending: a pickup count, a delivery count.
+            'count' => '',
+            'message' => '',
+        ], $extra);
     }
 
     /** The placeholders any template may use, for the editor to list. */
     public static function availablePlaceholders(): array
     {
-        return ['name', 'car', 'amount', 'renew_date', 'cloths', 'business', 'phone'];
+        return [
+            'name', 'car', 'amount', 'renew_date', 'cloths', 'business', 'phone',
+            'package', 'months', 'cloth_plan', 'cleaner', 'cleaner_phone',
+            'date', 'count', 'message',
+        ];
     }
 }

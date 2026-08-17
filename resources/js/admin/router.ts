@@ -24,8 +24,10 @@ const router = createRouter({
                 { path: 'payments', name: 'payments', component: () => import('@/admin/views/PaymentsView.vue'), meta: { ability: 'view.payment' } },
                 { path: 'complaints', name: 'complaints', component: () => import('@/admin/views/ComplaintsView.vue'), meta: { ability: 'view.complaint' } },
                 { path: 'round', name: 'round', component: () => import('@/admin/views/RoundView.vue'), meta: { ability: 'view.round' } },
+                { path: 'cloths', name: 'cloths', component: () => import('@/admin/views/ClothView.vue'), meta: { ability: 'record.cloth' } },
                 { path: 'coverage', name: 'coverage', component: () => import('@/admin/views/CoverageView.vue'), meta: { ability: 'view.attendance' } },
                 { path: 'reminders', name: 'reminders', component: () => import('@/admin/views/RemindersView.vue'), meta: { ability: 'view.subscription' } },
+                { path: 'abandoned', name: 'abandoned', component: () => import('@/admin/views/AbandonedView.vue'), meta: { ability: 'view.subscription' } },
                 { path: 'reports', name: 'reports', component: () => import('@/admin/views/ReportsView.vue'), meta: { ability: 'view.report' } },
                 { path: 'people', name: 'users', component: () => import('@/admin/views/UsersView.vue'), meta: { ability: 'view.staff' } },
                 { path: 'masters', name: 'masters', component: () => import('@/admin/views/MastersView.vue'), meta: { ability: 'manage.master' } },
@@ -74,8 +76,17 @@ router.beforeEach(async (to) => {
         await auth.loadSession();
     }
 
-    // Where each kind of person belongs once they are signed in.
-    const home = auth.isCustomer ? { name: 'portal-home' } : { name: 'dashboard' };
+    /*
+     * Where each kind of person belongs once they are signed in.
+     *
+     * A cleaner goes to their round, not a dashboard. Counts of revenue and
+     * overdue plans are the office's business; the cleaner's whole job is the
+     * list of cars for today, and making them find it through a screen of
+     * figures they cannot act on is a screen in the way.
+     */
+    const home = auth.isCustomer
+        ? { name: 'portal-home' }
+        : (auth.user?.role.value === 'cleaner' ? { name: 'round' } : { name: 'dashboard' });
 
     if (to.meta.guest) {
         return auth.isSignedIn ? home : true;

@@ -2,16 +2,19 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Package;
+use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleCategory;
 use App\Models\VehicleModel;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Settings\SiteSettings;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -37,7 +40,7 @@ class SubscriptionEditTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
         $this->owner = User::factory()->franchiseOwner($this->branch)->create();
@@ -62,7 +65,7 @@ class SubscriptionEditTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -85,7 +88,8 @@ class SubscriptionEditTest extends TestCase
             'status' => true,
         ]);
 
-        $this->actingAs($this->owner)
+        // As an administrator: the car number is theirs alone to change.
+        $this->actingAs(User::factory()->superAdmin()->create())
             ->patchJson('/api/v1/subscriptions/'.$this->plan->id, [
                 'registration' => 'ka 01 cd 5678',
                 'vehicle_model_id' => $model->id,
@@ -107,7 +111,8 @@ class SubscriptionEditTest extends TestCase
             'registration' => 'KA01ZZ9999',
         ]);
 
-        $this->actingAs($this->owner)
+        // The clash check still applies to the one person who may renumber.
+        $this->actingAs(User::factory()->superAdmin()->create())
             ->patchJson('/api/v1/subscriptions/'.$this->plan->id, ['registration' => 'KA01ZZ9999'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('registration');
@@ -187,5 +192,99 @@ class SubscriptionEditTest extends TestCase
         $this->actingAs($account)
             ->patchJson('/api/v1/subscriptions/'.$this->plan->id, ['status' => 'active'])
             ->assertForbidden();
+    }
+
+    public function test_only_an_administrator_can_change_a_car_number(): void
+    {
+        /*
+         * The plate is how a customer is found on the phone, how the cleaner
+         * knows which car is theirs, and what every past payment is filed
+         * under. A franchise owner's edit still saves - the plate is simply
+         * left alone, and the reply says so rather than pretending otherwise.
+         */
+        $response = $this->actingAs($this->owner)
+            ->patchJson('/api/v1/subscriptions/'.$this->plan->id, [
+                'registration' => 'KA09XX0001',
+                'status' => 'active',
+            ])
+            ->assertOk();
+
+        $this->assertSame('KA01AB1234', $this->plan->fresh()->vehicle->registration);
+        $this->assertNotNull($response->json('notice'));
+
+        // The rest of the edit went through.
+        $this->assertSame('active', $this->plan->fresh()->status->value);
+    }
+
+    public function test_an_administrator_can_change_a_car_number(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+
+        $this->actingAs($admin)
+            ->patchJson('/api/v1/subscriptions/'.$this->plan->id, ['registration' => 'ka 09 xx 0001'])
+            ->assertOk();
+
+        $this->assertSame('KA09XX0001', $this->plan->fresh()->vehicle->registration);
+    }
+
+    public function test_the_business_can_lock_plan_edits_to_administrators(): void
+    {
+        SiteSettings::put(['lock_plan_edits_to_admin' => '1']);
+
+        // A policy about the whole business, so it is a flag rather than an
+        // edit to every franchise's role one at a time.
+        $this->actingAs($this->owner)
+            ->patchJson('/api/v1/subscriptions/'.$this->plan->id, ['status' => 'active'])
+            ->assertForbidden();
+
+        // Never the administrator: somebody has to be able to correct a plan,
+        // and locking everybody out would leave only the database.
+        $this->actingAs(User::factory()->superAdmin()->create())
+            ->patchJson('/api/v1/subscriptions/'.$this->plan->id, ['status' => 'active'])
+            ->assertOk();
+    }
+
+    public function test_the_office_can_correct_the_last_payments_details(): void
+    {
+        $payment = Payment::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'subscription_id' => $this->plan->id,
+            'status' => PaymentStatus::Captured,
+            'method' => 'card',
+            'amount_paise' => 74900,
+            'paid_at' => now()->subDay(),
+        ]);
+
+        $this->actingAs($this->owner)
+            ->patchJson('/api/v1/subscriptions/'.$this->plan->id, [
+                'payment' => ['method' => 'upi', 'reference' => 'pay_ABC123'],
+            ])
+            ->assertOk();
+
+        $this->assertSame('upi', $payment->fresh()->method);
+        $this->assertSame('pay_ABC123', $payment->fresh()->reference);
+    }
+
+    public function test_the_amount_charged_is_not_editable_from_the_plan_form(): void
+    {
+        $payment = Payment::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'subscription_id' => $this->plan->id,
+            'status' => PaymentStatus::Captured,
+            'amount_paise' => 74900,
+            'paid_at' => now(),
+        ]);
+
+        $this->actingAs($this->owner)
+            ->patchJson('/api/v1/subscriptions/'.$this->plan->id, [
+                'payment' => ['amount_paise' => 100, 'method' => 'cash'],
+            ])
+            ->assertOk();
+
+        // Returning money is a refund, recorded on its own rather than by
+        // rewriting what was charged.
+        $this->assertSame(74900, (int) $payment->fresh()->amount_paise);
     }
 }

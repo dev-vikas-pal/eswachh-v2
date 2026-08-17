@@ -5,7 +5,7 @@ namespace App\Models;
 use App\Enums\ComplaintCategory;
 use App\Enums\ComplaintPriority;
 use App\Enums\ComplaintStatus;
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +13,7 @@ use Illuminate\Support\Carbon;
 
 class Complaint extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
 
     protected $attributes = [
         'category' => 'other',

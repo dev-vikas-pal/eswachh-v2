@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Domain\Pricing\PriceBook;
 use App\Enums\SubscriptionStatus;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SubscriptionResource;
 use App\Models\Customer;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Support\Settings\SiteSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -34,6 +36,9 @@ use RuntimeException;
 class SubscriptionEditController extends Controller
 {
     public function __construct(private PriceBook $book) {}
+
+    /** Set when a non-administrator tried to change the car number. */
+    private bool $registrationRefused = false;
 
     public function store(Request $request): JsonResponse
     {
@@ -102,6 +107,19 @@ class SubscriptionEditController extends Controller
     {
         $this->authorize('update.subscription');
 
+        /*
+         * The business-wide lock, for when a client asks that franchises stop
+         * changing what customers are on.
+         *
+         * Checked here rather than only in the interface, because a screen that
+         * hides a button is a courtesy and this is a rule. An administrator is
+         * never locked out - somebody has to be able to correct a plan.
+         */
+        if (SiteSettings::get('lock_plan_edits_to_admin')
+            && $request->user()?->role !== UserRole::SuperAdmin) {
+            abort(403, 'Plans can only be changed by an administrator at the moment. Please call the office.');
+        }
+
         $data = $request->validate([
             'package_id' => ['sometimes', 'string', 'exists:packages,id'],
             'service_type_id' => ['sometimes', 'string', 'exists:service_types,id'],
@@ -118,11 +136,30 @@ class SubscriptionEditController extends Controller
             'vehicle_model_id' => ['sometimes', 'nullable', 'string', 'exists:vehicle_models,id'],
             'assigned_cleaner_id' => ['sometimes', 'nullable', 'string', 'exists:users,id'],
             'status' => ['sometimes', Rule::enum(SubscriptionStatus::class)],
+
+            /*
+             * The payment details v1 kept on the order form.
+             *
+             * They live on the payment here rather than being copied onto the
+             * plan, so correcting them corrects the receipt, the payments list
+             * and the revenue report at once - in v1 the same figures existed in
+             * two places and drifted apart.
+             *
+             * Nested under `payment` so it is obvious at the call site that
+             * these touch a different record, and so the amount cannot be
+             * smuggled in beside them: what was charged is not editable here.
+             */
+            'payment' => ['sometimes', 'array'],
+            'payment.method' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'payment.reference' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'payment.paid_at' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
+            'payment.notes' => ['sometimes', 'nullable', 'string', 'max:500'],
         ]);
 
         $subscription->load('customer', 'vehicle');
 
         $this->applyVehicleChanges($subscription, $data);
+        $this->applyPaymentChanges($request, $subscription, $data);
 
         if (isset($data['period_start'])) {
             $subscription->period_start = Carbon::parse($data['period_start']);
@@ -181,6 +218,11 @@ class SubscriptionEditController extends Controller
 
         return response()->json([
             'data' => new SubscriptionResource($subscription->fresh()->load('vehicle', 'customer', 'package')),
+            // Said plainly rather than silently ignored, so nobody walks away
+            // believing a plate was changed when it was not.
+            'notice' => $this->registrationRefused
+                ? 'Everything else was saved. Only an administrator can change a car number.'
+                : null,
         ]);
     }
 
@@ -222,24 +264,106 @@ class SubscriptionEditController extends Controller
         }
 
         if (isset($data['registration'])) {
-            $registration = strtoupper(preg_replace('/\s+/', '', $data['registration']));
-
-            $clash = Vehicle::withoutGlobalScopes()
-                ->where('registration', $registration)
-                ->whereNull('deleted_at')
-                ->whereKeyNot($vehicle->id)
-                ->exists();
-
-            if ($clash) {
-                throw ValidationException::withMessages([
-                    'registration' => 'That car number is already registered to another customer.',
-                ]);
+            /*
+             * The car number is the one field on this form an administrator
+             * alone may change.
+             *
+             * It is how a customer is found on the phone, how the cleaner knows
+             * which car is theirs, and what every historical payment is filed
+             * under. A typo corrected by the office is a real need, but so is
+             * knowing that a plate does not quietly change hands - so the
+             * ability to do it stops at the administrator.
+             *
+             * Ignored rather than refused when somebody else sends it: the rest
+             * of their edit is legitimate and should still save. The reply says
+             * what was left alone.
+             */
+            if ($this->actorMayRenumber()) {
+                $this->applyRegistration($vehicle, $data['registration']);
+            } else {
+                $this->registrationRefused = true;
             }
-
-            $vehicle->registration = $registration;
         }
 
         $vehicle->save();
+    }
+
+    /**
+     * Correct the details of the last payment against this plan.
+     *
+     * v1 kept the payment mode, date and reference on the order itself, so the
+     * office could fix a mistyped UPI reference from the same form. Here those
+     * belong to the payment, and correcting them from this form updates the
+     * receipt, the payments list and the revenue report together rather than
+     * leaving two copies to drift.
+     *
+     * What is never editable is the amount. A figure that can be typed is a
+     * figure that can be typed wrong, and it is the one number the whole
+     * reconciliation rests on - changing what was charged is a refund, which is
+     * its own action with its own record.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function applyPaymentChanges(Request $request, Subscription $subscription, array $data): void
+    {
+        if (empty($data['payment'])) {
+            return;
+        }
+
+        // Touching money needs the money permission, not just the plan one.
+        abort_unless($request->user()?->hasAbility('create.payment'), 403,
+            'You cannot change payment details.');
+
+        $payment = $subscription->lastPayment()->first();
+
+        if (! $payment) {
+            throw ValidationException::withMessages([
+                'payment' => 'There is no payment against this plan to correct.',
+            ]);
+        }
+
+        $changes = [];
+
+        foreach (['method', 'reference', 'notes'] as $field) {
+            if (array_key_exists($field, $data['payment'])) {
+                $changes[$field] = $data['payment'][$field];
+            }
+        }
+
+        if (array_key_exists('paid_at', $data['payment']) && $data['payment']['paid_at']) {
+            $changes['paid_at'] = Carbon::parse($data['payment']['paid_at']);
+        }
+
+        if ($changes) {
+            // forceFill: these are not fillable on purpose, so nothing can set
+            // them straight from a request body anywhere else.
+            $payment->forceFill($changes)->save();
+        }
+    }
+
+    /** Only a super admin renumbers a car. */
+    private function actorMayRenumber(): bool
+    {
+        return request()->user()?->role === UserRole::SuperAdmin;
+    }
+
+    private function applyRegistration(Vehicle $vehicle, string $value): void
+    {
+        $registration = strtoupper(preg_replace('/\s+/', '', $value));
+
+        $clash = Vehicle::withoutGlobalScopes()
+            ->where('registration', $registration)
+            ->whereNull('deleted_at')
+            ->whereKeyNot($vehicle->id)
+            ->exists();
+
+        if ($clash) {
+            throw ValidationException::withMessages([
+                'registration' => 'That car number is already registered to another customer.',
+            ]);
+        }
+
+        $vehicle->registration = $registration;
     }
 
     /**

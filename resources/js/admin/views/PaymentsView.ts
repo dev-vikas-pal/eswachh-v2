@@ -31,7 +31,7 @@ export function usePaymentsScreen() {
 
     const { data, isPending, isError, isFetching } = useQuery({
         queryKey: computed(() => [
-            'payments', auth.selectedBranchId, search.value, status.value,
+            'payments', auth.selectedSectorId, search.value, status.value,
             from.value, to.value, page.value, sort.value, direction.value,
         ]),
         placeholderData: keepPreviousData,
@@ -40,6 +40,8 @@ export function usePaymentsScreen() {
                 params: {
                     page: page.value,
                     search: search.value || undefined,
+                    // The picker in the top bar.
+                    sector_id: auth.selectedSectorId || undefined,
                     status: status.value || undefined,
                     from: from.value || undefined,
                     to: to.value || undefined,
@@ -75,7 +77,7 @@ export function usePaymentsScreen() {
         }).format((meta.value?.total_captured_paise ?? 0) / 100),
     );
 
-    watch([search, status, from, to, () => auth.selectedBranchId], () => {
+    watch([search, status, from, to, () => auth.selectedSectorId], () => {
         page.value = 1;
     });
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useQuery, keepPreviousData } from '@tanstack/vue-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 
 /**
@@ -14,6 +14,8 @@ import { api, describeError } from '@/shared/api/client';
  */
 interface LogDay { date: string; size: string; bytes: number; modified: string }
 interface LogEntry { at: string; level: string; environment: string; message: string; context: string }
+
+const queryClient = useQueryClient();
 
 const level = ref('');
 const search = ref('');
@@ -46,6 +48,32 @@ const { data: entries, isFetching } = useQuery({
 
 const rows = computed(() => entries.value?.data ?? []);
 const meta = computed(() => entries.value?.meta);
+
+const clearing = ref(false);
+
+/**
+ * Empty the day being read.
+ *
+ * Asked first, and said plainly: a log is the only account of what happened on
+ * a server, and there is no undo. Useful when one noisy job has buried
+ * everything else and the next thing to debug needs a clean page.
+ */
+async function clearDay(): Promise<void> {
+    if (!chosen.value) return;
+
+    if (!confirm(`Empty the log for ${chosen.value}? There is no way to get it back.`)) return;
+
+    clearing.value = true;
+
+    try {
+        await api.delete(`/logs/${chosen.value}`);
+        await queryClient.invalidateQueries({ queryKey: ['logs'] });
+    } catch (e) {
+        alert(describeError(e).message);
+    } finally {
+        clearing.value = false;
+    }
+}
 
 /** Only the levels worth acting on get a colour; the rest stay quiet. */
 function tone(entry: LogEntry): string {
@@ -126,6 +154,16 @@ function at(iso: string): string {
                 <p v-if="meta" class="ms-auto text-sm text-muted">
                     Showing <strong class="text-ink">{{ meta.shown }}</strong> of {{ meta.total }}
                 </p>
+
+                <button
+                    v-if="chosen"
+                    type="button"
+                    class="rounded border border-crit px-3 py-1.5 text-sm font-medium text-crit transition hover:bg-crit-soft disabled:opacity-60"
+                    :disabled="clearing"
+                    @click="clearDay"
+                >
+                    {{ clearing ? 'Emptying…' : 'Empty this day' }}
+                </button>
             </div>
 
             <p v-if="!rows.length" class="rounded-lg border border-line bg-surface px-4 py-8 text-center text-muted">

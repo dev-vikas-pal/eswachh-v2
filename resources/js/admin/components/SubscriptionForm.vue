@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { useAuthStore } from '@/shared/stores/auth';
 
 /**
  * Creating or editing a plan.
@@ -14,6 +15,9 @@ const props = defineProps<{ subscriptionId?: string | null }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>();
 
 const queryClient = useQueryClient();
+
+/** Only an administrator may renumber a car. Checked again on the server. */
+const isAdmin = computed(() => useAuthStore().user?.role.value === 'super_admin');
 
 const form = ref({
     customer_id: '',
@@ -31,7 +35,19 @@ const form = ref({
     status: '',
     assigned_cleaner_id: '',
     reprice: false,
+
+    /*
+     * The payment details v1 kept on its order form. They belong to the plan's
+     * latest payment, not to the plan, so correcting one here corrects the
+     * receipt and the revenue report with it.
+     */
+    payment_method: '',
+    payment_reference: '',
+    payment_paid_at: '',
 });
+
+/** What was last paid, so the form can label the block honestly. */
+const lastPayment = computed(() => existing.value?.last_payment ?? null);
 
 const customerSearch = ref('');
 const chosenCustomer = ref<{ id: string; name: string; phone: string | null; sector: string | null } | null>(null);
@@ -55,7 +71,7 @@ const { data: customers } = useQuery({
 
 const { data: cleaners } = useQuery({
     queryKey: ['bulk', 'cleaners'],
-    queryFn: async () => (await import('@/admin/shared/subscriptions.api')).cleanersForBranch(),
+    queryFn: async () => (await import('@/admin/shared/subscriptions.api')).cleanersInSectors(),
     staleTime: 5 * 60 * 1000,
 });
 
@@ -102,6 +118,11 @@ watch(existing, (plan) => {
         period_end: plan.period?.end ?? '',
         status: plan.status?.value ?? '',
         assigned_cleaner_id: plan.vehicle?.cleaner?.id ?? '',
+
+        payment_method: plan.last_payment?.method ?? '',
+        payment_reference: plan.last_payment?.reference ?? plan.last_payment?.gateway_payment_id ?? '',
+        // The server sends a full timestamp; the date input wants a day.
+        payment_paid_at: (plan.last_payment?.paid_at ?? '').slice(0, 10),
     };
 });
 
@@ -134,6 +155,18 @@ async function save() {
         payload.status = form.value.status || undefined;
         payload.assigned_cleaner_id = form.value.assigned_cleaner_id || null;
         payload.reprice = form.value.reprice;
+
+        if (lastPayment.value) {
+            payload.payment = {
+                method: form.value.payment_method || null,
+                reference: form.value.payment_reference || null,
+                paid_at: form.value.payment_paid_at || null,
+            };
+        }
+
+        // Not sent at all when it cannot be changed, so the server has nothing
+        // to refuse and the reply carries no notice about it.
+        if (!isAdmin.value) delete payload.registration;
         // Create-only: the plan already has its customer, and sending an empty
         // one would look like an attempt to clear it.
         delete payload.customer_id;
@@ -273,7 +306,31 @@ async function save() {
                     <div v-if="subscriptionId" class="grid gap-3 sm:grid-cols-2">
                         <label class="block">
                             <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Car number</span>
-                            <input v-model.trim="form.registration" type="text" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm uppercase text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+
+                            <!--
+                                Administrator only. The plate is how a customer
+                                is found on the phone, how the cleaner knows
+                                which car is theirs, and what every past payment
+                                is filed under - so correcting one is a real
+                                need, but not everybody's to do. The server
+                                refuses it too; this only stops the field
+                                looking editable when it is not.
+                            -->
+                            <input
+                                v-if="isAdmin"
+                                v-model.trim="form.registration"
+                                type="text"
+                                class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm uppercase text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                            />
+
+                            <template v-else>
+                                <p class="rounded border border-line bg-sunk px-3 py-2 text-sm uppercase tabular-nums text-body">
+                                    {{ form.registration || '—' }}
+                                </p>
+                                <span class="mt-1 block text-xs text-faint">
+                                    Only an administrator can change a car number.
+                                </span>
+                            </template>
                         </label>
                         <label class="block">
                             <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Car model</span>
@@ -282,6 +339,46 @@ async function save() {
                                 <option v-for="m in catalogue?.car_models ?? []" :key="m.id" :value="m.id">{{ m.name }}</option>
                             </select>
                         </label>
+                    </div>
+
+                    <!--
+                        The payment behind this plan.
+
+                        v1 put the mode, the date and the reference on this form
+                        and the office expects them here. They are the latest
+                        payment's, and saying so matters: correcting them fixes
+                        the receipt too.
+                    -->
+                    <div v-if="subscriptionId && lastPayment" class="rounded border border-line p-3">
+                        <div class="mb-2 flex flex-wrap items-baseline gap-2">
+                            <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Last payment</h3>
+                            <span class="text-xs tabular-nums text-faint">
+                                {{ lastPayment.invoice_number ?? 'no receipt number' }} ·
+                                {{ lastPayment.order_type === 'offline' ? 'taken at the office' : 'taken online' }}
+                            </span>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Payment mode</span>
+                                <input v-model.trim="form.payment_method" type="text" placeholder="upi, cash, card" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            </label>
+
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Payment date</span>
+                                <input v-model="form.payment_paid_at" type="date" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm tabular-nums text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            </label>
+
+                            <label class="block">
+                                <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Payment id</span>
+                                <input v-model.trim="form.payment_reference" type="text" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            </label>
+                        </div>
+
+                        <p class="mt-2 text-xs text-faint">
+                            The amount is not editable here. Returning money is a refund, which is
+                            recorded on its own rather than by changing what was charged.
+                        </p>
                     </div>
 
                     <!--

@@ -39,13 +39,15 @@ watch([search, activeOnly, sort, direction], () => { page.value = 1; });
 
 const { data, isPending, isError, error, isFetching } = useQuery({
     queryKey: computed(() => [
-        'customers', search.value, activeOnly.value, page.value, sort.value, direction.value, auth.selectedBranchId,
+        'customers', search.value, activeOnly.value, page.value, sort.value, direction.value, auth.selectedSectorId,
     ]),
     placeholderData: keepPreviousData,
     queryFn: async () => (await api.get('/customers', {
         params: {
             page: page.value,
             search: search.value || undefined,
+            // The picker in the top bar.
+            sector_id: auth.selectedSectorId || undefined,
             with_active: activeOnly.value ? 1 : undefined,
             sort: sort.value,
             direction: direction.value,
@@ -63,13 +65,21 @@ const { data: detailData } = useQuery({
     queryFn: async () => (await api.get(`/customers/${detail.value}`)).data.data,
 });
 
-/** One level of the address at a time, the same cascade as the public form. */
+/**
+ * One level of the address at a time, the same cascade as the public form -
+ * and now literally the same endpoint.
+ *
+ * It used to read /masters, which is administrator-only: every level 403'd for
+ * a franchise owner, so the dropdowns rendered empty and they could not set a
+ * customer's address at all. /public/locations answers the same question for
+ * anybody, and already refuses to offer a sector nobody covers.
+ */
 function useLevel(level: string, parent: () => string) {
     return useQuery({
-        queryKey: computed(() => ['masters', level, parent()]),
+        queryKey: computed(() => ['locations', level, parent()]),
         enabled: computed(() => level === 'states' || !!parent()),
-        queryFn: async () => (await api.get(`/masters/${level}`, {
-            params: { parent_id: parent() || undefined },
+        queryFn: async () => (await api.get('/public/locations', {
+            params: { level, parent_id: parent() || undefined },
         })).data.data,
         staleTime: 5 * 60 * 1000,
     });
@@ -101,8 +111,8 @@ watch(() => form.value.area_id, () => {
 
 const { data: sectors } = useQuery({
     queryKey: computed(() => ['masters', 'sectors', form.value.area_id]),
-    queryFn: async () => (await api.get('/masters/sectors', {
-        params: { parent_id: form.value.area_id || undefined },
+    queryFn: async () => (await api.get('/public/locations', {
+        params: { level: 'sectors', parent_id: form.value.area_id },
     })).data.data,
     staleTime: 5 * 60 * 1000,
 });
@@ -110,8 +120,8 @@ const { data: sectors } = useQuery({
 const { data: societies } = useQuery({
     queryKey: computed(() => ['masters', 'societies', form.value.sector_id]),
     enabled: computed(() => !!form.value.sector_id),
-    queryFn: async () => (await api.get('/masters/societies', {
-        params: { parent_id: form.value.sector_id },
+    queryFn: async () => (await api.get('/public/locations', {
+        params: { level: 'societies', parent_id: form.value.sector_id },
     })).data.data,
 });
 
@@ -128,8 +138,10 @@ const carError = ref<string | null>(null);
 const newCar = ref({ registration: '', vehicle_model_id: '' });
 
 const { data: carModels } = useQuery({
-    queryKey: ['masters', 'vehicle-models', 'options'],
-    queryFn: async () => (await api.get('/masters/vehicle-models')).data.data,
+    // The public price list, not /masters, for the same reason as the address
+    // cascade above: /masters is administrator-only.
+    queryKey: ['catalogue', 'car-models'],
+    queryFn: async () => (await api.get('/public/catalogue')).data.data.car_models,
     staleTime: 5 * 60 * 1000,
 });
 

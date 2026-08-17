@@ -4,8 +4,10 @@ namespace Tests\Feature\Api;
 
 use App\Enums\UserRole;
 use App\Models\Branch;
+use App\Models\Customer;
+use App\Models\Sector;
 use App\Models\User;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -27,7 +29,7 @@ class UserManagementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->ourBranch = Branch::factory()->create();
         $this->theirBranch = Branch::factory()->create();
@@ -35,7 +37,7 @@ class UserManagementTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -251,5 +253,116 @@ class UserManagementTest extends TestCase
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
 
         $this->actingAs($cleaner)->getJson('/api/v1/users')->assertForbidden();
+    }
+
+    // --------------------------------------------------------------- sectors
+
+    public function test_somebody_is_given_their_territory_when_they_are_created(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $sector = SectorContext::withoutScope(fn () => Sector::factory()->create());
+
+        $this->actingAs($admin)->postJson('/api/v1/users', [
+            'name' => 'New Owner',
+            'email' => 'new.owner@eswachh.test',
+            'role' => UserRole::FranchiseOwner->value,
+            'password' => 'a-good-password',
+            'sector_ids' => [$sector->id],
+        ])->assertCreated()->assertJsonPath('data.sector_ids', [$sector->id]);
+
+        $this->assertDatabaseHas('user_sector', [
+            'user_id' => User::where('email', 'new.owner@eswachh.test')->value('id'),
+            'sector_id' => $sector->id,
+        ]);
+    }
+
+    public function test_changing_the_territory_changes_what_they_see_immediately(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
+
+        [$mine, $theirs] = SectorContext::withoutScope(fn () => [
+            Sector::factory()->create(),
+            Sector::factory()->create(),
+        ]);
+
+        $customer = SectorContext::withoutScope(
+            fn () => Customer::factory()->create(['sector_id' => $theirs->id])
+        );
+
+        // The whole point of the model: no customer is touched, and the change
+        // takes effect on their next request.
+        $this->actingAs($admin)->patchJson("/api/v1/users/{$owner->id}", [
+            'sector_ids' => [$theirs->id],
+        ])->assertOk();
+
+        $this->actingAs($owner->fresh());
+        $this->assertNotNull(Customer::find($customer->id));
+
+        $this->actingAs($admin)->patchJson("/api/v1/users/{$owner->id}", [
+            'sector_ids' => [$mine->id],
+        ])->assertOk();
+
+        SectorContext::forget($owner->id);
+        $this->actingAs($owner->fresh());
+        $this->assertNull(Customer::find($customer->id));
+
+        $this->assertSame(
+            $theirs->id,
+            SectorContext::withoutScope(fn () => Customer::find($customer->id)->sector_id)
+        );
+    }
+
+    public function test_a_franchise_owner_cannot_hand_out_a_sector_they_do_not_hold(): void
+    {
+        $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
+        $elsewhere = SectorContext::withoutScope(fn () => Sector::factory()->create());
+
+        /*
+         * Otherwise assigning a colleague to somebody else's sector would be a
+         * way to read another franchise's customers through them. Filtered
+         * rather than refused, so the rest of an otherwise legitimate edit
+         * still saves.
+         */
+        $this->actingAs($owner)->postJson('/api/v1/users', [
+            'name' => 'Their Cleaner',
+            'phone' => '9800000123',
+            'role' => UserRole::Cleaner->value,
+            'password' => 'a-good-password',
+            'sector_ids' => [$elsewhere->id],
+        ])->assertCreated();
+
+        $this->assertDatabaseMissing('user_sector', ['sector_id' => $elsewhere->id]);
+    }
+
+    public function test_a_customer_is_never_given_a_sector(): void
+    {
+        // A customer's territory comes from their address. In the pivot they
+        // would see their neighbours.
+        $admin = User::factory()->superAdmin()->create();
+        $sector = SectorContext::withoutScope(fn () => Sector::factory()->create());
+        $login = User::factory()->customer($this->ourBranch)->create();
+
+        $this->actingAs($admin)->patchJson("/api/v1/users/{$login->id}", [
+            'sector_ids' => [$sector->id],
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('user_sector', ['user_id' => $login->id]);
+    }
+
+    public function test_leaving_sectors_out_of_an_edit_keeps_them(): void
+    {
+        $admin = User::factory()->superAdmin()->create();
+        $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
+
+        $before = $owner->sectors()->pluck('sectors.id')->all();
+        $this->assertNotEmpty($before);
+
+        // Absent means "leave it alone"; only an empty array clears it. Renaming
+        // somebody must not silently strip their territory.
+        $this->actingAs($admin)->patchJson("/api/v1/users/{$owner->id}", ['name' => 'Renamed'])
+            ->assertOk();
+
+        $this->assertSame($before, $owner->fresh()->sectors()->pluck('sectors.id')->all());
     }
 }

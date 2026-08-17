@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 import RichTextEditor from '@/admin/components/RichTextEditor.vue';
 
-interface Field { key: string; label: string; value: string; long: boolean; rich: boolean }
+interface Field { key: string; label: string; value: string; long: boolean; rich: boolean; boolean: boolean }
 interface Group { group: string; fields: Field[] }
 
 const { data, isPending, refetch } = useQuery({
@@ -76,7 +76,18 @@ async function save() {
                                 {{ field.label }}
                             </span>
 
-                            <RichTextEditor v-if="field.rich" v-model="form[field.key]" />
+                            <!-- A yes or no question, as a switch. -->
+                            <label v-if="field.boolean" class="flex items-center gap-2 text-sm text-body">
+                                <input
+                                    type="checkbox"
+                                    class="accent-[var(--accent)]"
+                                    :checked="form[field.key] === '1'"
+                                    @change="form[field.key] = ($event.target as HTMLInputElement).checked ? '1' : '0'"
+                                />
+                                Yes
+                            </label>
+
+                            <RichTextEditor v-else-if="field.rich" v-model="form[field.key]" />
 
                             <textarea
                                 v-else-if="field.long"

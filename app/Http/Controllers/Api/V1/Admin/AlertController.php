@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Alert;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,7 +22,7 @@ class AlertController extends Controller
     {
         $user = $request->user();
 
-        $alerts = BranchContext::withoutScope(fn () => Alert::query()
+        $alerts = SectorContext::withoutScope(fn () => Alert::query()
             ->visibleTo($user)
             ->open()
             ->orderByRaw("FIELD(severity, 'critical', 'warning', 'info')")
@@ -61,7 +61,7 @@ class AlertController extends Controller
 
     public function markAllRead(Request $request): JsonResponse
     {
-        $ids = BranchContext::withoutScope(fn () => Alert::query()
+        $ids = SectorContext::withoutScope(fn () => Alert::query()
             ->visibleTo($request->user())->open()->pluck('id'));
 
         $request->user()->alertReads()->syncWithoutDetaching(
@@ -74,7 +74,7 @@ class AlertController extends Controller
     /** Dealt with. For everybody. */
     public function resolve(Request $request, string $id): JsonResponse
     {
-        $alert = BranchContext::withoutScope(fn () => Alert::query()
+        $alert = SectorContext::withoutScope(fn () => Alert::query()
             ->visibleTo($request->user())->findOrFail($id));
 
         $alert->forceFill(['resolved_at' => now(), 'resolved_by' => $request->user()->id])->save();

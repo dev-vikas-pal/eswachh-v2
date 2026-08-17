@@ -49,6 +49,15 @@ class BackupDatabase extends Command
 
         $process = new Process([
             $this->mysqldump(),
+            /*
+             * TCP, said outright.
+             *
+             * Left to itself mysqldump may try a named pipe or a socket file
+             * depending on how it was built, and on Windows the pipe attempt is
+             * what produced "Can't create TCP/IP socket (10106)" - an error
+             * that names TCP while being about not using it.
+             */
+            '--protocol=TCP',
             '--host='.$config['host'],
             '--port='.$config['port'],
             '--user='.$config['username'],
@@ -65,6 +74,27 @@ class BackupDatabase extends Command
 
         // A big database takes a while; the default 60 seconds is not enough.
         $process->setTimeout(600);
+
+        /*
+         * Windows needs SystemRoot to open a socket at all.
+         *
+         * This runs from two places: the scheduler, which inherits a normal
+         * shell environment, and the Backups screen, where the parent is the
+         * web server - and a process spawned from there can arrive with almost
+         * no environment. Without SystemRoot, Winsock cannot initialise and
+         * mysqldump reports "Can't create TCP/IP socket (10106)", which is why
+         * the same command worked from a terminal and failed from the button.
+         *
+         * Passed rather than assumed, so the two paths behave the same.
+         */
+        if (PHP_OS_FAMILY === 'Windows') {
+            $process->setEnv(array_filter([
+                'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows',
+                'TEMP' => getenv('TEMP') ?: sys_get_temp_dir(),
+                'TMP' => getenv('TMP') ?: sys_get_temp_dir(),
+                'PATH' => getenv('PATH') ?: '',
+            ]));
+        }
 
         $process->run();
 

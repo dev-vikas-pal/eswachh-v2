@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
 import { payForSubscription } from '@/shared/api/checkout';
@@ -23,6 +23,52 @@ const auth = useAuthStore();
 const queryClient = useQueryClient();
 
 const open = ref(false);
+
+/**
+ * Where to draw the menu.
+ *
+ * It is teleported to the body rather than positioned inside the row, because
+ * the table scrolls horizontally and `overflow-x-auto` clips anything that
+ * escapes it - so the menu was being cut off at the edge of the table exactly
+ * when the window was narrow enough to need scrolling.
+ */
+const trigger = ref<HTMLElement | null>(null);
+const at = ref({ top: 0, left: 0 });
+
+function place() {
+    const box = trigger.value?.getBoundingClientRect();
+
+    if (!box) return;
+
+    const width = 240;
+
+    at.value = {
+        top: box.bottom + 4,
+        // Right-aligned to the button, then nudged back on screen if that would
+        // put it off the left edge on a phone.
+        left: Math.max(8, box.right - width),
+    };
+}
+
+function toggle() {
+    open.value = !open.value;
+
+    if (open.value) place();
+}
+
+/*
+ * Follow the button if the page moves underneath it. Cheaper than closing on
+ * scroll, which is what somebody scrolling a wide table would fight with.
+ */
+onMounted(() => {
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('scroll', place, true);
+    window.removeEventListener('resize', place);
+});
 const busy = ref(false);
 const notice = ref<string | null>(null);
 const error = ref<string | null>(null);
@@ -41,6 +87,23 @@ async function run(fn: () => Promise<string>) {
 
     try {
         notice.value = await fn();
+
+        /*
+         * Close the menu and say it plainly.
+         *
+         * The confirmation used to render inside the dropdown, under six other
+         * options - so "Payment received" appeared as a cramped line at the
+         * bottom of a menu the person had already stopped reading, and money
+         * having changed hands is not something to whisper.
+         */
+        open.value = false;
+        picking.value = false;
+
+        // Clears itself, so it does not sit on the screen for the rest of the
+        // afternoon. Long enough to read, and closeable if it is in the way.
+        const shown = notice.value;
+        setTimeout(() => { if (notice.value === shown) notice.value = null; }, 6000);
+
         await queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
     } catch (e) {
         error.value = e instanceof Error && !(e as any).response ? e.message : describeError(e).message;
@@ -80,20 +143,26 @@ const setStatus = (status: string) => run(async () =>
 </script>
 
 <template>
-    <div class="relative inline-block text-left">
+    <div ref="trigger" class="inline-block text-left">
         <button
             type="button"
             class="rounded border border-line-strong px-2 py-1 text-xs text-body transition hover:bg-sunk focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             :aria-expanded="open"
-            @click="open = !open"
+            @click="toggle"
         >
             Actions
         </button>
 
-        <div
-            v-if="open"
-            class="absolute right-0 z-30 mt-1 w-60 rounded-lg border border-line-strong bg-surface p-1.5 text-left shadow-lg"
-        >
+        <!-- Clicking anywhere else closes it, since the menu no longer sits
+             inside anything that would catch the click. -->
+        <Teleport to="body">
+            <div v-if="open" class="fixed inset-0 z-40" @click="open = false"></div>
+
+            <div
+                v-if="open"
+                class="fixed z-50 w-60 rounded-lg border border-line-strong bg-surface p-1.5 text-left shadow-xl"
+                :style="{ top: at.top + 'px', left: at.left + 'px' }"
+            >
             <template v-if="!picking">
                 <button
                     type="button"
@@ -211,9 +280,33 @@ const setStatus = (status: string) => run(async () =>
                 </button>
             </template>
 
-            <p v-if="notice" class="mt-1 rounded bg-ok-soft px-3 py-1.5 text-xs text-ok">{{ notice }}</p>
-            <p v-if="error" class="mt-1 rounded bg-crit-soft px-3 py-1.5 text-xs text-crit">{{ error }}</p>
-        </div>
+                <p v-if="error" class="mt-1 rounded bg-crit-soft px-3 py-1.5 text-xs text-crit">{{ error }}</p>
+            </div>
+
+            <!--
+                The answer, where it can actually be seen.
+                Fixed to the screen rather than drawn inside a menu that has
+                just closed - money changing hands deserves more than a line
+                somebody has to go looking for.
+            -->
+            <div
+                v-if="notice"
+                class="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-ok bg-ok-soft px-5 py-3 shadow-xl"
+                role="status"
+            >
+                <svg class="h-5 w-5 shrink-0 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="text-sm font-medium text-ink">{{ notice }}</span>
+                <button
+                    type="button"
+                    class="ms-2 text-sm text-body underline hover:text-ink"
+                    @click="notice = null"
+                >
+                    Close
+                </button>
+            </div>
+        </Teleport>
 
         <div
             v-if="recording"

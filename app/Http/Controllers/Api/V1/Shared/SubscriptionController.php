@@ -6,6 +6,7 @@ use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SubscriptionResource;
 use App\Models\Subscription;
+use App\Support\Http\FiltersBySector;
 use App\Support\Http\RestrictsToOwnRecords;
 use App\Support\Http\SortsLists;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class SubscriptionController extends Controller
 {
     use RestrictsToOwnRecords;
+    use FiltersBySector;
     use SortsLists;
 
     private const SORTABLE = [
@@ -57,6 +59,24 @@ class SubscriptionController extends Controller
         $filter = $filters['filter'] ?? [];
 
         $query = Subscription::query()->with(['vehicle.cleaner', 'customer', 'package', 'lastPayment']);
+
+        /*
+         * One row per car: the period it is on now.
+         *
+         * A plan is a chain of periods - each renewal writes a new one and ends
+         * the last, which is what gives every period its own price, dates and
+         * invoice. Listing all of them showed the same car three times over,
+         * two of them finished, and read as duplicate records rather than as
+         * history.
+         *
+         * The earlier periods are still there and still reachable through
+         * History on the row. Asked for by status, they come back too - "show
+         * me what has ended" is a real question and this must not answer it
+         * with nothing.
+         */
+        if (empty($filter['status']) && empty($filter['expired'])) {
+            $query->whereNot('status', SubscriptionStatus::Ended);
+        }
 
         // A customer holds view.subscription so they can look at their own
         // plan. The ability says nothing about whose rows they are, and the
@@ -112,6 +132,10 @@ class SubscriptionController extends Controller
         }
 
         // Whitelisted, like every other list: the column goes into SQL.
+        // The sector picker in the top bar, the same parameter every other
+        // list answers to.
+        $this->applySectorFilter($query, $request, 'customer');
+
         $this->applySort($query, $request, self::SORTABLE, 'created');
         $query->orderByDesc('created_at');
 
@@ -133,7 +157,12 @@ class SubscriptionController extends Controller
         abort_unless($this->ownsRecord($request, $subscription->customer_id), 404);
 
         return new SubscriptionResource(
-            $subscription->load(['vehicle.cleaner', 'vehicle.model', 'customer', 'package', 'serviceType', 'duration'])
+            // lastPayment too: the edit form shows the payment mode, date and
+            // reference beside the plan, as v1's order form did.
+            $subscription->load([
+                'vehicle.cleaner', 'vehicle.model', 'customer',
+                'package', 'serviceType', 'duration', 'lastPayment',
+            ])
         );
     }
 }

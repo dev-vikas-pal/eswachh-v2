@@ -39,7 +39,7 @@ enum UserRole: string
      * global scope, with no exceptions and no "else" branch that means
      * unrestricted.
      */
-    public function seesAllBranches(): bool
+    public function seesAllSectors(): bool
     {
         return $this === self::SuperAdmin;
     }
@@ -78,7 +78,11 @@ enum UserRole: string
 
                 'view.attendance', 'record.attendance',
                 'view.round', 'record.service',
-                'view.cloth', 'update.cloth',
+                // Including recording a movement. The document puts cloth
+                // pickup and delivery on the cleaner's screen, but an owner
+                // covering for somebody who did not turn up needs the same
+                // screen, and they already hold every other part of the round.
+                'view.cloth', 'update.cloth', 'record.cloth',
             ],
 
             self::Cleaner => [

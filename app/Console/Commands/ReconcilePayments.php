@@ -6,7 +6,7 @@ use App\Domain\Billing\RazorpayGateway;
 use App\Domain\Billing\RecordPayment;
 use App\Enums\PaymentStatus;
 use App\Models\Payment;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -34,7 +34,7 @@ class ReconcilePayments extends Command
     {
         // Reconciliation is a system job and has to see every branch, so it
         // runs outside the tenancy scope. Explicit, not accidental.
-        return BranchContext::withoutScope(function () use ($gateway, $recorder) {
+        return SectorContext::withoutScope(function () use ($gateway, $recorder) {
             $since = Carbon::now()->subDays((int) $this->option('days'));
             $dryRun = (bool) $this->option('dry-run');
 

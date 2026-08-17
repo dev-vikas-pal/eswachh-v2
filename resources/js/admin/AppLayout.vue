@@ -4,7 +4,7 @@ import { computed, ref } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
 import { useAuthStore } from '@/shared/stores/auth';
 import { useSettingsStore } from '@/shared/stores/settings';
-import BranchSelector from '@/admin/components/BranchSelector.vue';
+import SectorSelector from '@/admin/components/SectorSelector.vue';
 import SettingsMenu from '@/shared/SettingsMenu.vue';
 import AlertsBell from '@/admin/components/AlertsBell.vue';
 import AccountMenu from '@/shared/AccountMenu.vue';
@@ -18,24 +18,36 @@ const drawerOpen = ref(false);
 /** Navigation is filtered by ability, so people only see what they can use. */
 const navigation = computed(() =>
     [
-        { name: 'Dashboard', to: { name: 'dashboard' }, ability: 'view.dashboard', icon: 'grid' },
+        // Not for a cleaner: their whole job is the round, and a screen of
+        // revenue figures they cannot act on is a screen in the way.
+        { name: 'Dashboard', to: { name: 'dashboard' }, ability: 'view.dashboard', icon: 'grid', notCleaner: true },
         { name: 'My round', to: { name: 'round' }, ability: 'view.round', icon: 'route' },
         { name: 'Subscriptions', to: { name: 'subscriptions' }, ability: 'view.subscription', icon: 'card' },
         { name: 'Customers', to: { name: 'customers' }, ability: 'view.customer', icon: 'contact' },
         { name: 'Payments', to: { name: 'payments' }, ability: 'view.payment', icon: 'rupee' },
         { name: 'Complaints', to: { name: 'complaints' }, ability: 'view.complaint', icon: 'flag' },
+        { name: 'Cloths', to: { name: 'cloths' }, ability: 'record.cloth', icon: 'card' },
         { name: 'Coverage', to: { name: 'coverage' }, ability: 'view.attendance', icon: 'route' },
         { name: 'Messages', to: { name: 'reminders' }, ability: 'view.subscription', icon: 'chat' },
+        // People who reached the payment page and stopped. Beside Messages
+        // because both are "somebody to contact", not "something to read".
+        { name: 'Not finished', to: { name: 'abandoned' }, ability: 'view.subscription', icon: 'rupee' },
         { name: 'Reports', to: { name: 'reports' }, ability: 'view.report', icon: 'chart' },
         { name: 'People', to: { name: 'users' }, ability: 'view.staff', icon: 'people' },
         { name: 'Masters', to: { name: 'masters' }, ability: 'manage.master', icon: 'sliders' },
         { name: 'Blog', to: { name: 'blog-admin' }, ability: 'manage.master', icon: 'pen' },
         { name: 'Settings', to: { name: 'settings' }, ability: 'manage.master', icon: 'cog' },
         { name: 'Logs', to: { name: 'logs' }, ability: 'manage.master', icon: 'chat' },
+        // The page existed and the nightly job wrote to it, but nothing linked
+        // here - so the only way to check that last night's backup ran was to
+        // know the address. A backup nobody can see is not a backup.
+        { name: 'Backups', to: { name: 'backups' }, ability: 'manage.master', icon: 'grid' },
         // Administrator only, and that is a role rather than an ability - see
         // RoleController for why managing roles is not itself grantable.
         { name: 'Roles', to: { name: 'roles' }, ability: 'manage.master', superAdmin: true, icon: 'people' },
-    ].filter((item) => auth.can(item.ability) && (!item.superAdmin || auth.user?.role.value === 'super_admin')),
+    ].filter((item) => auth.can(item.ability)
+        && (!item.superAdmin || auth.user?.role.value === 'super_admin')
+        && (!item.notCleaner || auth.user?.role.value !== 'cleaner')),
 );
 
 const sideways = computed(() => settings.menuPosition === 'left');
@@ -152,7 +164,7 @@ const ICONS: Record<string, string> = {
                         than letting the name butt up against the button.
                     -->
                     <div class="ms-auto flex min-w-0 items-center gap-2 sm:gap-3">
-                        <BranchSelector />
+                        <SectorSelector />
                         <AlertsBell />
                         <SettingsMenu />
 

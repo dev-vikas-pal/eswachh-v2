@@ -114,6 +114,25 @@ const selectedSociety = computed<SocietyOption | undefined>(() =>
     (societies.value ?? []).find((s: SocietyOption) => s.id === form.value.society_id),
 );
 
+/*
+ * Names for the confirmation page.
+ *
+ * Read from the lists already loaded rather than fetched again: the customer
+ * has just paid, and a page that shows "—" while it waits on a request reads
+ * as something having gone wrong.
+ */
+const packageName = computed(
+    () => packages.value.find((p) => p.id === form.value.package_id)?.name ?? 'Cleaning',
+);
+
+const durationName = computed(
+    () => durations.value.find((d) => d.id === form.value.duration_id)?.name ?? '',
+);
+
+const societyName = computed(
+    () => (societies.value ?? []).find((s: { id: string }) => s.id === form.value.society_id)?.name ?? '',
+);
+
 function money(value: number): string {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 }
@@ -142,6 +161,20 @@ const buttonLabel = computed(() => {
 });
 
 function submit() {
+    /*
+     * Everything wrong, said at once.
+     *
+     * Somebody who tabs past a field never blurs it, so its message would stay
+     * hidden until the server refused the whole form. Pressing on marks them
+     * all touched, and the code is not sent until the form could actually be
+     * accepted - there is no point spending a message on a form we already know
+     * will be turned down.
+     */
+    if (!signup.ready.value) {
+        signup.touchEverything();
+        return;
+    }
+
     if (signup.stage.value === 'code') {
         signup.placeOrder();
         return;
@@ -152,7 +185,82 @@ function submit() {
 </script>
 
 <template>
-    <div class="mx-auto max-w-6xl px-4 py-8">
+    <!--
+        Paid. A page of its own rather than a green line beside a form they
+        have finished with: what somebody wants at this moment is proof of what
+        they bought and what happens next, and a form still on screen invites
+        them to fill it in again.
+    -->
+    <div v-if="signup.stage.value === 'done'" class="mx-auto max-w-2xl px-4 py-12">
+        <div class="rounded-lg border border-ok bg-ok-soft p-6 text-center">
+            <svg class="mx-auto h-12 w-12 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <h1 class="mt-3 text-2xl font-bold tracking-tight text-ink">Payment received</h1>
+            <p class="mt-1 text-body">
+                Thank you, {{ form.name }}. Your cleaning plan is live.
+            </p>
+        </div>
+
+        <div class="mt-6 rounded-lg border border-line bg-surface">
+            <h2 class="border-b border-line px-5 py-3 text-sm font-semibold uppercase tracking-wide text-muted">
+                Your order
+            </h2>
+
+            <dl class="divide-y divide-line text-sm">
+                <div v-if="signup.receipt.value?.invoice_number" class="flex justify-between gap-4 px-5 py-3">
+                    <dt class="text-muted">Invoice</dt>
+                    <dd class="font-medium tabular-nums text-ink">{{ signup.receipt.value.invoice_number }}</dd>
+                </div>
+                <div class="flex justify-between gap-4 px-5 py-3">
+                    <dt class="text-muted">Car</dt>
+                    <dd class="font-medium uppercase text-ink">{{ form.registration }}</dd>
+                </div>
+                <div class="flex justify-between gap-4 px-5 py-3">
+                    <dt class="text-muted">Plan</dt>
+                    <dd class="text-ink">{{ packageName }}{{ durationName ? `, ${durationName}` : '' }}</dd>
+                </div>
+                <div class="flex justify-between gap-4 px-5 py-3">
+                    <dt class="text-muted">Where</dt>
+                    <dd class="text-end text-ink">
+                        {{ form.house_no }}<template v-if="societyName">, {{ societyName }}</template>
+                    </dd>
+                </div>
+                <div class="flex justify-between gap-4 px-5 py-3">
+                    <dt class="text-muted">Paid</dt>
+                    <dd class="text-lg font-bold tabular-nums text-ink">
+                        {{ money(signup.receipt.value?.amount ?? quote?.total ?? 0) }}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="mt-6 rounded-lg border border-line bg-surface p-5 text-sm text-body">
+            <h2 class="mb-2 font-semibold text-ink">What happens next</h2>
+            <ol class="ms-4 list-decimal space-y-1">
+                <li>We assign a cleaner to your car and tell you who it is.</li>
+                <li>Cleaning starts from the next round, and you get a message each day it is done.</li>
+                <li>
+                    You can see your plan any time — sign in with
+                    <span class="font-medium text-ink">{{ form.phone }}</span> and we send a code.
+                    There is no password.
+                </li>
+            </ol>
+
+            <a
+                href="/login"
+                class="mt-4 inline-block rounded bg-accent px-5 py-2.5 text-sm font-medium text-on-accent transition hover:brightness-110"
+            >
+                See my plan
+            </a>
+        </div>
+
+        <p class="mt-4 text-center text-xs text-faint">
+            A copy of this has gone to {{ form.phone }}<template v-if="form.email"> and {{ form.email }}</template>.
+        </p>
+    </div>
+
+    <div v-else class="mx-auto max-w-6xl px-4 py-8">
         <h1 class="text-2xl font-bold tracking-tight text-ink">Start a subscription</h1>
         <p class="mt-1 max-w-prose text-body">
             Tell us where the car is kept and how often you want it cleaned. The price updates as you choose.
@@ -167,8 +275,8 @@ function submit() {
         <div v-if="session" class="mt-8 rounded-lg border border-line bg-surface p-6">
             <h2 class="text-lg font-semibold text-ink">You are already signed in</h2>
             <p class="mt-1 max-w-prose text-body">
-                Adding another car or renewing a plan is quicker from your own pages, and the
-                details we already hold are filled in for you.
+                Adding another car is quicker from your own pages: your address and phone number
+                are already there, and there is no code to wait for.
             </p>
 
             <div class="mt-4 flex flex-wrap gap-3">
@@ -176,7 +284,7 @@ function submit() {
                     :href="session.home"
                     class="rounded bg-accent px-5 py-2.5 text-sm font-semibold text-on-accent transition hover:brightness-110"
                 >
-                    Go to my plans
+                    Add a car from my plans
                 </a>
 
                 <button
@@ -187,6 +295,17 @@ function submit() {
                     Start a plan for somebody else
                 </button>
             </div>
+
+            <!--
+                Said plainly, because this form genuinely cannot serve them: it
+                proves a mobile number with a code and then refuses numbers it
+                already knows, so an existing customer would be told their own
+                number was taken.
+            -->
+            <p class="mt-3 text-xs text-faint">
+                This form is for a new customer, and asks for a code sent to a mobile number we do
+                not already hold.
+            </p>
         </div>
 
         <div v-else-if="loadingCatalogue" class="mt-8 text-muted">Loading the price list…</div>
@@ -199,19 +318,23 @@ function submit() {
                     <div class="grid gap-3 sm:grid-cols-2">
                         <label class="block">
                             <span class="mb-1 block text-sm font-medium text-body">Name</span>
-                            <input v-model.trim="form.name" type="text" required class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <input v-model.trim="form.name" type="text" required @blur="signup.touch('name')" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <p v-if="signup.errorFor('name')" class="mt-1 text-xs text-crit">{{ signup.errorFor('name') }}</p>
                         </label>
                         <label class="block">
                             <span class="mb-1 block text-sm font-medium text-body">Mobile number</span>
-                            <input v-model.trim="form.phone" type="tel" inputmode="numeric" maxlength="10" required class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <input v-model.trim="form.phone" type="tel" inputmode="numeric" maxlength="10" required @blur="signup.touch('phone')" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <p v-if="signup.errorFor('phone')" class="mt-1 text-xs text-crit">{{ signup.errorFor('phone') }}</p>
                         </label>
                         <label class="block">
                             <span class="mb-1 block text-sm font-medium text-body">Email</span>
-                            <input v-model.trim="form.email" type="email" required class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <input v-model.trim="form.email" type="email" @blur="signup.touch('email')" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <p v-if="signup.errorFor('email')" class="mt-1 text-xs text-crit">{{ signup.errorFor('email') }}</p>
                         </label>
                         <label class="block">
                             <span class="mb-1 block text-sm font-medium text-body">Car number</span>
-                            <input v-model.trim="form.registration" type="text" required placeholder="UP16AB1234" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm uppercase text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <input v-model.trim="form.registration" type="text" required placeholder="UP16AB1234" @blur="signup.touch('registration')" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm uppercase text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <p v-if="signup.errorFor('registration')" class="mt-1 text-xs text-crit">{{ signup.errorFor('registration') }}</p>
                         </label>
                     </div>
                 </section>
@@ -259,7 +382,8 @@ function submit() {
                         </label>
                         <label class="block">
                             <span class="mb-1 block text-sm font-medium text-body">Flat / house no.</span>
-                            <input v-model.trim="form.house_no" type="text" required class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <input v-model.trim="form.house_no" type="text" required @blur="signup.touch('house_no')" class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
+                            <p v-if="signup.errorFor('house_no')" class="mt-1 text-xs text-crit">{{ signup.errorFor('house_no') }}</p>
                         </label>
                     </div>
 
@@ -386,7 +510,6 @@ function submit() {
                     </label>
 
                     <button
-                        v-if="signup.stage.value !== 'done'"
                         type="submit"
                         class="mt-4 w-full rounded bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent"
                         :disabled="!quote || signup.busy.value || (signup.stage.value === 'code' && signup.code.value.length < 6)"
@@ -415,14 +538,6 @@ function submit() {
 
                     <p v-if="signup.error.value" class="mt-3 rounded bg-crit-soft px-3 py-2 text-sm text-crit" role="alert">
                         {{ signup.error.value }}
-                    </p>
-
-                    <p v-else-if="signup.notice.value" class="mt-3 rounded bg-ok-soft px-3 py-2 text-sm text-ok">
-                        {{ signup.notice.value }}
-                    </p>
-
-                    <p v-if="signup.stage.value === 'done'" class="mt-3 text-xs text-faint">
-                        You can sign in any time with a code sent to {{ form.phone }} to see your plan.
                     </p>
 
                     <p class="mt-3 text-xs text-faint">

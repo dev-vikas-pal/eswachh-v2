@@ -1,6 +1,6 @@
-import { ref, type Ref } from 'vue';
+import { computed, ref, type Ref } from 'vue';
 import { api, describeError, type ValidationErrors } from '@/shared/api/client';
-import { completeCheckout, type Checkout } from '@/shared/api/checkout';
+import { completeCheckout, type Checkout, type PaymentReceipt } from '@/shared/api/checkout';
 import { useCodeCooldown } from '@/shared/useCodeCooldown';
 
 /**
@@ -43,6 +43,9 @@ export function useSignup(form: Ref<SignupForm>) {
     const notice = ref<string | null>(null);
     const fieldErrors = ref<ValidationErrors>({});
 
+    /** The receipt, once there is one. Drives the confirmation page. */
+    const receipt = ref<PaymentReceipt | null>(null);
+
     /** How long before "send it again" is allowed. */
     const cooldown = useCodeCooldown();
 
@@ -50,6 +53,76 @@ export function useSignup(form: Ref<SignupForm>) {
         const described = describeError(e);
         error.value = described.message;
         fieldErrors.value = described.errors;
+    }
+
+    /*
+     * Field-level checks, shown as somebody leaves each box.
+     *
+     * The form used to say nothing until Pay was pressed, which meant a typo in
+     * the first field was reported after the code had been sent and the price
+     * worked out - three steps too late to be useful, and next to a payment
+     * button that then refused to work.
+     *
+     * Deliberately a small set: the things the server will certainly refuse.
+     * Anything cleverer belongs on the server, which checks all of it again.
+     */
+    const touched = ref<Record<string, boolean>>({});
+
+    const RULES: Record<string, (f: SignupForm) => string | null> = {
+        name: (f) => (f.name.trim().length >= 2 ? null : 'Please give your name.'),
+
+        phone: (f) => (/^[6-9]\d{9}$/.test(f.phone.replace(/\D/g, ''))
+            ? null
+            : 'A ten digit Indian mobile number, starting 6 to 9.'),
+
+        email: (f) => (!f.email.trim() || /^\S+@\S+\.\S+$/.test(f.email)
+            ? null
+            : 'That does not look like an email address.'),
+
+        // Loose on purpose: plates vary, and refusing a real one is worse than
+        // letting the server have the last word.
+        registration: (f) => (f.registration.replace(/\s/g, '').length >= 6
+            ? null
+            : 'The full car number, as on the plate.'),
+
+        vehicle_model_id: (f) => (f.vehicle_model_id ? null : 'Pick the car.'),
+        sector_id: (f) => (f.sector_id ? null : 'Pick the sector the car is kept in.'),
+        house_no: (f) => (f.house_no.trim() ? null : 'Flat or house number.'),
+    };
+
+    /** Mark a field as left, so its message may now be shown. */
+    function touch(field: string): void {
+        touched.value[field] = true;
+    }
+
+    /**
+     * What to show under a field: the server's complaint if it has one,
+     * otherwise ours - and only once they have actually been in the box.
+     */
+    function errorFor(field: string): string | null {
+        if (fieldErrors.value[field]?.length) {
+            return fieldErrors.value[field][0];
+        }
+
+        if (! touched.value[field]) {
+            return null;
+        }
+
+        return RULES[field]?.(form.value) ?? null;
+    }
+
+    /** Every field that would fail, whether or not it has been touched. */
+    const problems = computed(
+        () => Object.keys(RULES).filter((field) => RULES[field](form.value) !== null),
+    );
+
+    const ready = computed(() => problems.value.length === 0);
+
+    /** Show every message at once, for when somebody presses on regardless. */
+    function touchEverything(): void {
+        for (const field of Object.keys(RULES)) {
+            touched.value[field] = true;
+        }
     }
 
     /**
@@ -66,7 +139,19 @@ export function useSignup(form: Ref<SignupForm>) {
         fieldErrors.value = {};
 
         try {
-            await api.post('/public/signup/code', { phone: form.value.phone });
+            /*
+             * The car number and the sector go with the request.
+             *
+             * Both can refuse this signup, and the server checks them here so
+             * the customer hears about it now rather than after the code has
+             * been sent, typed and read back - which is the whole form filled
+             * in, and nothing to do but start again.
+             */
+            await api.post('/public/signup/code', {
+                phone: form.value.phone,
+                registration: form.value.registration,
+                sector_id: form.value.sector_id || null,
+            });
             stage.value = 'code';
             cooldown.start();
             notice.value = `We have sent a code to ${form.value.phone}. It lasts five minutes.`;
@@ -127,6 +212,8 @@ export function useSignup(form: Ref<SignupForm>) {
         if (result.ok) {
             stage.value = 'done';
             notice.value = result.message;
+            receipt.value = result.payment ?? null;
+
             return;
         }
 
@@ -141,5 +228,8 @@ export function useSignup(form: Ref<SignupForm>) {
             : result.message + ' Your details are saved, so please do not fill the form in again.';
     }
 
-    return { stage, code, busy, error, notice, fieldErrors, cooldown, sendCode, placeOrder };
+    return {
+        stage, code, busy, error, notice, fieldErrors, receipt, cooldown, sendCode, placeOrder,
+        touch, errorFor, ready, problems, touchEverything,
+    };
 }

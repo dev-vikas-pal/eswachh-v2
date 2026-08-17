@@ -29,9 +29,15 @@ const { data: catalogue } = useQuery({
 });
 
 const { data, isPending, isError, error, isFetching } = useQuery({
-    queryKey: computed(() => ['report', selected.value, from.value, to.value, auth.selectedBranchId]),
+    queryKey: computed(() => ['report', selected.value, from.value, to.value, auth.selectedSectorId]),
     queryFn: async () => (await api.get(`/reports/${selected.value}`, {
-        params: { from: from.value || undefined, to: to.value || undefined },
+        params: {
+            from: from.value || undefined,
+            to: to.value || undefined,
+            // The picker in the top bar. Applied by narrowing the context, so
+            // every figure on every report follows it.
+            sector_id: auth.selectedSectorId || undefined,
+        },
     })).data.data,
 });
 

@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  */
 class Subscription extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
 
     protected $fillable = [
         'branch_id', 'vehicle_id', 'customer_id',
@@ -60,6 +60,18 @@ class Subscription extends BaseModel
     public function serviceType(): BelongsTo
     {
         return $this->belongsTo(ServiceType::class);
+    }
+
+    /**
+     * The cloth plan bought with this subscription.
+     *
+     * The column has always been here; the relation was not, so anything that
+     * wanted to name the plan - a message saying "Cloth ironing plan - yes,
+     * Weekly 20" - had to look it up by hand or do without.
+     */
+    public function clothBundle(): BelongsTo
+    {
+        return $this->belongsTo(ClothBundle::class);
     }
 
     /**

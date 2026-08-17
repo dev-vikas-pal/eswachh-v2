@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Numbering\SeriesNumber;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -36,7 +37,7 @@ class ComplaintWorkflow
         return DB::transaction(function () use ($customer, $input, $category, $priority, $actor) {
             $complaint = Complaint::create([
                 'branch_id' => $customer->branch_id,
-                'reference' => SeriesNumber::next($customer->branch_id, Complaint::class, 'reference', 'CMP'),
+                'reference' => SeriesNumber::next(Complaint::class, 'reference', 'CMP'),
                 'customer_id' => $customer->id,
                 'vehicle_id' => $input['vehicle_id'] ?? $this->onlyVehicleOf($customer),
                 'subscription_id' => $input['subscription_id'] ?? null,
@@ -51,15 +52,69 @@ class ComplaintWorkflow
 
             $this->record($complaint, 'raised', null, ComplaintStatus::Open, $input['description'], $actor);
 
+            /*
+             * Handed straight to whoever cleans the car.
+             *
+             * They are the one person who can answer it, and an unassigned
+             * complaint sits in a queue until somebody notices - which is how
+             * v1 accumulated open complaints nobody had read. The office can
+             * still reassign it; this only decides where it starts.
+             *
+             * Left unassigned when the car has no cleaner, because there is
+             * nobody to hand it to and inventing one is worse than the queue.
+             */
+            $this->assignToTheCarsCleaner($complaint);
+
             return $complaint;
         });
+    }
+
+    /**
+     * Give a fresh complaint to the cleaner who services the car.
+     *
+     * Deliberately quiet on failure: a complaint that could not be routed is
+     * still a complaint, and losing it because the round is unassigned would be
+     * the worse outcome.
+     */
+    private function assignToTheCarsCleaner(Complaint $complaint): void
+    {
+        $cleanerId = SectorContext::withoutScope(
+            fn () => Vehicle::withoutGlobalScopes()
+                ->whereKey($complaint->vehicle_id)
+                ->value('assigned_cleaner_id')
+        );
+
+        if (! $cleanerId) {
+            return;
+        }
+
+        $cleaner = SectorContext::withoutScope(fn () => User::find($cleanerId));
+
+        if (! $cleaner || ! $cleaner->status) {
+            return;
+        }
+
+        $complaint->forceFill([
+            'assigned_to' => $cleaner->id,
+            'assigned_at' => now(),
+            'status' => ComplaintStatus::Assigned,
+        ])->save();
+
+        $this->record(
+            $complaint,
+            'assigned',
+            ComplaintStatus::Open,
+            ComplaintStatus::Assigned,
+            'Given to the cleaner who services this car.',
+            null,
+        );
     }
 
     public function assign(Complaint $complaint, User $assignee, ?User $actor = null, ?string $note = null): Complaint
     {
         $this->guard($complaint, ComplaintStatus::Assigned);
 
-        if ($assignee->branch_id !== $complaint->branch_id && ! $assignee->seesAllBranches()) {
+        if ($assignee->branch_id !== $complaint->branch_id && ! $assignee->seesAllSectors()) {
             // Handing a complaint to somebody in another franchise would make
             // it invisible to them and unactionable. Fail loudly.
             throw new LogicException('That person does not work in this branch.');
@@ -130,8 +185,18 @@ class ComplaintWorkflow
         return DB::transaction(function () use ($complaint, $reason, $actor) {
             $from = $complaint->status;
 
+            /*
+             * Back to whoever holds it - or to the queue if nobody does.
+             *
+             * This forced Assigned unconditionally, which left rows reading
+             * "Assigned" with "Nobody yet" beside them: a status nobody could
+             * act on, because there was nobody it belonged to. The status has
+             * to follow the fact, not the other way round.
+             */
+            $to = $complaint->assigned_to ? ComplaintStatus::Assigned : ComplaintStatus::Open;
+
             $complaint->forceFill([
-                'status' => ComplaintStatus::Assigned,
+                'status' => $to,
                 'resolved_at' => null,
                 'resolved_by' => null,
                 'closed_at' => null,
@@ -140,7 +205,7 @@ class ComplaintWorkflow
                 'due_at' => $this->dueAt($complaint->category, $complaint->priority),
             ])->save();
 
-            $this->record($complaint, 'reopened', $from, ComplaintStatus::Assigned, $reason, $actor);
+            $this->record($complaint, 'reopened', $from, $to, $reason, $actor);
 
             return $complaint;
         });

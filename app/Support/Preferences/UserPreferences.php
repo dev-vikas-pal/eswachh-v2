@@ -22,8 +22,14 @@ class UserPreferences
         // 'system' follows the operating system's light or dark setting.
         'theme' => ['system', 'light', 'dark'],
 
-        // Where the navigation lives.
-        'menu_position' => ['top', 'left'],
+        /*
+         * Where the navigation lives. Down the side by default.
+         *
+         * The list is long enough that across the top it wraps and hides items
+         * on a laptop, and the sidebar is what everybody switched to anyway -
+         * so a new account should not have to find the setting first.
+         */
+        'menu_position' => ['left', 'top'],
 
         // How much breathing room the tables get.
         'density' => ['comfortable', 'compact'],

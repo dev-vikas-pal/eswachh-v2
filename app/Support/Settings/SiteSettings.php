@@ -45,7 +45,54 @@ class SiteSettings
 
             // How the business behaves, as opposed to how the code is wired.
             'renewal_grace_days' => ['label' => 'Days overdue before pausing', 'group' => 'Service', 'rules' => ['nullable', 'integer', 'min:0', 'max:60'], 'default' => '7'],
-            'cloth_low_threshold' => ['label' => 'Warn when cloths fall below', 'group' => 'Service', 'rules' => ['nullable', 'integer', 'min:0', 'max:500'], 'default' => '10'],
+            // The document says five. v1 warned at ten in one place and five in
+            // another; this is the one number both now read.
+            'cloth_low_threshold' => ['label' => 'Warn when cloths fall below', 'group' => 'Service', 'rules' => ['nullable', 'integer', 'min:0', 'max:500'], 'default' => '5'],
+
+            /*
+             * Where "a new car needs a cleaner" goes. v1 had this number
+             * written into two controllers, so changing it meant a deployment
+             * and missing one of them meant messages going to the wrong phone.
+             */
+            'admin_notify_phone' => ['label' => 'Number for new plan alerts', 'group' => 'Service', 'rules' => ['nullable', 'string', 'max:20'], 'default' => ''],
+
+            /*
+             * When the day's round is reported to customers.
+             *
+             * Everything the cleaner does used to message the customer the
+             * moment they tapped it, which on an early round is six in the
+             * morning - and a household with two cars was woken twice. One
+             * message, at a civilised hour, says the same thing.
+             */
+            'daily_summary_hour' => [
+                'label' => 'Hour to send the day\'s update (0-23)',
+                'group' => 'Service',
+                'rules' => ['nullable', 'integer', 'min:0', 'max:23'],
+                'default' => '19',
+            ],
+
+            /*
+             * A switch for the whole business, for when a client asks that
+             * franchises stop changing what customers are on.
+             *
+             * Deliberately a flag as well as a role. A custom role can already
+             * take update.subscription away from one franchise - that is the
+             * fine-grained answer - but "nobody but the office changes a plan,
+             * everywhere, from today" is a policy about the business, and
+             * expressing it by editing every franchise's role one at a time is
+             * how one gets missed.
+             *
+             * It never restricts an administrator: somebody has to be able to
+             * correct a plan, and if this locked everyone out the only way back
+             * would be the database.
+             */
+            'lock_plan_edits_to_admin' => [
+                'label' => 'Only administrators may change a plan',
+                'group' => 'Service',
+                'rules' => ['sometimes', 'boolean'],
+                'default' => '0',
+                'boolean' => true,
+            ],
 
             /*
              * The two pages a payment gateway asks to see before it will let a
@@ -54,6 +101,45 @@ class SiteSettings
              * not articles, they have no author and no date, and they must
              * always exist.
              */
+            /*
+             * What search engines and a shared link show.
+             *
+             * Held here rather than written into the page, so a title can be
+             * changed without a release - and so the person who cares about it
+             * can change it without asking a developer.
+             */
+            'seo_title' => ['label' => 'Page title', 'group' => 'Search & sharing', 'rules' => ['nullable', 'string', 'max:70'], 'default' => 'Eswachh · Doorstep car cleaning, every day'],
+            'seo_description' => ['label' => 'Description', 'group' => 'Search & sharing', 'rules' => ['nullable', 'string', 'max:180'], 'default' => 'Daily doorstep car cleaning at your parking spot. Pick a plan, pick how often, and the same cleaner comes every day before you leave for work.', 'long' => true],
+            'seo_keywords' => ['label' => 'Keywords', 'group' => 'Search & sharing', 'rules' => ['nullable', 'string', 'max:255'], 'default' => 'car cleaning, doorstep car wash, daily car cleaning, Greater Noida'],
+            // The picture that appears when somebody shares a link.
+            'seo_share_image' => ['label' => 'Sharing image', 'group' => 'Search & sharing', 'rules' => ['nullable', 'string', 'max:255'], 'default' => ''],
+            'seo_index' => [
+                'label' => 'Let search engines list this site',
+                'group' => 'Search & sharing',
+                'rules' => ['sometimes', 'boolean'],
+                // On, but switchable: a staging copy that gets indexed competes
+                // with the real site for its own name.
+                'default' => '1',
+                'boolean' => true,
+            ],
+
+            /*
+             * The cloth ironing service, business-wide.
+             *
+             * Built on both sides and working, but switched off while the
+             * business decides whether to run it. Off hides the top-up page,
+             * the cloth screens and the cloth choice on the signup form; it
+             * does not touch existing balances or the ledger, so turning it
+             * back on resumes exactly where it left off.
+             */
+            'cloth_service_enabled' => [
+                'label' => 'Offer the cloth ironing service',
+                'group' => 'Service',
+                'rules' => ['sometimes', 'boolean'],
+                'default' => '0',
+                'boolean' => true,
+            ],
+
             'privacy_policy' => ['label' => 'Privacy policy', 'group' => 'Policies', 'rules' => ['nullable', 'string', 'max:20000'], 'default' => PolicyText::PRIVACY, 'rich' => true],
             'terms' => ['label' => 'Terms of service', 'group' => 'Policies', 'rules' => ['nullable', 'string', 'max:20000'], 'default' => PolicyText::TERMS, 'rich' => true],
             'refund_policy' => ['label' => 'Cancellation and refunds', 'group' => 'Policies', 'rules' => ['nullable', 'string', 'max:20000'], 'default' => PolicyText::REFUNDS, 'rich' => true],
@@ -67,25 +153,48 @@ class SiteSettings
      */
     public static function all(): array
     {
-        return Cache::rememberForever(self::CACHE_KEY, function () {
-            $stored = DB::table('site_settings')->pluck('value', 'key')->all();
-            $out = [];
+        $cached = Cache::rememberForever(self::CACHE_KEY, fn () => self::read());
 
-            foreach (self::definitions() as $key => $definition) {
-                /*
-                 * array_key_exists rather than ??, because a stored null means
-                 * something different from no row at all: somebody cleared this
-                 * field on purpose. With ?? the two are the same, so emptying a
-                 * policy page and saving would silently bring the shipped
-                 * wording back and look like the save had failed.
-                 */
-                $out[$key] = array_key_exists($key, $stored)
-                    ? ($stored[$key] ?? '')
-                    : $definition['default'];
-            }
+        /*
+         * A setting added since the cache was written would otherwise be
+         * missing until somebody cleared it by hand - which is exactly what
+         * happened when the SEO fields were added and the site kept serving
+         * the fallback title. Deploying a new setting should not need a cache
+         * clear to take effect, so a cache that predates one is rebuilt.
+         */
+        if (count($cached) !== count(self::definitions())) {
+            Cache::forget(self::CACHE_KEY);
 
-            return $out;
-        });
+            return Cache::rememberForever(self::CACHE_KEY, fn () => self::read());
+        }
+
+        return $cached;
+    }
+
+    /**
+     * Straight from the table, with defaults filled in.
+     *
+     * @return array<string, string>
+     */
+    private static function read(): array
+    {
+        $stored = DB::table('site_settings')->pluck('value', 'key')->all();
+        $out = [];
+
+        foreach (self::definitions() as $key => $definition) {
+            /*
+             * array_key_exists rather than ??, because a stored null means
+             * something different from no row at all: somebody cleared this
+             * field on purpose. With ?? the two are the same, so emptying a
+             * policy page and saving would silently bring the shipped wording
+             * back and look like the save had failed.
+             */
+            $out[$key] = array_key_exists($key, $stored)
+                ? ($stored[$key] ?? '')
+                : $definition['default'];
+        }
+
+        return $out;
     }
 
     public static function get(string $key, mixed $fallback = null): mixed

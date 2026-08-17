@@ -22,6 +22,8 @@ use Illuminate\Validation\ValidationException;
  */
 class SubscriptionActionController extends Controller
 {
+    public function __construct(private Messenger $messenger) {}
+
     /**
      * Send the renewal reminder now, by hand.
      *
@@ -127,6 +129,20 @@ class SubscriptionActionController extends Controller
         }
 
         $vehicle->forceFill(['assigned_cleaner_id' => $cleaner?->id])->save();
+
+        /*
+         * [6] in the requirements document: the customer is told who is coming
+         * and how to reach them. Only when somebody is assigned - taking a
+         * cleaner off is an internal move, and telling a customer their car has
+         * nobody would alarm them about something the office is mid-way through
+         * fixing.
+         */
+        if ($cleaner) {
+            $this->messenger->notify(
+                $subscription->fresh()->load('vehicle.cleaner', 'customer'),
+                MessagePurpose::CleanerAssigned,
+            );
+        }
 
         return response()->json([
             'message' => $cleaner

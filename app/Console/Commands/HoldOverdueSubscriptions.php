@@ -7,7 +7,7 @@ use App\Domain\Messaging\Messenger;
 use App\Enums\MessagePurpose;
 use App\Enums\SubscriptionStatus;
 use App\Models\Subscription;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +36,7 @@ class HoldOverdueSubscriptions extends Command
 
     public function handle(Messenger $messenger, ClothLedger $cloths): int
     {
-        return BranchContext::withoutScope(function () use ($messenger, $cloths) {
+        return SectorContext::withoutScope(function () use ($messenger, $cloths) {
             $grace = max(0, (int) $this->option('grace'));
             $limit = max(1, (int) $this->option('limit'));
             $dryRun = (bool) $this->option('dry-run');

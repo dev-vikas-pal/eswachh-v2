@@ -11,7 +11,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Support\Settings\SiteSettings;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -31,7 +31,7 @@ class AccountAndInvoiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
         $this->owner = User::factory()->franchiseOwner($this->branch)->create();
@@ -39,7 +39,7 @@ class AccountAndInvoiceTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 

@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -22,8 +23,28 @@ class PaymentFactory extends Factory
     {
         return [
             'branch_id' => Branch::factory(),
-            'customer_id' => Customer::factory(),
-            'subscription_id' => Subscription::factory(),
+            // A customer in the same territory - see ComplaintFactory for why.
+            'customer_id' => fn (array $attributes) => SectorContext::withoutScope(
+                fn () => Customer::factory()->create(['branch_id' => $attributes['branch_id'] ?? null])->id
+            ),
+            'subscription_id' => fn (array $attributes) => SectorContext::withoutScope(
+                fn () => Subscription::factory()->create([
+                    'branch_id' => $attributes['branch_id'] ?? null,
+                    'customer_id' => $attributes['customer_id'],
+                ])->id
+            ),
+
+            /*
+             * The territory the money was taken in, stamped as the real thing
+             * stamps it - from the customer, at the moment of the payment.
+             *
+             * Without this a factory-made payment carries no sector and is
+             * invisible to every sector-scoped user, which is the correct rule
+             * applied to a row that simply forgot to say where it came from.
+             */
+            'sector_id' => fn (array $attributes) => SectorContext::withoutScope(
+                fn () => Customer::withTrashed()->whereKey($attributes['customer_id'])->value('sector_id')
+            ),
             'purpose' => PaymentPurpose::Subscription,
             // The default is an attempt in flight, because that is what a
             // payment is for most of its short life.
@@ -41,6 +62,9 @@ class PaymentFactory extends Factory
             'subscription_id' => $subscription->id,
             'customer_id' => $subscription->customer_id,
             'branch_id' => $subscription->branch_id,
+            'sector_id' => SectorContext::withoutScope(
+                fn () => Customer::withTrashed()->whereKey($subscription->customer_id)->value('sector_id')
+            ),
             'amount_paise' => $subscription->amount_paise,
         ]);
     }

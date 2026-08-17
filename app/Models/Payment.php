@@ -4,7 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentPurpose;
 use App\Enums\PaymentStatus;
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,7 +16,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Payment extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
+
+    /**
+     * The one table with a stamped sector rather than a derived one.
+     *
+     * A payment records something that happened. Who took the money does not
+     * change because the territory was rearranged afterwards, so the sector is
+     * written once at capture and never recomputed - the same reason the cloth
+     * ledger is corrected with new entries instead of edits.
+     *
+     * The practical effect: hand a sector to somebody else and they see the
+     * customers and the plans from that moment, but the revenue already
+     * collected stays with whoever collected it, and last year's figures do not
+     * quietly change shape.
+     */
+    protected static function sectorScope(): array
+    {
+        return ['sector' => 'sector_id', 'customer' => 'customer_id'];
+    }
 
     /**
      * Mirrors the schema defaults.
@@ -34,7 +52,7 @@ class Payment extends BaseModel
     ];
 
     protected $fillable = [
-        'branch_id', 'customer_id', 'subscription_id',
+        'branch_id', 'sector_id', 'customer_id', 'subscription_id',
         'purpose', 'status', 'amount_paise', 'currency',
         'gateway', 'gateway_order_id', 'gateway_payment_id',
         'method', 'reference', 'paid_at', 'invoice_number',

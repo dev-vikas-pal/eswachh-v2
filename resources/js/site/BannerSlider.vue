@@ -32,6 +32,15 @@ const carousel = useCarousel(toRef(count), 6000);
 
 const current = computed<Banner | null>(() => props.banners[carousel.index.value] ?? null);
 
+/**
+ * Does any live banner carry a picture?
+ *
+ * Decided across all of them, not per slide: switching between a full-bleed
+ * image band and a two-column layout mid-rotation makes the page jump, and the
+ * three steps would appear and vanish as the slides changed.
+ */
+const hasImage = computed(() => props.banners.some((b) => b.image));
+
 /** Swiping, which is how a phone expects to move between slides. */
 const touchStart = ref<number | null>(null);
 
@@ -66,11 +75,38 @@ function onTouchEnd(event: TouchEvent) {
         @touchend.passive="onTouchEnd"
     >
         <!--
-            Wider than the rest of the page and with smaller gutters, so the
-            hero reads as a full width band rather than a card floating in the
-            middle of the screen.
+            The picture spans the whole band, with the words laid over it.
+
+            A hero image in a half column is a picture beside some text; the
+            same image across the full width is the page. The rest of the site
+            is centred in a reading column because prose needs one - a hero does
+            not, and a band that stops short of the screen reads as a card that
+            failed to load the rest of itself.
         -->
-        <div class="mx-auto grid max-w-[90rem] gap-6 px-4 py-10 sm:px-8 md:grid-cols-2 md:items-center md:gap-12 md:py-16 lg:px-12">
+        <div v-if="hasImage" class="absolute inset-0">
+            <Transition name="fade" mode="out-in">
+                <img
+                    v-if="current?.image"
+                    :key="current.id"
+                    :src="current.image"
+                    alt=""
+                    aria-hidden="true"
+                    class="h-full w-full object-cover"
+                    :loading="carousel.index.value === 0 ? 'eager' : 'lazy'"
+                />
+            </Transition>
+
+            <!--
+                The words have to stay readable over whatever was uploaded, and
+                the office uploads a photograph one week and a pale illustration
+                the next. A wash from the page's own surface colour, heaviest
+                behind the text and clearing towards the far edge, keeps the
+                contrast without hiding the picture.
+            -->
+            <div class="absolute inset-0 bg-gradient-to-r from-surface via-surface/85 to-surface/40 md:to-surface/10"></div>
+        </div>
+
+        <div class="relative grid w-full gap-6 px-4 py-12 sm:px-8 md:grid-cols-2 md:items-center md:gap-12 md:py-20 lg:px-16 xl:px-24">
             <!--
                 Keyed on the banner so Vue replaces the whole block and the
                 transition runs. Without the key the text would swap in place
@@ -117,43 +153,17 @@ function onTouchEnd(event: TouchEvent) {
             </Transition>
 
             <!--
-                A fixed aspect ratio rather than a fixed height: banners are
-                uploaded at whatever size somebody had, and letting them set the
-                height makes the page jump as the slides change.
+                The picture is the background now, so this column holds the
+                three steps when there is no picture and nothing when there is.
+                Keeping the empty column means the words stay on their half of
+                a wide screen rather than stretching across the whole band.
             -->
-            <!--
-                Second on a narrow screen, so the words come first. A visitor
-                who has just landed should read what this is before scrolling
-                past a picture to find out.
-            -->
-            <div v-if="banners.some((b) => b.image)">
-                <Transition name="slide" mode="out-in">
-                    <div
-                        :key="current?.id ?? 'image'"
-                        class="aspect-[16/10] overflow-hidden rounded-lg border border-line bg-sunk sm:aspect-[16/9]"
-                    >
-                        <!--
-                            Contained rather than cropped. The office uploads
-                            whatever it has - a photograph one week, a
-                            transparent illustration the next - and cropping
-                            cuts the head off the second kind.
-                        -->
-                        <img
-                            v-if="current?.image"
-                            :src="current.image"
-                            :alt="current.headline"
-                            class="h-full w-full object-contain"
-                            :loading="carousel.index.value === 0 ? 'eager' : 'lazy'"
-                        />
-                    </div>
-                </Transition>
-            </div>
-
-            <slot v-else name="aside" />
+            <slot v-if="!hasImage" name="aside" />
+            <div v-else aria-hidden="true"></div>
         </div>
 
         <!-- Controls only when there is something to control. -->
-        <div v-if="carousel.isSlideshow.value" class="pointer-events-none absolute inset-x-0 bottom-4 mx-auto flex max-w-[90rem] items-center justify-between px-4 sm:px-8 lg:px-12">
+        <div v-if="carousel.isSlideshow.value" class="pointer-events-none absolute inset-x-0 bottom-4 flex items-center justify-between px-4 sm:px-8 lg:px-16 xl:px-24">
             <button
                 type="button"
                 class="pointer-events-auto grid h-9 w-9 place-items-center rounded-full border border-line-strong bg-surface/80 text-body backdrop-blur transition hover:bg-sunk focus:outline-none focus:ring-2 focus:ring-accent"
@@ -193,6 +203,16 @@ function onTouchEnd(event: TouchEvent) {
 </template>
 
 <style scoped>
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+
 .slide-enter-active,
 .slide-leave-active {
     transition: opacity 0.35s ease, transform 0.35s ease;

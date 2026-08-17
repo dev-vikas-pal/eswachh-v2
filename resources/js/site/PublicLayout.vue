@@ -21,13 +21,37 @@ const open = ref(false);
  * already has a plan to a blank signup form - both of which read as though the
  * site had forgotten them.
  */
-const { session } = useSiteSession();
+const { session, checked } = useSiteSession();
 
 /** The account link, or the signup call to action for a visitor. */
 const primary = computed(() => (session.value
     ? { label: 'My account', href: '/login' }
     : null));
 
+/**
+ * Renew and Subscribe are for visitors, so a signed-in customer is not shown
+ * them.
+ *
+ * They do both from their own pages, where their address and phone are already
+ * known and there is no code to wait for. The public forms would in fact turn
+ * them away: signup refuses a mobile number it already holds, so an existing
+ * customer was told their own number was taken.
+ *
+ * Waiting for the session check before showing anything is deliberate. The
+ * alternative shows the buttons on first paint and pulls them away a moment
+ * later, under the cursor of somebody already reaching for one.
+ *
+ * Staff are not customers, so they still see them. Hidden, not removed: the
+ * pages, routes and forms are all untouched, and making these public to
+ * everybody again is this one line.
+ */
+const showVisitorActions = computed(() => checked.value && session.value?.role !== 'customer');
+
+/*
+ * The pages anybody can read. Renew is not among them: it is one of the things
+ * a visitor comes here to *do*, so it sits with Subscribe rather than being
+ * lost in a row of eight links.
+ */
 const links = [
     { name: 'Home', to: { name: 'home' } },
     { name: 'Packages', to: { name: 'packages' } },
@@ -35,8 +59,19 @@ const links = [
     { name: 'Team', to: { name: 'team' } },
     { name: 'Questions', to: { name: 'faq' } },
     { name: 'Contact', to: { name: 'contact' } },
-    { name: 'Renew', to: { name: 'renew' } },
 ];
+
+/*
+ * Topping up cloths is not offered in the header at all.
+ *
+ * It belongs next to the plan it tops up - a customer thinking about cloths is
+ * looking at their car, not at a navigation bar - so it lives on My plans. The
+ * page and its route stay exactly as they are, reachable by anybody who has the
+ * address, so putting it back is a one line change here.
+ *
+ * The whole service is also behind a business-wide switch; see
+ * cloth_service_enabled in the settings.
+ */
 </script>
 
 <template>
@@ -59,32 +94,46 @@ const links = [
                     </RouterLink>
 
                     <!--
+                        The two things a visitor comes here to do, kept
+                        together: start a plan, or renew the one they have.
+                        Hidden from a signed-in customer, who does both from
+                        their own pages - see showVisitorActions.
+                    -->
+                    <template v-if="showVisitorActions">
+                        <RouterLink
+                            :to="{ name: 'renew' }"
+                            class="ms-2 rounded border border-line-strong px-4 py-1.5 text-sm font-semibold text-body transition hover:bg-sunk"
+                        >
+                            Renew
+                        </RouterLink>
+
+                        <RouterLink
+                            :to="{ name: 'subscribe' }"
+                            class="rounded bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent transition hover:brightness-110"
+                        >
+                            Subscribe
+                        </RouterLink>
+                    </template>
+
+                    <!--
                         A real page load rather than a route: their pages live
                         in the other bundle, which this one does not contain.
                     -->
                     <a
                         v-if="primary"
                         :href="primary.href"
-                        class="ms-2 rounded bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent transition hover:brightness-110"
+                        class="rounded border border-line-strong px-3 py-1.5 text-sm font-medium text-body transition hover:bg-sunk"
                     >
                         {{ primary.label }}
                     </a>
 
-                    <template v-else>
-                        <RouterLink
-                            :to="{ name: 'subscribe' }"
-                            class="ms-2 rounded bg-accent px-4 py-1.5 text-sm font-semibold text-on-accent transition hover:brightness-110"
-                        >
-                            Subscribe
-                        </RouterLink>
-
-                        <RouterLink
-                            :to="{ name: 'login' }"
-                            class="rounded border border-line-strong px-3 py-1.5 text-sm font-medium text-body transition hover:bg-sunk"
-                        >
-                            Sign in
-                        </RouterLink>
-                    </template>
+                    <RouterLink
+                        v-else
+                        :to="{ name: 'login' }"
+                        class="rounded border border-line-strong px-3 py-1.5 text-sm font-medium text-body transition hover:bg-sunk"
+                    >
+                        Sign in
+                    </RouterLink>
                 </nav>
 
                 <button
@@ -108,18 +157,23 @@ const links = [
                     {{ link.name }}
                 </RouterLink>
 
+                <template v-if="showVisitorActions">
+                    <RouterLink :to="{ name: 'renew' }" class="rounded px-3 py-2 text-sm font-medium text-body hover:bg-sunk" @click="open = false">
+                        Renew
+                    </RouterLink>
+
+                    <RouterLink :to="{ name: 'subscribe' }" class="rounded px-3 py-2 text-sm font-medium text-body hover:bg-sunk" @click="open = false">
+                        Subscribe
+                    </RouterLink>
+                </template>
+
                 <a v-if="primary" :href="primary.href" class="rounded px-3 py-2 text-sm font-medium text-accent hover:bg-sunk">
                     {{ primary.label }}
                 </a>
 
-                <template v-else>
-                    <RouterLink :to="{ name: 'subscribe' }" class="rounded px-3 py-2 text-sm font-medium text-body hover:bg-sunk" @click="open = false">
-                        Subscribe
-                    </RouterLink>
-                    <RouterLink :to="{ name: 'login' }" class="rounded px-3 py-2 text-sm font-medium text-body hover:bg-sunk" @click="open = false">
-                        Sign in
-                    </RouterLink>
-                </template>
+                <RouterLink v-else :to="{ name: 'login' }" class="rounded px-3 py-2 text-sm font-medium text-body hover:bg-sunk" @click="open = false">
+                    Sign in
+                </RouterLink>
             </nav>
         </header>
 

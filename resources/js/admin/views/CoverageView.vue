@@ -10,10 +10,13 @@ const auth = useAuthStore();
 const date = ref(new Date().toISOString().slice(0, 10));
 
 const { data, isPending, isError, isFetching } = useQuery({
-    queryKey: computed(() => ['coverage', auth.selectedBranchId, date.value]),
+    queryKey: computed(() => ['coverage', auth.selectedSectorId, date.value]),
     placeholderData: keepPreviousData,
     queryFn: async (): Promise<{ data: Coverage }> => {
-        const { data } = await api.get('/attendance/coverage', { params: { date: date.value } });
+        const { data } = await api.get('/attendance/coverage', {
+            // The picker in the top bar, narrowing to the people covering it.
+            params: { date: date.value, sector_id: auth.selectedSectorId || undefined },
+        });
         return data;
     },
 });

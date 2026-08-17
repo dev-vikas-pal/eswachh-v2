@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Domain\Messaging\Messenger;
 use App\Domain\Operations\DailyRound;
 use App\Enums\AttendanceStatus;
+use App\Enums\MessagePurpose;
 use App\Enums\ServiceOutcome;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
@@ -13,7 +15,9 @@ use App\Models\ClothMovement;
 use App\Models\ServiceLog;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Settings\SiteSettings;
+use App\Support\Http\FiltersBySector;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,7 +28,12 @@ use Illuminate\Validation\Rule;
  */
 class RoundController extends Controller
 {
-    public function __construct(private DailyRound $round) {}
+    use FiltersBySector;
+
+    public function __construct(
+        private DailyRound $round,
+        private Messenger $messenger,
+    ) {}
 
     /**
      * The cars this cleaner is due to visit, with what has already happened.
@@ -103,6 +112,27 @@ class RoundController extends Controller
             $data['note'] ?? null,
         );
 
+        /*
+         * [8] in the requirements document. Only when the car was actually
+         * cleaned: telling somebody "cleaning has been done" on a day the
+         * cleaner recorded that the car was not there would be a lie, and the
+         * complaint that follows would be justified.
+         */
+        /*
+         * The customer is told this evening, not now.
+         *
+         * [8] in the requirements document, honoured better than it was: this
+         * fired the moment the cleaner tapped, which on an early round is six
+         * in the morning, and a household with two cars was woken twice. The
+         * day's outcomes go out together at an hour somebody is awake to read
+         * them - see eswachh:send-daily-summary.
+         *
+         * Nothing is lost by waiting. The customer cannot act on "your car was
+         * cleaned", and the one thing they might act on - "we could not reach
+         * it" - is more use in the evening, when they can move the car for
+         * tomorrow, than at dawn when they cannot.
+         */
+
         return response()->json([
             'data' => new ServiceLogResource($log->load('vehicle', 'cleaner')),
         ], 201);
@@ -150,6 +180,8 @@ class RoundController extends Controller
             $movement = ClothMovement::create($attributes);
         }
 
+        $this->announceCloths($vehicle, $movement);
+
         return response()->json([
             'message' => $data['direction'] === ClothMovement::PICKUP
                 ? "{$data['cloth_count']} cloth(s) collected from {$vehicle->registration}."
@@ -160,6 +192,42 @@ class RoundController extends Controller
                 'cloth_count' => $movement->cloth_count,
             ],
         ], 201);
+    }
+
+    /**
+     * Tell the customer their cloths moved, and warn when they run low.
+     *
+     * [9], [10] and [12] in the requirements document. The low warning goes out
+     * on a delivery only: the balance is what is left after cloths come back,
+     * so warning on a pickup would fire against a number that is about to
+     * change.
+     */
+    private function announceCloths(Vehicle $vehicle, ClothMovement $movement): void
+    {
+        $subscription = $vehicle->currentSubscription?->fresh();
+
+        if (! $subscription) {
+            return;
+        }
+
+        $subscription->load('customer', 'vehicle');
+
+        $isDelivery = $movement->direction === ClothMovement::DELIVERY;
+
+        /*
+         * [9] and [10] go in the evening summary with the rest of the round,
+         * for the same reason: cloths are collected on the same early visit,
+         * and two more messages at dawn is two more reasons to mute us.
+         */
+        if (! $isDelivery) {
+            return;
+        }
+
+        $threshold = (int) SiteSettings::get('cloth_low_threshold', 5);
+
+        if ($subscription->cloth_service && $subscription->cloth_balance <= $threshold) {
+            $this->messenger->notify($subscription, MessagePurpose::ClothsLow);
+        }
     }
 
     /**
@@ -184,7 +252,7 @@ class RoundController extends Controller
                 'delivered' => (int) $movements->where('direction', ClothMovement::DELIVERY)->sum('cloth_count'),
                 // Collected and not yet returned, across all time - cloths a
                 // customer has paid for and cannot currently use.
-                'outstanding' => ClothMovement::outstanding(BranchContext::currentBranchId()),
+                'outstanding' => ClothMovement::outstanding(),
                 'movements' => $movements->map(fn (ClothMovement $m) => [
                     'id' => $m->id,
                     'car' => $m->vehicle?->registration,
@@ -262,7 +330,24 @@ class RoundController extends Controller
         $filters = $request->validate(['date' => ['sometimes', 'date']]);
         $on = isset($filters['date']) ? Carbon::parse($filters['date']) : Carbon::today();
 
-        $cleaners = User::query()->visible()->role(UserRole::Cleaner)->where('status', true)->get();
+        /*
+         * The sector picker narrows this to the people covering it.
+         *
+         * This screen lists staff rather than customers, so it cannot use the
+         * usual customer filter - "whose round is short today" is a question
+         * about who covers the sector, not about who lives in it. Without this
+         * an administrator picking one sector still saw every cleaner in the
+         * business, which reads as the control being broken.
+         */
+        $cleaners = User::query()
+            ->visible()
+            ->role(UserRole::Cleaner)
+            ->where('status', true)
+            ->when(
+                $sector = $this->requestedSector($request),
+                fn ($q) => $q->inSectors([$sector]),
+            )
+            ->get();
 
         $attendance = Attendance::query()
             ->whereIn('cleaner_id', $cleaners->pluck('id'))

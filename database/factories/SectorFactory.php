@@ -7,7 +7,7 @@ use App\Models\Branch;
 use App\Models\City;
 use App\Models\Sector;
 use App\Models\State;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,7 +22,7 @@ class SectorFactory extends Factory
         return [
             // Built unscoped: the factory must be able to set up geography
             // regardless of who is "logged in" during a test.
-            'area_id' => BranchContext::withoutScope(fn () => self::anArea()->id),
+            'area_id' => SectorContext::withoutScope(fn () => self::anArea()->id),
             'name' => 'Sector '.fake()->unique()->numberBetween(1, 999),
             'status' => true,
         ];

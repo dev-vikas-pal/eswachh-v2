@@ -13,7 +13,8 @@ use App\Models\Sector;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Settings\SiteSettings;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -62,9 +63,36 @@ class SignupController extends Controller
      */
     public function requestCode(Request $request): JsonResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string', 'max:20']]);
+        $data = $request->validate([
+            'phone' => ['required', 'string', 'max:20'],
+
+            /*
+             * Sent so the answers that would refuse this signup can be given
+             * now, before a message is spent on it.
+             *
+             * They used to be checked only when the form was submitted, which
+             * is after the code has been sent, typed and read back - so a car
+             * number already on the books was reported at the payment step,
+             * with the whole form filled in and nothing to do but start again.
+             *
+             * Optional, because the same endpoint serves "send it again", when
+             * the form has not changed and there is nothing new to check.
+             */
+            'registration' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'sector_id' => ['sometimes', 'nullable', 'string', 'exists:sectors,id'],
+        ]);
 
         $phone = PhoneCodes::normalise($data['phone']);
+
+        if ($registration = $data['registration'] ?? null) {
+            $this->refuseIfCarTaken(
+                strtoupper((string) preg_replace('/\s+/', '', $registration))
+            );
+        }
+
+        if ($sectorId = $data['sector_id'] ?? null) {
+            $this->refuseIfSectorUncovered($sectorId);
+        }
 
         if (strlen($phone) !== 10) {
             throw ValidationException::withMessages(['phone' => 'That does not look like a mobile number.']);
@@ -125,8 +153,18 @@ class SignupController extends Controller
 
         $phone = PhoneCodes::normalise($data['phone']);
 
-        // Proved before anything is written. Everything below creates records.
-        if (! $this->codes->consume($phone, $data['code'], PhoneCodes::SIGNUP)) {
+        /*
+         * Checked, not spent.
+         *
+         * Everything below can still refuse this signup - a car number already
+         * on the books, a sector nobody covers - and a code burned by one of
+         * those leaves the customer retyping a code that has silently stopped
+         * working, with nothing on screen to say why. It is spent inside the
+         * transaction, once nothing else can fail.
+         */
+        $verified = $this->codes->check($phone, $data['code'], PhoneCodes::SIGNUP);
+
+        if (! $verified) {
             throw ValidationException::withMessages([
                 'code' => 'That code is not valid. Ask for a new one.',
             ]);
@@ -136,23 +174,27 @@ class SignupController extends Controller
 
         $this->refuseIfTaken($phone, $registration);
 
-        // The franchise that services the sector owns the customer. There is no
-        // branch in the request to trust.
-        $branchId = BranchContext::withoutScope(
-            fn () => Sector::query()->whereKey($data['sector_id'])->value('branch_id')
-        );
+        $this->refuseIfSectorUncovered($data['sector_id']);
 
-        if (! $branchId) {
+        /*
+         * The form no longer offers cloths while the service is off, but the
+         * form is not what enforces it - a stale page or a hand-made request
+         * would otherwise still sell one.
+         */
+        if (! empty($data['cloth_bundle_id']) && ! SiteSettings::get('cloth_service_enabled')) {
             throw ValidationException::withMessages([
-                'sector_id' => 'We do not service that sector yet.',
+                'cloth_bundle_id' => 'The cloth ironing service is not available at the moment.',
             ]);
         }
 
         $quote = $this->quote($data);
 
-        return DB::transaction(function () use ($data, $phone, $registration, $branchId, $quote) {
+        return DB::transaction(function () use ($data, $phone, $registration, $quote, $verified) {
+            // Nothing left that can refuse them, so the code is spent now.
+            $this->codes->spend($verified);
             $account = User::create([
-                'branch_id' => $branchId,
+                // A hint only; visibility comes from the customer's sector.
+                'branch_id' => null,
                 'name' => $data['name'],
                 'email' => $data['email'] ?? null,
                 'phone' => $phone,
@@ -167,7 +209,8 @@ class SignupController extends Controller
             ]);
 
             $customer = Customer::create([
-                'branch_id' => $branchId,
+                // A hint only; visibility comes from the customer's sector.
+                'branch_id' => null,
                 'user_id' => $account->id,
                 'name' => $data['name'],
                 'phone' => $phone,
@@ -183,7 +226,8 @@ class SignupController extends Controller
             ]);
 
             $vehicle = Vehicle::create([
-                'branch_id' => $branchId,
+                // A hint only; visibility comes from the customer's sector.
+                'branch_id' => null,
                 'customer_id' => $customer->id,
                 'vehicle_model_id' => $data['vehicle_model_id'],
                 'registration' => $registration,
@@ -193,7 +237,8 @@ class SignupController extends Controller
             $start = Carbon::today();
 
             $subscription = Subscription::create([
-                'branch_id' => $branchId,
+                // A hint only; visibility comes from the customer's sector.
+                'branch_id' => null,
                 'customer_id' => $customer->id,
                 'vehicle_id' => $vehicle->id,
                 'package_id' => $data['package_id'],
@@ -243,7 +288,7 @@ class SignupController extends Controller
              * is the only part that varies by where they live, and that comes
              * from the society they picked.
              */
-            return BranchContext::withoutScope(fn () => $this->book->quote(
+            return SectorContext::withoutScope(fn () => $this->book->quote(
                 $data['vehicle_model_id'],
                 $data['package_id'],
                 $data['service_type_id'],
@@ -264,7 +309,18 @@ class SignupController extends Controller
             ]);
         }
 
-        // Scopes off: a car already on another franchise's books is still taken,
+        $this->refuseIfCarTaken($registration);
+    }
+
+    /**
+     * Asked twice: once before the code is sent, once before anything is
+     * written. The early answer saves the customer a wasted round trip; the
+     * late one is what actually guarantees it, because the form could have
+     * changed in between.
+     */
+    private function refuseIfCarTaken(string $registration): void
+    {
+        // Scopes off: a car already on another sector's books is still taken,
         // and finding that out at the payment step is far worse than here.
         $taken = Vehicle::withoutGlobalScopes()
             ->where('registration', $registration)
@@ -274,6 +330,23 @@ class SignupController extends Controller
         if ($taken) {
             throw ValidationException::withMessages([
                 'registration' => 'That car number is already registered. Use the renewal page instead.',
+            ]);
+        }
+    }
+
+    /**
+     * Somebody has to cover the sector, or nobody will ever be sent to clean
+     * the car. Read from the assignment, not from anything on the sector row.
+     */
+    private function refuseIfSectorUncovered(string $sectorId): void
+    {
+        $covered = SectorContext::withoutScope(
+            fn () => DB::table('user_sector')->where('sector_id', $sectorId)->exists()
+        );
+
+        if (! $covered) {
+            throw ValidationException::withMessages([
+                'sector_id' => 'We do not service that sector yet.',
             ]);
         }
     }

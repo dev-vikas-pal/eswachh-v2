@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Domain\Messaging\Messenger;
 use App\Domain\Support\ComplaintWorkflow;
 use App\Enums\ComplaintCategory;
+use App\Enums\MessagePurpose;
 use App\Enums\ComplaintPriority;
 use App\Enums\ComplaintStatus;
 use App\Enums\UserRole;
@@ -12,15 +14,18 @@ use App\Http\Resources\ComplaintResource;
 use App\Models\Complaint;
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\Http\FiltersBySector;
 use App\Support\Http\SortsLists;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
 class ComplaintController extends Controller
 {
+    use FiltersBySector;
     use SortsLists;
 
     /**
@@ -94,6 +99,9 @@ class ComplaintController extends Controller
             ->orderBy('due_at')
             ->orderBy('created_at');
 
+        // The sector picker in the top bar.
+        $this->applySectorFilter($query, $request, 'customer');
+
         $this->applySort($query, $request, self::SORTABLE, 'queue');
 
         $liveCount = (clone $query)->live()->count();
@@ -146,6 +154,26 @@ class ComplaintController extends Controller
                     'value' => $p->value,
                     'label' => $p->label(),
                 ], ComplaintPriority::cases()),
+
+                /*
+                 * Who a complaint can be handed to.
+                 *
+                 * Scoped by ->visible(), so a franchise user is offered their
+                 * own colleagues and nobody else - the same list the assign
+                 * endpoint will accept, so the screen cannot offer a choice the
+                 * server then refuses.
+                 */
+                'assignees' => User::query()
+                    ->visible()
+                    ->whereNot('role', UserRole::Customer->value)
+                    ->where('status', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'role'])
+                    ->map(fn (User $u) => [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'role' => $u->role?->label(),
+                    ]),
             ],
         ]);
     }
@@ -173,6 +201,17 @@ class ComplaintController extends Controller
             'subscription_id' => $data['subscription_id'] ?? null,
         ], $request->user());
 
+        /*
+         * [5] in the requirements document: the cleaners are told, not the
+         * customer. The customer already knows - they just raised it - and what
+         * matters is that whoever cleans that car finds out today.
+         *
+         * Sent to the cleaner assigned to the car when there is one. v1 sent it
+         * to a WhatsApp group; a group has no owner and nobody is accountable
+         * for reading it, so this goes to the person whose round the car is on.
+         */
+        $this->tellTheCleaner($complaint);
+
         return response()->json([
             'data' => new ComplaintResource($complaint->load(['customer', 'vehicle', 'events.actor'])),
         ], 201);
@@ -194,6 +233,57 @@ class ComplaintController extends Controller
         return $this->run(fn () => $this->workflow->assign(
             $complaint, $assignee, $request->user(), $data['note'] ?? null
         ));
+    }
+
+    /**
+     * Hand several complaints to one person at once.
+     *
+     * The fallback for when auto-assignment could not route them - a car with
+     * no cleaner, or a cleaner who has left. Doing that one at a time through
+     * the panel is how a queue of twenty stays a queue of twenty.
+     *
+     * Each is assigned in its own transaction rather than all in one: a
+     * complaint that cannot be assigned - already closed, say - should not undo
+     * the nineteen that could.
+     */
+    public function assignMany(Request $request): JsonResponse
+    {
+        $this->authorize('assign.complaint');
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['string'],
+            'assignee_id' => ['required', 'string', 'exists:users,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $assignee = User::query()->visible()->findOrFail($data['assignee_id']);
+
+        // Scoped: an id from a sector they do not cover simply matches nothing,
+        // so there is no separate ownership check to forget.
+        $complaints = Complaint::query()->whereIn('id', $data['ids'])->get();
+
+        $assigned = 0;
+        $skipped = [];
+
+        foreach ($complaints as $complaint) {
+            try {
+                $this->workflow->assign($complaint, $assignee, $request->user(), $data['note'] ?? null);
+                $assigned++;
+            } catch (LogicException $e) {
+                // Reported rather than swallowed: "18 of 20" with the reasons
+                // is actionable, a silent 18 is not.
+                $skipped[] = $complaint->reference.': '.$e->getMessage();
+            }
+        }
+
+        return response()->json([
+            'assigned' => $assigned,
+            'skipped' => $skipped,
+            'message' => $assigned === $complaints->count()
+                ? "{$assigned} complaint(s) given to {$assignee->name}."
+                : "{$assigned} of {$complaints->count()} given to {$assignee->name}.",
+        ]);
     }
 
     public function addNote(Request $request, Complaint $complaint): JsonResponse
@@ -290,6 +380,39 @@ class ComplaintController extends Controller
         // 404, not 403: confirming it exists tells them about somebody else's
         // complaint.
         abort_unless($isTheirs, 404);
+    }
+
+    /**
+     * Tell whoever cleans this car that there is a complaint about it.
+     *
+     * Quiet when there is nobody assigned or no phone to send to: a complaint
+     * that could not be forwarded is still raised, still visible on the queue,
+     * and still counted against its promised response time. Losing the
+     * complaint because the message failed would be the worse outcome.
+     */
+    private function tellTheCleaner(Complaint $complaint): void
+    {
+        $subscription = $complaint->subscription
+            ?? $complaint->vehicle?->currentSubscription;
+
+        $cleaner = $complaint->vehicle?->cleaner;
+
+        if (! $subscription || ! $cleaner?->phone) {
+            return;
+        }
+
+        try {
+            app(Messenger::class)->notify(
+                $subscription->load('customer', 'vehicle.cleaner'),
+                MessagePurpose::ComplaintRaised,
+                toPhone: $cleaner->phone,
+            );
+        } catch (\Throwable $e) {
+            Log::error('A complaint was raised but the cleaner could not be told.', [
+                'complaint_id' => $complaint->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

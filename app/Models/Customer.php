@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -15,7 +15,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Customer extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
+
+    /**
+     * The customer's own sector is the fact everything else is measured
+     * against, so this table matches it directly rather than deriving it.
+     *
+     * Deliberately not through society. A society tells you the surcharge and
+     * the address; the sector tells you whose territory it is, and making the
+     * second depend on the first meant a customer with no society recorded
+     * belonged to nobody.
+     */
+    protected static function sectorScope(): array
+    {
+        return ['sector' => 'sector_id', 'customer' => 'id'];
+    }
 
     protected $fillable = [
         'branch_id', 'user_id', 'name', 'phone', 'email',

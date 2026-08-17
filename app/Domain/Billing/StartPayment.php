@@ -4,10 +4,14 @@ namespace App\Domain\Billing;
 
 use App\Enums\PaymentPurpose;
 use App\Enums\PaymentStatus;
+use App\Enums\SubscriptionStatus;
 use App\Models\ClothBundle;
+use App\Models\Customer;
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Opens a payment: writes our record, then asks the gateway for an order.
@@ -19,6 +23,25 @@ use Illuminate\Support\Facades\DB;
  */
 class StartPayment
 {
+    /**
+     * The territory this money is being taken in.
+     *
+     * Read outside the scope, deliberately. A public signup has nobody signed
+     * in, so the scope is restricted with no sectors and the customer relation
+     * comes back empty - and `?->sector_id` then quietly yields null. Every
+     * payment taken from the public form was stamped with nothing and became
+     * invisible to the very franchise that had just earned it.
+     *
+     * The one place a null stamp is still correct is a customer with no sector
+     * at all, which is a different problem and shows up on the customer record.
+     */
+    private function sectorFor(Subscription $subscription): ?string
+    {
+        return SectorContext::withoutScope(
+            fn () => Customer::withTrashed()->whereKey($subscription->customer_id)->value('sector_id')
+        );
+    }
+
     public function __construct(private RazorpayGateway $gateway) {}
 
     /**
@@ -26,13 +49,50 @@ class StartPayment
      */
     public function forSubscription(Subscription $subscription): array
     {
+        /*
+         * A period that has already been renewed is not the one to pay for.
+         *
+         * Stopped here rather than sorted out afterwards: the office clicks
+         * "take payment" on whichever row is in front of them, and an old row
+         * looks exactly like a current one in a list. Refusing before the
+         * gateway opens is better than taking money and reasoning about which
+         * period it belonged to.
+         */
+        if ($subscription->status === SubscriptionStatus::Ended) {
+            /*
+             * Read outside the scope, like the stamp below. This runs from the
+             * public renewal page as well as the office, and with nobody signed
+             * in a scoped query finds no live period - so the guard would pass
+             * exactly when it is needed most.
+             */
+            $live = SectorContext::withoutScope(fn () => Subscription::query()
+                ->where('vehicle_id', $subscription->vehicle_id)
+                ->whereNot('id', $subscription->id)
+                ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::Hold, SubscriptionStatus::Pending])
+                ->exists());
+
+            if ($live) {
+                throw ValidationException::withMessages([
+                    'subscription' => 'This period has already been renewed. Take the payment on the current one.',
+                ]);
+            }
+        }
+
         // The amount comes from the subscription, never from the request. If a
         // client could name its own price, it would - this is the single most
         // common way a payment page is abused.
         $amountPaise = (int) $subscription->amount_paise;
 
         $payment = DB::transaction(fn () => Payment::create([
-            'branch_id' => $subscription->branch_id,
+            /*
+             * The territory this money was taken in, stamped once.
+             *
+             * Read from the customer now rather than derived on every later
+             * query, because a payment records something that happened: hand
+             * the sector to somebody else tomorrow and they get the customer
+             * and the plan, but not last year's revenue.
+             */
+            'sector_id' => $this->sectorFor($subscription),
             'customer_id' => $subscription->customer_id,
             'subscription_id' => $subscription->id,
             'purpose' => PaymentPurpose::Subscription,
@@ -49,7 +109,7 @@ class StartPayment
             receipt: $payment->id,
             notes: [
                 'subscription_id' => (string) $subscription->id,
-                'branch_id' => (string) $subscription->branch_id,
+                'sector_id' => (string) $this->sectorFor($subscription),
             ],
         );
 
@@ -85,7 +145,15 @@ class StartPayment
         $amountPaise = (int) $bundle->price_paise;
 
         $payment = DB::transaction(fn () => Payment::create([
-            'branch_id' => $subscription->branch_id,
+            /*
+             * The territory this money was taken in, stamped once.
+             *
+             * Read from the customer now rather than derived on every later
+             * query, because a payment records something that happened: hand
+             * the sector to somebody else tomorrow and they get the customer
+             * and the plan, but not last year's revenue.
+             */
+            'sector_id' => $this->sectorFor($subscription),
             'customer_id' => $subscription->customer_id,
             'subscription_id' => $subscription->id,
             'purpose' => PaymentPurpose::ClothTopUp,

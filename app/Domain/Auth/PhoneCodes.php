@@ -2,6 +2,7 @@
 
 namespace App\Domain\Auth;
 
+use App\Domain\Messaging\Messenger;
 use App\Models\LoginCode;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -68,6 +69,31 @@ class PhoneCodes
      */
     public function consume(string $phone, string $code, string $purpose): bool
     {
+        $record = $this->check($phone, $code, $purpose);
+
+        if (! $record) {
+            return false;
+        }
+
+        $this->spend($record);
+
+        return true;
+    }
+
+    /**
+     * Check a code without spending it.
+     *
+     * For callers that have more to validate before they commit. Signup used
+     * `consume()` first and checked the car number afterwards, so a plate that
+     * was already taken burned the code as well: the customer corrected the
+     * plate, retyped the same code, and was told it was invalid. Nothing they
+     * could see explained why, and asking for a new one only did it again.
+     *
+     * A wrong guess still counts against the attempt limit, because that is
+     * what stops six digits being walked through. Only success is free.
+     */
+    public function check(string $phone, string $code, string $purpose): ?LoginCode
+    {
         $record = LoginCode::query()
             ->where('phone', $phone)
             ->where('purpose', $purpose)
@@ -76,7 +102,7 @@ class PhoneCodes
             ->first();
 
         if (! $record || ! $record->isUsable()) {
-            return false;
+            return null;
         }
 
         if (! Hash::check($code, $record->code_hash)) {
@@ -85,17 +111,24 @@ class PhoneCodes
             // Burned once the guesses run out. Six digits is only strong while
             // the number of attempts is small, and v1 never counted them.
             if ($record->attempts >= LoginCode::MAX_ATTEMPTS) {
-                $record->forceFill(['consumed_at' => now()])->save();
+                $this->spend($record);
             }
 
-            return false;
+            return null;
         }
 
-        // Spent before the caller does anything with the result, so a code read
-        // twice - from a shared phone, from a screenshot - works once.
-        $record->forceFill(['consumed_at' => now()])->save();
+        return $record;
+    }
 
-        return true;
+    /**
+     * Mark a checked code as used.
+     *
+     * Once spent, a code read twice - from a shared phone, from a screenshot -
+     * works once.
+     */
+    public function spend(LoginCode $record): void
+    {
+        $record->forceFill(['consumed_at' => now()])->save();
     }
 
     public function lifetimeSeconds(): int
@@ -124,7 +157,10 @@ class PhoneCodes
     {
         if (! app()->isProduction() || app()->runningUnitTests()) {
             Log::info('Phone code (not sent: '.app()->environment().')', [
-                'phone' => $phone,
+                // As it would actually be addressed, country code and all, so
+                // the log shows what would really have gone out rather than the
+                // ten digits we happen to store.
+                'phone' => Messenger::dialable($phone),
                 'code' => $code,
             ]);
 
@@ -144,7 +180,10 @@ class PhoneCodes
                     'integrated_number' => config('services.whatsapp.number'),
                     'content_type' => 'template',
                     'payload' => [
-                        'to' => $phone,
+                        // With the country code. A bare ten digit number is
+                        // accepted and dropped, which looks like a code that
+                        // was sent and never arrives.
+                        'to' => Messenger::dialable($phone),
                         'type' => 'template',
                         'template' => [
                             'name' => 'otp',

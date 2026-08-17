@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\Support\Numbering\SeriesNumber;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +34,7 @@ class BackfillInvoiceNumbers extends Command
     {
         $dryRun = (bool) $this->option('dry-run');
 
-        return BranchContext::withoutScope(function () use ($dryRun) {
+        return SectorContext::withoutScope(function () use ($dryRun) {
             $payments = Payment::query()
                 ->where('status', PaymentStatus::Captured)
                 ->whereNull('invoice_number')

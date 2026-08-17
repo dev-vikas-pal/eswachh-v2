@@ -12,7 +12,7 @@ use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -39,7 +39,7 @@ class CustomerPortalTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
 
@@ -56,7 +56,7 @@ class CustomerPortalTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -208,17 +208,23 @@ class CustomerPortalTest extends TestCase
 
     // -------------------------------------------------------- signing in by phone
 
-    public function test_asking_for_a_code_says_the_same_thing_for_an_unknown_number(): void
+    public function test_an_unknown_number_is_told_so_plainly(): void
     {
-        $known = $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210']);
-        $unknown = $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9000000001']);
+        /*
+         * This used to give the same vague reply either way, so the form could
+         * not be used to ask "is this person a customer of yours". The owner
+         * asked for it to be plain, and it costs nothing that is not already
+         * public: the signup form refuses a number it knows with "that number
+         * is already registered", which answers the same question outright.
+         *
+         * What actually stops a list being walked through is the throttle, per
+         * number and per address, and that is unchanged.
+         */
+        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9876543210'])->assertOk();
 
-        $known->assertOk();
-        $unknown->assertOk();
-
-        // Identical replies: the form must not answer "is this person a
-        // customer of yours". v1 replied "User does not exist".
-        $this->assertSame($known->json('message'), $unknown->json('message'));
+        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9000000001'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('phone');
 
         // And no code is made for a number that has nobody behind it.
         $this->assertDatabaseCount('login_codes', 1);
@@ -337,10 +343,18 @@ class CustomerPortalTest extends TestCase
     {
         $owner = User::factory()->franchiseOwner($this->branch)->create(['phone' => '9111111111']);
 
-        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9111111111'])->assertOk();
+        /*
+         * Refused, and refused the same way an unknown number is.
+         *
+         * A code to a mobile is a weaker door, and it must not be one that
+         * opens onto a whole sector's data. Staff have a password for a reason,
+         * and answering "that is a staff account" would be worse than saying
+         * nothing useful at all.
+         */
+        $this->fromSpa()->postJson('/api/v1/login/code', ['phone' => '9111111111'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('phone');
 
-        // A code to a mobile is a weaker door, and it must not be one that
-        // opens onto the whole branch's data.
         $this->assertDatabaseCount('login_codes', 0);
         $this->assertGuest();
         $this->assertNotNull($owner->id);

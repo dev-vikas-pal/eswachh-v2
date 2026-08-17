@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\Messaging\Messenger;
 use App\Enums\MessagePurpose;
 use App\Models\Subscription;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -37,7 +37,7 @@ class SendRenewalReminders extends Command
 
     public function handle(Messenger $messenger): int
     {
-        return BranchContext::withoutScope(function () use ($messenger) {
+        return SectorContext::withoutScope(function () use ($messenger) {
             $today = $this->option('date') ? Carbon::parse($this->option('date')) : Carbon::today();
             $dryRun = (bool) $this->option('dry-run');
 

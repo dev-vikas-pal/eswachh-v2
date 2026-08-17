@@ -11,7 +11,7 @@ use App\Models\ClothBundle;
 use App\Models\Subscription;
 use App\Models\Vehicle;
 use App\Support\Http\RestrictsToOwnRecords;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -57,6 +57,34 @@ class RenewalController extends Controller
             ]);
         }
 
+        /*
+         * A customer may change what they are buying at the moment they renew.
+         *
+         * v1 offered this and it matters most for the duration: the business
+         * discounts three and six month plans, and somebody who cannot see that
+         * while they are paying never takes it.
+         *
+         * Accepted here rather than through the edit endpoint, which needs
+         * update.subscription - a permission a customer does not have and should
+         * not be given just to change their own plan. Only these four fields,
+         * and the price is still worked out by the server afterwards.
+         */
+        $chosen = $request->validate([
+            'package_id' => ['sometimes', 'string', 'exists:packages,id'],
+            'service_type_id' => ['sometimes', 'string', 'exists:service_types,id'],
+            'duration_id' => ['sometimes', 'string', 'exists:durations,id'],
+            'cloth_bundle_id' => ['sometimes', 'nullable', 'string', 'exists:cloth_bundles,id'],
+        ]);
+
+        if ($chosen) {
+            foreach ($chosen as $field => $value) {
+                $subscription->{$field} = $value;
+            }
+
+            $subscription->cloth_service = (bool) $subscription->cloth_bundle_id;
+            $subscription->save();
+        }
+
         try {
             $quote = $this->book->forRenewal($subscription);
         } catch (RuntimeException $e) {
@@ -70,15 +98,32 @@ class RenewalController extends Controller
             ]);
         }
 
-        $result = $this->starter->forSubscription($subscription);
+        /*
+         * The plan is priced at today's rates before the payment is opened.
+         *
+         * StartPayment charges what the subscription says it costs, so without
+         * this a customer who switched from one month to six would be shown the
+         * six month price and charged the one month one. The figure comes from
+         * the price book either way - never from the request.
+         */
+        $before = (int) $subscription->amount_paise;
+
+        if ($before !== $quote->totalPaise) {
+            $subscription->forceFill(['amount_paise' => $quote->totalPaise])->save();
+        }
+
+        $result = $this->starter->forSubscription($subscription->fresh());
 
         return response()->json([
             'data' => $result['checkout'],
             'quote' => $quote->toArray(),
             // Flagged rather than left for somebody to spot by comparing two
             // numbers: a renewal is bought at today's prices, not last year's.
-            'price_changed' => (int) $subscription->amount_paise !== $quote->totalPaise,
-            'previously_paid' => $subscription->amount_paise / 100,
+            // Compared against what it cost before this call, not after - the
+            // plan has just been repriced, so reading it now would always say
+            // nothing had changed.
+            'price_changed' => $before !== $quote->totalPaise,
+            'previously_paid' => $before / 100,
         ], 201);
     }
 
@@ -93,7 +138,7 @@ class RenewalController extends Controller
             'cloth_bundle_id' => ['required', 'string', 'exists:cloth_bundles,id'],
         ]);
 
-        $bundle = BranchContext::withoutScope(
+        $bundle = SectorContext::withoutScope(
             fn () => ClothBundle::query()->where('status', true)->findOrFail($data['cloth_bundle_id'])
         );
 
@@ -166,7 +211,7 @@ class RenewalController extends Controller
 
         RateLimiter::hit($key, 300);
 
-        $subscription = BranchContext::withoutScope(function () use ($registration) {
+        $subscription = SectorContext::withoutScope(function () use ($registration) {
             $vehicle = Vehicle::query()->where('registration', $registration)->first();
 
             return $vehicle?->subscriptions()
@@ -223,7 +268,7 @@ class RenewalController extends Controller
 
         $registration = strtoupper(preg_replace('/\s+/', '', $data['registration']));
 
-        $subscription = BranchContext::withoutScope(
+        $subscription = SectorContext::withoutScope(
             fn () => Subscription::query()->with('vehicle', 'customer')->find($data['subscription_id'])
         );
 
@@ -237,7 +282,7 @@ class RenewalController extends Controller
             404,
         );
 
-        $result = BranchContext::withoutScope(fn () => $this->starter->forSubscription($subscription));
+        $result = SectorContext::withoutScope(fn () => $this->starter->forSubscription($subscription));
 
         return response()->json(['data' => $result['checkout']], 201);
     }

@@ -4,6 +4,7 @@ namespace App\Support\Masters;
 
 use App\Models\Area;
 use App\Models\Banner;
+use App\Models\Branch;
 use App\Models\City;
 use App\Models\ClothBundle;
 use App\Models\Duration;
@@ -24,11 +25,11 @@ use InvalidArgumentException;
 /**
  * The reference lists behind everything else.
  *
- * Eleven tables, all edited the same way: a name, sometimes a price, sometimes
- * a parent. One registry rather than eleven near-identical controllers, because
- * eleven copies of the same CRUD is eleven places for a validation rule to be
- * forgotten - and several of these carry prices, where a missing rule means a
- * mistyped master silently re-prices every plan that uses it.
+ * All edited the same way: a name, sometimes a price, sometimes a parent. One
+ * registry rather than twenty near-identical controllers, because twenty copies
+ * of the same CRUD is twenty places for a validation rule to be forgotten - and
+ * several of these carry prices, where a missing rule means a mistyped master
+ * silently re-prices every plan that uses it.
  *
  * Only names listed here can be addressed, so the route cannot be pointed at an
  * arbitrary table.
@@ -41,6 +42,15 @@ class MasterRegistry
     public static function all(): array
     {
         return [
+            /*
+             * There is no franchise master, deliberately.
+             *
+             * A sector *is* the territory, and the business has no separate
+             * franchise with a meaning of its own. One briefly existed here and
+             * was removed: it added a level that had to be kept in step with
+             * the sectors beneath it, and keeping it in step was the bug.
+             */
+
             // ---- geography, in the order one depends on the next ----
             'states' => [
                 'model' => State::class,
@@ -73,10 +83,16 @@ class MasterRegistry
                 'parent' => ['key' => 'area_id', 'master' => 'areas', 'label' => 'Area'],
                 'fields' => [
                     'name' => ['required', 'string', 'max:120'],
-                    // Which franchise services it. This is the one master with
-                    // an operational consequence: it decides who sees the work.
-                    'branch_id' => ['nullable', 'string', 'exists:branches,id'],
                 ],
+                /*
+                 * Who covers it. The one master with an operational consequence:
+                 * this is the whole of tenancy, so it is edited on the sector
+                 * itself rather than being buried on a staff screen.
+                 *
+                 * Not a plain field - it is rows in user_sector, written after
+                 * the sector is saved by the master controller's syncStaff.
+                 */
+                'staff' => true,
             ],
             'societies' => [
                 'model' => Society::class,
@@ -176,6 +192,10 @@ class MasterRegistry
                 // The headline is the name here: a banner has no separate one,
                 // and inventing a second field to label it would be busywork.
                 'titleField' => 'headline',
+                // Offered with a file picker rather than a path to type: a
+                // path only works if somebody has already put the file on the
+                // server by other means.
+                'images' => ['image_path'],
                 'fields' => [
                     'eyebrow' => ['nullable', 'string', 'max:120'],
                     'headline' => ['required', 'string', 'max:255'],
@@ -319,6 +339,12 @@ class MasterRegistry
                 'rich' => $definition['rich'] ?? [],
                 'long' => $definition['long'] ?? [],
                 'dates' => $definition['dates'] ?? [],
+                // Fields that hold a picture, so the form offers a file picker
+                // rather than a box to type a path into.
+                'images' => $definition['images'] ?? [],
+                // Whether this master is assigned to people, so the form knows
+                // to render the picker.
+                'staff' => $definition['staff'] ?? false,
                 'title_field' => $definition['titleField'] ?? 'name',
                 'fields' => array_keys($definition['fields']),
             ];

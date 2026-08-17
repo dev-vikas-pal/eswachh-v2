@@ -10,7 +10,7 @@ use App\Models\Duration;
 use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -30,7 +30,7 @@ class ReconcilePaymentsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         // Live, so the gateway is really queried - against a fake, never a
         // network.
@@ -43,7 +43,7 @@ class ReconcilePaymentsTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -110,7 +110,7 @@ class ReconcilePaymentsTest extends TestCase
     public function test_a_checkout_still_in_progress_is_left_alone(): void
     {
         $payment = $this->staleAttempt();
-        BranchContext::withoutScope(
+        SectorContext::withoutScope(
             fn () => $payment->forceFill(['created_at' => Carbon::now()->subMinutes(2)])->save()
         );
 
@@ -151,7 +151,7 @@ class ReconcilePaymentsTest extends TestCase
 
     private function subscription(array $attributes = []): Subscription
     {
-        return BranchContext::withoutScope(function () use ($attributes) {
+        return SectorContext::withoutScope(function () use ($attributes) {
             $branch = Branch::factory()->create();
             $customer = Customer::factory()->create(['branch_id' => $branch->id]);
             $vehicle = Vehicle::factory()->forCustomer($customer)->create();
@@ -165,7 +165,7 @@ class ReconcilePaymentsTest extends TestCase
     /** An attempt old enough that the customer is clearly not coming back. */
     private function staleAttempt(?Subscription $subscription = null): Payment
     {
-        return BranchContext::withoutScope(function () use ($subscription) {
+        return SectorContext::withoutScope(function () use ($subscription) {
             $subscription ??= $this->subscription();
 
             $payment = Payment::factory()->forSubscription($subscription)->create();

@@ -13,7 +13,7 @@ use App\Models\ServiceLog;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -34,7 +34,7 @@ class DailyRoundTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
         $this->cleaner = User::factory()->cleaner($this->branch)->create();
@@ -43,13 +43,13 @@ class DailyRoundTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
     public function test_the_round_is_the_cars_with_a_live_subscription(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->carFor($this->cleaner);
             $this->carFor($this->cleaner);
             // On hold: not work, and putting it on the list means it gets
@@ -64,7 +64,7 @@ class DailyRoundTest extends TestCase
 
     public function test_an_expired_period_still_counts_as_work_until_it_is_held(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->carFor($this->cleaner, [
                 'status' => SubscriptionStatus::Active,
                 'period_end' => Carbon::today()->subDays(3),
@@ -79,7 +79,7 @@ class DailyRoundTest extends TestCase
 
     public function test_another_cleaners_cars_are_not_on_this_round(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $other = User::factory()->cleaner($this->branch)->create();
 
             $this->carFor($this->cleaner);
@@ -93,7 +93,7 @@ class DailyRoundTest extends TestCase
 
     public function test_marking_the_same_car_twice_corrects_rather_than_counts_twice(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $vehicle = $this->carFor($this->cleaner);
 
             $this->round->record($vehicle, $this->cleaner, ServiceOutcome::Missed);
@@ -111,7 +111,7 @@ class DailyRoundTest extends TestCase
 
     public function test_a_car_the_owner_drove_away_is_not_a_service_failure(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $a = $this->carFor($this->cleaner);
             $b = $this->carFor($this->cleaner);
             $c = $this->carFor($this->cleaner);
@@ -133,7 +133,7 @@ class DailyRoundTest extends TestCase
 
     public function test_a_car_nobody_said_anything_about_is_unaccounted(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $a = $this->carFor($this->cleaner);
             $this->carFor($this->cleaner);
             $this->carFor($this->cleaner);
@@ -148,7 +148,7 @@ class DailyRoundTest extends TestCase
 
     public function test_the_days_figures_are_counted_not_typed(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $cars = collect(range(1, 5))->map(fn () => $this->carFor($this->cleaner));
 
             $cars->take(4)->each(
@@ -166,7 +166,7 @@ class DailyRoundTest extends TestCase
 
     public function test_attendance_is_one_entry_a_day_corrected_in_place(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $this->round->markAttendance($this->cleaner, AttendanceStatus::Absent);
             $this->round->markAttendance($this->cleaner, AttendanceStatus::Present, note: 'Came in late.');
 
@@ -180,7 +180,7 @@ class DailyRoundTest extends TestCase
 
     public function test_attendance_filled_in_afterwards_says_so(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $onTime = $this->round->markAttendance($this->cleaner, AttendanceStatus::Present);
             $this->assertFalse($onTime->wasMarkedLate());
 
@@ -199,7 +199,7 @@ class DailyRoundTest extends TestCase
     {
         $elsewhere = Branch::factory()->create();
 
-        BranchContext::withoutScope(function () use ($elsewhere) {
+        SectorContext::withoutScope(function () use ($elsewhere) {
             $this->carFor($this->cleaner);
 
             // Same person somehow assigned a car in another franchise. The

@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Http\FiltersBySector;
 use App\Support\Http\SortsLists;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -23,6 +24,7 @@ use Illuminate\Validation\ValidationException;
  */
 class UserController extends Controller
 {
+    use FiltersBySector;
     use SortsLists;
 
     private const SORTABLE = [
@@ -51,20 +53,52 @@ class UserController extends Controller
          * somebody create a customer with no address and no vehicle.
          */
         $query = User::query()
-            ->with('branch', 'customRole')
+            ->with('branch', 'customRole', 'sectors')
             ->where('role', '!=', UserRole::Customer);
 
         /*
-         * The user table is not branch scoped by a global scope - the scope has
-         * to read the current user, and scoping the user would be circular - so
-         * the filter is applied here, explicitly, on every listing.
+         * The user table carries no global scope - the scope has to read the
+         * current user, and scoping the user would be circular - so the filter
+         * is applied here, explicitly, on every listing.
+         *
+         * Colleagues, meaning whoever shares a sector. It used to be everybody
+         * on the same branch, which stopped meaning anything when territory
+         * moved to user_sector: a franchise owner would have seen staff they
+         * share no work with and missed the cleaners actually covering their
+         * sectors.
          */
-        if (! $request->user()->seesAllBranches()) {
-            $query->where('branch_id', $request->user()->branch_id);
+        if (! $request->user()->seesAllSectors()) {
+            $mine = SectorContext::currentSectorIds($request->user()) ?? [];
+
+            $query->where(function ($q) use ($mine, $request) {
+                $q->inSectors($mine)
+                    /*
+                     * Plus anybody they created who has no territory yet.
+                     *
+                     * Without this, adding a cleaner and forgetting to tick a
+                     * sector makes them vanish from the only screen that could
+                     * put it right - the account exists, cannot be found, and
+                     * the name is already taken.
+                     */
+                    ->orWhere(fn ($n) => $n->where('created_by', $request->user()->id)
+                        ->whereNotExists(fn ($s) => $s->selectRaw(1)
+                            ->from('user_sector')
+                            ->whereColumn('user_sector.user_id', 'users.id')));
+            });
         }
 
         if ($role = $filters['role'] ?? null) {
             $query->where('role', $role);
+        }
+
+        /*
+         * The sector picker, narrowing to the people who cover it.
+         *
+         * Like Coverage, this lists staff rather than customers, so "who works
+         * this sector" is the question rather than "who lives in it".
+         */
+        if ($sector = $this->requestedSector($request)) {
+            $query->inSectors([$sector]);
         }
 
         if ($filters['include_disabled'] ?? false) {
@@ -105,6 +139,17 @@ class UserController extends Controller
             'phone' => ['nullable', 'string', 'max:20', Rule::unique('users', 'phone')->whereNull('deleted_at')],
             'role' => ['required', Rule::enum(UserRole::class)],
             'branch_id' => ['nullable', 'string', 'exists:branches,id'],
+
+            /*
+             * The territory this person covers.
+             *
+             * Set here rather than on the sector, because assigning it is part
+             * of creating somebody - an account with none sees nothing at all,
+             * and asking whoever made it to go to another screen afterwards is
+             * how staff end up staring at an empty dashboard.
+             */
+            'sector_ids' => ['sometimes', 'array'],
+            'sector_ids.*' => ['string', 'exists:sectors,id'],
             'password' => ['required', 'string', 'min:8'],
             'status' => ['sometimes', 'boolean'],
         ]);
@@ -121,7 +166,7 @@ class UserController extends Controller
             ]);
         }
 
-        $user = BranchContext::withoutScope(fn () => User::create([
+        $user = SectorContext::withoutScope(fn () => User::create([
             'name' => $data['name'],
             'email' => $data['email'] ?? null,
             'phone' => $data['phone'] ?? null,
@@ -132,7 +177,9 @@ class UserController extends Controller
             'email_verified_at' => now(),
         ]));
 
-        return response()->json(['data' => $this->present($user->load('branch'))], 201);
+        $this->syncSectors($actor, $user, $data['sector_ids'] ?? null);
+
+        return response()->json(['data' => $this->present($user->load('branch', 'sectors'))], 201);
     }
 
     public function update(Request $request, User $user): JsonResponse
@@ -146,6 +193,10 @@ class UserController extends Controller
             'phone' => ['nullable', 'string', 'max:20', Rule::unique('users', 'phone')->ignore($user->id)->whereNull('deleted_at')],
             'role' => ['sometimes', Rule::enum(UserRole::class)],
             'branch_id' => ['sometimes', 'nullable', 'string', 'exists:branches,id'],
+            // The territory. Absent means "leave it alone"; an empty array
+            // means "covers nothing", and the two must not be confused.
+            'sector_ids' => ['sometimes', 'array'],
+            'sector_ids.*' => ['string', 'exists:sectors,id'],
             // Optional: changing a name should not require retyping a password.
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
             'status' => ['sometimes', 'boolean'],
@@ -187,7 +238,61 @@ class UserController extends Controller
 
         $user->save();
 
-        return response()->json(['data' => $this->present($user->fresh()->load('branch'))]);
+        $this->syncSectors($actor, $user, $data['sector_ids'] ?? null);
+
+        return response()->json(['data' => $this->present($user->fresh()->load('branch', 'sectors'))]);
+    }
+
+    /**
+     * Write who this person covers.
+     *
+     * Null means the form did not mention sectors and the assignment is left
+     * alone; an empty array means "covers nothing", which is a real answer and
+     * has to be told apart from silence.
+     *
+     * @param  array<int, string>|null  $sectorIds
+     */
+    private function syncSectors(User $actor, User $user, ?array $sectorIds): void
+    {
+        if ($sectorIds === null) {
+            return;
+        }
+
+        /*
+         * A customer's territory comes from their address, not an assignment.
+         * Putting one in the pivot would let them see their neighbours, so the
+         * list is emptied rather than refused - the rest of an otherwise
+         * legitimate edit still saves.
+         */
+        if ($user->role === UserRole::Customer) {
+            $sectorIds = [];
+        }
+
+        /*
+         * Nobody hands out territory they do not hold themselves.
+         *
+         * An administrator covers everything, so their list stands. A franchise
+         * owner adding a cleaner can only give them sectors from their own -
+         * otherwise assigning a colleague to somebody else's sector would be a
+         * way to read another franchise's customers through them.
+         */
+        $mine = SectorContext::currentSectorIds($actor);
+
+        if ($mine !== null) {
+            $sectorIds = array_values(array_intersect($sectorIds, $mine));
+        }
+
+        $before = $user->sectors()->pluck('sectors.id')->all();
+
+        $user->sectors()->sync($sectorIds);
+
+        // Their sectors are memoised for the life of a request, and this is a
+        // request in which they changed.
+        SectorContext::forget($user->id);
+
+        if ($before !== $sectorIds) {
+            SectorContext::forget($actor->id);
+        }
     }
 
     /**
@@ -231,7 +336,7 @@ class UserController extends Controller
         $user->restore();
         $user->forceFill(['status' => true])->save();
 
-        return response()->json(['data' => $this->present($user->load('branch'))]);
+        return response()->json(['data' => $this->present($user->load('branch', 'sectors'))]);
     }
 
     // ---------------------------------------------------------------- private
@@ -283,7 +388,7 @@ class UserController extends Controller
             return null;
         }
 
-        if (! $actor->seesAllBranches()) {
+        if (! $actor->seesAllSectors()) {
             return $actor->branch_id;
         }
 
@@ -292,7 +397,7 @@ class UserController extends Controller
 
     private function assertVisible(User $actor, User $target): void
     {
-        if ($actor->seesAllBranches()) {
+        if ($actor->seesAllSectors()) {
             return;
         }
 
@@ -303,7 +408,7 @@ class UserController extends Controller
 
     private function otherAdministrators(User $excluding): int
     {
-        return BranchContext::withoutScope(fn () => User::query()
+        return SectorContext::withoutScope(fn () => User::query()
             ->where('role', UserRole::SuperAdmin)
             ->where('status', true)
             ->whereKeyNot($excluding->id)
@@ -336,6 +441,15 @@ class UserController extends Controller
                 : null,
             'custom_role_id' => $user->custom_role_id,
             'branch' => $user->branch ? ['id' => $user->branch->id, 'name' => $user->branch->name] : null,
+
+            /*
+             * The territory. Sent with the list rather than fetched when the
+             * form opens, because it belongs in the table too: "who covers
+             * nothing" is a question the People screen should answer at a
+             * glance, since such an account sees an empty dashboard.
+             */
+            'sector_ids' => $user->sectors->pluck('id')->all(),
+            'sector_names' => $user->sectors->pluck('name')->implode(', '),
             'status' => (bool) $user->status,
             // Access removed, as opposed to switched off. Different things:
             // one is temporary, the other is somebody who has left.

@@ -4,17 +4,21 @@ namespace Tests\Feature\Billing;
 
 use App\Domain\Billing\RazorpaySignature;
 use App\Domain\Billing\RecordPayment;
+use App\Domain\Billing\StartPayment;
 use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Duration;
 use App\Models\Payment;
+use App\Models\Sector;
 use App\Models\Subscription;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Settings\SiteSettings;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -104,7 +108,7 @@ class PaymentCaptureTest extends TestCase
         // second one alongside it.
         $subscription->refresh();
         $this->assertSame(SubscriptionStatus::Active, $subscription->status);
-        $this->assertSame(1, Subscription::withoutGlobalScope('branch')->count());
+        $this->assertSame(1, Subscription::withoutGlobalScope('sector')->count());
     }
 
     public function test_every_captured_payment_gets_an_invoice_number(): void
@@ -116,12 +120,21 @@ class PaymentCaptureTest extends TestCase
         $this->assertNotNull($payment->fresh()->invoice_number);
     }
 
-    public function test_invoice_numbers_run_in_sequence_within_a_branch(): void
+    public function test_invoice_numbers_run_in_one_unbroken_sequence(): void
     {
-        $branch = Branch::factory()->create(['code' => 'GN1']);
+        /*
+         * One series for the business, not one per territory.
+         *
+         * It used to run per branch, prefixed with that branch's code. Sectors
+         * are the wrong replacement: somebody covering three of them would have
+         * their invoices split across three runs, and an accountant reading one
+         * would find gaps that are not gaps. The prefix now comes from the
+         * invoice_prefix setting.
+         */
+        SiteSettings::put(['invoice_prefix' => 'GN1']);
 
-        $numbers = collect(range(1, 3))->map(function () use ($branch) {
-            $payment = $this->initiatedPayment($this->subscription([], $branch));
+        $numbers = collect(range(1, 3))->map(function () {
+            $payment = $this->initiatedPayment($this->subscription());
             app(RecordPayment::class)->complete(
                 $this->callbackFor($payment, 'pay_'.uniqid()), []
             );
@@ -135,6 +148,20 @@ class PaymentCaptureTest extends TestCase
             $numbers->map(fn ($n) => (int) substr($n, strrpos($n, '/') + 1))->all()
         );
         $this->assertStringStartsWith('GN1/', $numbers->first());
+    }
+
+    public function test_the_sequence_does_not_restart_for_a_different_sector(): void
+    {
+        // Two customers in different sectors, one run of numbers. The old
+        // per-branch behaviour would have given both an 00001.
+        $first = $this->initiatedPayment($this->subscription());
+        app(RecordPayment::class)->complete($this->callbackFor($first, 'pay_'.uniqid()), []);
+
+        $elsewhere = Sector::factory()->create();
+        $second = $this->initiatedPayment($this->subscription([], null, $elsewhere->id));
+        app(RecordPayment::class)->complete($this->callbackFor($second, 'pay_'.uniqid()), []);
+
+        $this->assertNotSame($first->fresh()->invoice_number, $second->fresh()->invoice_number);
     }
 
     public function test_the_same_callback_twice_only_takes_the_money_once(): void
@@ -153,7 +180,7 @@ class PaymentCaptureTest extends TestCase
         // payment did go through - while changing nothing.
         $this->assertTrue($second->succeeded());
 
-        $this->assertSame(1, Payment::withoutGlobalScope('branch')
+        $this->assertSame(1, Payment::withoutGlobalScope('sector')
             ->where('status', PaymentStatus::Captured)->count());
     }
 
@@ -164,14 +191,14 @@ class PaymentCaptureTest extends TestCase
         $callback = $this->callbackFor($payment, 'pay_replay');
 
         app(RecordPayment::class)->complete($callback, []);
-        $periodsAfterFirst = Subscription::withoutGlobalScope('branch')->count();
+        $periodsAfterFirst = Subscription::withoutGlobalScope('sector')->count();
 
         app(RecordPayment::class)->complete($callback, []);
         app(RecordPayment::class)->complete($callback, []);
 
         $this->assertSame(
             $periodsAfterFirst,
-            Subscription::withoutGlobalScope('branch')->count(),
+            Subscription::withoutGlobalScope('sector')->count(),
             'A replayed callback must not add another paid period.'
         );
     }
@@ -201,6 +228,55 @@ class PaymentCaptureTest extends TestCase
         $this->assertStringContainsString('could not match', $outcome->message);
     }
 
+    public function test_a_period_that_has_been_renewed_cannot_be_paid_for_again(): void
+    {
+        $first = $this->subscription(['period_end' => Carbon::today()->addDays(10)]);
+
+        app(RecordPayment::class)->complete(
+            $this->callbackFor($this->initiatedPayment($first), 'pay_one'), []
+        );
+
+        /*
+         * The office clicks "take payment" on whichever row is in front of
+         * them, and a finished period looks exactly like a current one in a
+         * list. Paying against the old row created a second live period beside
+         * the real one - the same car with two plans, ending on the same day,
+         * billed twice and cleaned once.
+         */
+        $this->expectException(ValidationException::class);
+
+        app(StartPayment::class)->forSubscription($first->fresh());
+    }
+
+    public function test_a_payment_that_reaches_a_superseded_period_extends_the_live_one(): void
+    {
+        $first = $this->subscription(['period_end' => Carbon::today()->addDays(10)]);
+
+        // Opened while the period was current, captured after it was renewed -
+        // the race the guard above cannot catch, so the capture has to cope.
+        $stale = $this->initiatedPayment($first);
+
+        app(RecordPayment::class)->complete(
+            $this->callbackFor($this->initiatedPayment($first), 'pay_one'), []
+        );
+
+        app(RecordPayment::class)->complete($this->callbackFor($stale, 'pay_two'), []);
+
+        $periods = Subscription::withoutGlobalScope('sector')
+            ->where('vehicle_id', $first->vehicle_id)
+            ->get();
+
+        // Three periods, one live. Never two live ones.
+        $this->assertCount(3, $periods);
+        $this->assertCount(1, $periods->where('status', SubscriptionStatus::Active));
+
+        // And every period number is its own.
+        $this->assertSame(
+            $periods->pluck('sequence')->sort()->values()->all(),
+            $periods->pluck('sequence')->unique()->sort()->values()->all(),
+        );
+    }
+
     public function test_renewing_early_adds_time_rather_than_losing_it(): void
     {
         $subscription = $this->subscription([
@@ -211,7 +287,7 @@ class PaymentCaptureTest extends TestCase
 
         app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_early'), []);
 
-        $next = Subscription::withoutGlobalScope('branch')
+        $next = Subscription::withoutGlobalScope('sector')
             ->where('sequence', 2)->firstOrFail();
 
         // The new period starts where the old one ends, so a customer who pays
@@ -234,7 +310,7 @@ class PaymentCaptureTest extends TestCase
 
         app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_late'), []);
 
-        $next = Subscription::withoutGlobalScope('branch')->where('sequence', 2)->firstOrFail();
+        $next = Subscription::withoutGlobalScope('sector')->where('sequence', 2)->firstOrFail();
 
         // A customer who lapsed for twenty days does not get billed for a
         // period that has already gone by.
@@ -249,7 +325,7 @@ class PaymentCaptureTest extends TestCase
         // The subscription vanishes between the charge and the renewal - the
         // exact shape of the v1 failure where money was taken and nothing
         // recorded it.
-        Subscription::withoutGlobalScope('branch')->whereKey($subscription->id)->forceDelete();
+        Subscription::withoutGlobalScope('sector')->whereKey($subscription->id)->forceDelete();
 
         $outcome = app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_orphaned'), []);
 
@@ -261,7 +337,7 @@ class PaymentCaptureTest extends TestCase
 
     public function test_only_captured_payments_count_as_revenue(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             $branch = Branch::factory()->create();
 
             Payment::factory()->captured()->create(['branch_id' => $branch->id, 'amount_paise' => 50000]);
@@ -276,11 +352,14 @@ class PaymentCaptureTest extends TestCase
 
     // ---------------------------------------------------------------- helpers
 
-    private function subscription(array $attributes = [], ?Branch $branch = null): Subscription
+    private function subscription(array $attributes = [], ?Branch $branch = null, ?string $sectorId = null): Subscription
     {
-        return BranchContext::withoutScope(function () use ($attributes, $branch) {
+        return SectorContext::withoutScope(function () use ($attributes, $branch, $sectorId) {
             $branch ??= Branch::factory()->create();
-            $customer = Customer::factory()->create(['branch_id' => $branch->id]);
+            $customer = Customer::factory()->create(array_filter([
+                'branch_id' => $branch->id,
+                'sector_id' => $sectorId,
+            ]));
             $vehicle = Vehicle::factory()->forCustomer($customer)->create();
 
             return Subscription::factory()
@@ -293,7 +372,7 @@ class PaymentCaptureTest extends TestCase
 
     private function initiatedPayment(?Subscription $subscription = null): Payment
     {
-        return BranchContext::withoutScope(function () use ($subscription) {
+        return SectorContext::withoutScope(function () use ($subscription) {
             $subscription ??= $this->subscription();
 
             return Payment::factory()->forSubscription($subscription)->create();

@@ -11,7 +11,7 @@ use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -28,7 +28,7 @@ class PaymentApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         config()->set('services.razorpay.secret', self::SECRET);
         config()->set('services.razorpay.key', 'rzp_test_key');
@@ -40,7 +40,7 @@ class PaymentApiTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -51,7 +51,7 @@ class PaymentApiTest extends TestCase
 
     public function test_a_franchise_owner_only_sees_their_own_branch_payments(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             Payment::factory()->captured()->count(3)->create(['branch_id' => $this->ourBranch->id]);
             Payment::factory()->captured()->count(5)->create(['branch_id' => $this->theirBranch->id]);
         });
@@ -67,7 +67,7 @@ class PaymentApiTest extends TestCase
 
     public function test_a_super_admin_sees_every_branch(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             Payment::factory()->captured()->count(3)->create(['branch_id' => $this->ourBranch->id]);
             Payment::factory()->captured()->count(5)->create(['branch_id' => $this->theirBranch->id]);
         });
@@ -81,7 +81,7 @@ class PaymentApiTest extends TestCase
 
     public function test_a_payment_from_another_branch_is_not_found_rather_than_forbidden(): void
     {
-        $theirs = BranchContext::withoutScope(
+        $theirs = SectorContext::withoutScope(
             fn () => Payment::factory()->captured()->create(['branch_id' => $this->theirBranch->id])
         );
 
@@ -94,7 +94,7 @@ class PaymentApiTest extends TestCase
 
     public function test_the_reported_total_only_counts_money_actually_taken(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             Payment::factory()->captured()->create(['branch_id' => $this->ourBranch->id, 'amount_paise' => 85000]);
             Payment::factory()->captured()->create(['branch_id' => $this->ourBranch->id, 'amount_paise' => 15000]);
             Payment::factory()->create(['branch_id' => $this->ourBranch->id, 'amount_paise' => 99900]);
@@ -111,7 +111,7 @@ class PaymentApiTest extends TestCase
 
     public function test_the_total_is_the_same_on_every_page(): void
     {
-        BranchContext::withoutScope(
+        SectorContext::withoutScope(
             fn () => Payment::factory()->captured()->count(6)->create([
                 'branch_id' => $this->ourBranch->id, 'amount_paise' => 10000,
             ])
@@ -141,7 +141,7 @@ class PaymentApiTest extends TestCase
         // The one rupee in the request body is ignored entirely.
         $this->assertSame(85000, $response->json('data.amount_paise'));
 
-        $payment = BranchContext::withoutScope(fn () => Payment::query()->firstOrFail());
+        $payment = SectorContext::withoutScope(fn () => Payment::query()->firstOrFail());
         $this->assertSame(85000, (int) $payment->amount_paise);
         $this->assertSame(PaymentStatus::Initiated, $payment->status);
     }
@@ -168,7 +168,7 @@ class PaymentApiTest extends TestCase
             ->postJson("/api/v1/subscriptions/{$theirs->id}/pay")
             ->assertNotFound();
 
-        $this->assertSame(0, BranchContext::withoutScope(fn () => Payment::query()->count()));
+        $this->assertSame(0, SectorContext::withoutScope(fn () => Payment::query()->count()));
     }
 
     public function test_the_callback_needs_no_session_but_does_need_a_signature(): void
@@ -229,7 +229,7 @@ class PaymentApiTest extends TestCase
         $this->assertTrue($response->json('data.recorded_by_hand'));
         $this->assertNotNull($response->json('data.invoice_number'));
 
-        $payment = BranchContext::withoutScope(fn () => Payment::query()->firstOrFail());
+        $payment = SectorContext::withoutScope(fn () => Payment::query()->firstOrFail());
         // Cash is where money goes missing, so the taker is always on record.
         $this->assertSame($owner->id, $payment->verified_by);
     }
@@ -297,7 +297,7 @@ class PaymentApiTest extends TestCase
 
     public function test_the_summary_reports_abandoned_attempts_beside_revenue(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             Payment::factory()->captured()->create([
                 'branch_id' => $this->ourBranch->id, 'amount_paise' => 85000,
             ]);
@@ -319,7 +319,7 @@ class PaymentApiTest extends TestCase
 
     private function subscription(Branch $branch, array $attributes = []): Subscription
     {
-        return BranchContext::withoutScope(function () use ($branch, $attributes) {
+        return SectorContext::withoutScope(function () use ($branch, $attributes) {
             $customer = Customer::factory()->create(['branch_id' => $branch->id]);
             $vehicle = Vehicle::factory()->forCustomer($customer)->create();
 
@@ -331,7 +331,7 @@ class PaymentApiTest extends TestCase
 
     private function initiatedPayment(Branch $branch): Payment
     {
-        return BranchContext::withoutScope(
+        return SectorContext::withoutScope(
             fn () => Payment::factory()->forSubscription($this->subscription($branch))->create()
         );
     }

@@ -10,7 +10,7 @@ use App\Models\MessageTemplate;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -32,7 +32,7 @@ class SubscriptionBulkTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         Http::preventStrayRequests();
 
@@ -44,7 +44,7 @@ class SubscriptionBulkTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -62,7 +62,7 @@ class SubscriptionBulkTest extends TestCase
 
         $this->assertSame(3, $response->json('assigned'));
 
-        BranchContext::withoutScope(function () use ($cleaner) {
+        SectorContext::withoutScope(function () use ($cleaner) {
             $this->assertSame(3, Vehicle::query()->where('assigned_cleaner_id', $cleaner->id)->count());
         });
     }
@@ -85,7 +85,7 @@ class SubscriptionBulkTest extends TestCase
         $this->assertSame(1, $response->json('assigned'));
         $this->assertSame(1, $response->json('not_visible'));
 
-        BranchContext::withoutScope(function () use ($theirs) {
+        SectorContext::withoutScope(function () use ($theirs) {
             $this->assertNull($theirs->vehicle->fresh()->assigned_cleaner_id);
         });
     }
@@ -179,7 +179,7 @@ class SubscriptionBulkTest extends TestCase
         $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
         $subscription = $this->subscription($this->ourBranch);
 
-        BranchContext::withoutScope(
+        SectorContext::withoutScope(
             fn () => $subscription->customer->forceFill(['phone' => null])->save()
         );
 
@@ -231,7 +231,7 @@ class SubscriptionBulkTest extends TestCase
 
     private function subscription(Branch $branch): Subscription
     {
-        return BranchContext::withoutScope(function () use ($branch) {
+        return SectorContext::withoutScope(function () use ($branch) {
             $customer = Customer::factory()->create(['branch_id' => $branch->id]);
             $vehicle = Vehicle::factory()->forCustomer($customer)->create();
 

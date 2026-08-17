@@ -34,13 +34,13 @@ const openId = ref<string | null>(null);
 const noteText = ref('');
 const actionError = ref('');
 
-watch([search, status, overdueOnly, mineOnly, () => auth.selectedBranchId], () => {
+watch([search, status, overdueOnly, mineOnly, () => auth.selectedSectorId], () => {
     page.value = 1;
 });
 
 const { data, isPending, isError, isFetching } = useQuery({
     queryKey: computed(() => [
-        'complaints', auth.selectedBranchId, search.value, status.value,
+        'complaints', auth.selectedSectorId, search.value, status.value,
         overdueOnly.value, mineOnly.value, page.value, sort.value, direction.value,
     ]),
     placeholderData: keepPreviousData,
@@ -52,6 +52,9 @@ const { data, isPending, isError, isFetching } = useQuery({
                 status: status.value || undefined,
                 overdue: overdueOnly.value ? 1 : undefined,
                 mine: mineOnly.value ? 1 : undefined,
+                // The picker in the top bar. It was only in the cache key,
+                // so the list refetched unchanged and looked broken.
+                sector_id: auth.selectedSectorId || undefined,
                 sort: sort.value,
                 direction: direction.value,
             },
@@ -61,6 +64,76 @@ const { data, isPending, isError, isFetching } = useQuery({
 });
 
 const rows = computed(() => data.value?.data ?? []);
+
+// ---------------------------------------------------------- handing them over
+
+/**
+ * Auto-assignment gives a new complaint to whoever cleans the car. This is the
+ * fallback for everything it could not route - a car with no cleaner, a cleaner
+ * who has left - and the override for when the office wants somebody else on it.
+ */
+const canAssign = computed(() => auth.can('assign.complaint'));
+
+const ticked = ref<string[]>([]);
+const assignee = ref('');
+const assigning = ref(false);
+const assignNotice = ref<string | null>(null);
+
+// A different page is a different set of rows; carrying ticks across would
+// assign things nobody can see.
+watch([rows, page], () => { ticked.value = []; });
+
+const allTicked = computed(() => rows.value.length > 0 && ticked.value.length === rows.value.length);
+
+function toggleAll() {
+    ticked.value = allTicked.value ? [] : rows.value.map((r) => r.id);
+}
+
+/** Who a complaint may be handed to. The server decides the same list again. */
+const { data: options } = useQuery({
+    queryKey: ['complaint-options'],
+    queryFn: async () => (await api.get('/complaints/options')).data.data,
+    staleTime: 5 * 60 * 1000,
+});
+
+const assignees = computed<Array<{ id: string; name: string; role: string }>>(
+    () => options.value?.assignees ?? [],
+);
+
+async function assignTicked() {
+    if (!assignee.value || ticked.value.length === 0) return;
+
+    const person = assignees.value.find((a) => a.id === assignee.value)?.name ?? 'them';
+
+    /*
+     * Said plainly, because this overrides whoever already holds them. Handing
+     * twenty complaints to the wrong person is a tedious thing to undo one at
+     * a time.
+     */
+    if (!confirm(`Give ${ticked.value.length} complaint(s) to ${person}? This replaces whoever holds them now.`)) return;
+
+    assigning.value = true;
+    assignNotice.value = null;
+
+    try {
+        const { data } = await api.post('/complaints-bulk/assign', {
+            ids: ticked.value,
+            assignee_id: assignee.value,
+        });
+
+        assignNotice.value = data.message;
+
+        // Anything the server refused is worth reading, not swallowing.
+        if (data.skipped?.length) assignNotice.value += ' ' + data.skipped.join(' ');
+
+        ticked.value = [];
+        await queryClient.invalidateQueries({ queryKey: ['complaints'] });
+    } catch (e) {
+        assignNotice.value = describeError(e).message;
+    } finally {
+        assigning.value = false;
+    }
+}
 const meta = computed(() => data.value?.meta);
 
 /** The full record, including the trail, only for the one being read. */
@@ -183,6 +256,54 @@ function due(row: Complaint): string {
             </label>
         </div>
 
+        <!--
+            Only once something is ticked. A bar that is always there is a bar
+            people stop reading.
+        -->
+        <div
+            v-if="canAssign && ticked.length"
+            class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-accent bg-accent-soft p-3"
+        >
+            <span class="text-sm font-medium text-accent-ink">
+                {{ ticked.length }} selected
+            </span>
+
+            <select
+                v-model="assignee"
+                class="rounded border border-line-strong bg-surface px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            >
+                <option value="">Give to…</option>
+                <option v-for="person in assignees" :key="person.id" :value="person.id">
+                    {{ person.name }} — {{ person.role }}
+                </option>
+            </select>
+
+            <button
+                type="button"
+                class="rounded bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:opacity-60"
+                :disabled="!assignee || assigning"
+                @click="assignTicked"
+            >
+                {{ assigning ? 'Assigning…' : 'Assign' }}
+            </button>
+
+            <button
+                type="button"
+                class="text-sm text-body underline hover:text-ink"
+                @click="ticked = []"
+            >
+                Clear
+            </button>
+
+            <span class="text-xs text-muted">
+                This replaces whoever holds them now.
+            </span>
+        </div>
+
+        <p v-if="assignNotice" class="mb-4 rounded border border-line bg-sunk px-3 py-2 text-sm text-body" role="status">
+            {{ assignNotice }}
+        </p>
+
         <p v-if="isError" class="rounded border border-crit bg-crit-soft px-3 py-2 text-sm text-crit">
             The list could not be loaded. Please refresh.
         </p>
@@ -191,6 +312,14 @@ function due(row: Complaint): string {
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                        <th v-if="canAssign" class="w-8 px-3 py-2">
+                            <input
+                                type="checkbox"
+                                class="rounded border-line-strong"
+                                :checked="allTicked"
+                                @change="toggleAll"
+                            />
+                        </th>
                         <SortableHeader field="reference" :sort="activeSort" :direction="activeDirection" @sort="onSort">Reference</SortableHeader>
                         <th class="px-3 py-2 font-medium">Customer</th>
                         <th class="px-3 py-2 font-medium">About</th>
@@ -201,11 +330,11 @@ function due(row: Complaint): string {
                 </thead>
                 <tbody>
                     <tr v-if="isPending">
-                        <td colspan="6" class="px-3 py-6 text-center text-muted">Loading…</td>
+                        <td :colspan="canAssign ? 7 : 6" class="px-3 py-6 text-center text-muted">Loading…</td>
                     </tr>
 
                     <tr v-else-if="!rows.length">
-                        <td colspan="6" class="px-3 py-6 text-center text-muted">
+                        <td :colspan="canAssign ? 7 : 6" class="px-3 py-6 text-center text-muted">
                             Nothing matches those filters.
                         </td>
                     </tr>
@@ -216,6 +345,14 @@ function due(row: Complaint): string {
                         class="cursor-pointer border-b border-line last:border-0 hover:bg-sunk"
                         @click="open(row)"
                     >
+                        <td v-if="canAssign" class="px-3 py-2" @click.stop>
+                            <input
+                                v-model="ticked"
+                                type="checkbox"
+                                :value="row.id"
+                                class="rounded border-line-strong"
+                            />
+                        </td>
                         <td class="px-3 py-2 whitespace-nowrap font-medium tabular-nums text-ink">
                             {{ row.reference }}
                             <span v-if="row.reopened_count" class="ms-1 text-xs text-crit">

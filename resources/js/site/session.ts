@@ -19,6 +19,10 @@ export interface SiteSession {
     role: string;
     /** Where their own pages are, which differs for staff and customers. */
     home: string;
+    /** A running or paused plan. Decides which buttons are worth showing. */
+    hasActivePlan: boolean;
+    /** And whether any of those plans includes the cloth service. */
+    hasClothService: boolean;
 }
 
 const session = ref<SiteSession | null>(null);
@@ -38,6 +42,8 @@ export function useSiteSession() {
                     name: data.data?.name ?? '',
                     role,
                     home: role === 'customer' ? '/my/plans' : '/app/dashboard',
+                    hasActivePlan: Boolean(data.standing?.has_active_plan),
+                    hasClothService: Boolean(data.standing?.has_cloth_service),
                 };
             })
             .catch(() => {

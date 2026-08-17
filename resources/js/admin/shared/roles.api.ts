@@ -14,7 +14,7 @@ export interface AbilityModule { module: string; abilities: AbilityOption[] }
 export interface BaseRole {
     value: string;
     label: string;
-    sees_all_branches: boolean;
+    sees_all_sectors: boolean;
     /** What this role grants before anybody customises it. */
     abilities: string[];
 }

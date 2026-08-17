@@ -8,7 +8,7 @@ use App\Models\Branch;
 use App\Models\Complaint;
 use App\Models\Customer;
 use App\Models\User;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -23,7 +23,7 @@ class ComplaintApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->ourBranch = Branch::factory()->create(['code' => 'AAA']);
         $this->theirBranch = Branch::factory()->create(['code' => 'BBB']);
@@ -31,7 +31,7 @@ class ComplaintApiTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -57,7 +57,7 @@ class ComplaintApiTest extends TestCase
         [$user, $customer] = $this->customerAccount($this->ourBranch);
         [, $neighbour] = $this->customerAccount($this->ourBranch);
 
-        BranchContext::withoutScope(function () use ($customer, $neighbour) {
+        SectorContext::withoutScope(function () use ($customer, $neighbour) {
             Complaint::factory()->forCustomer($customer)->count(2)->create();
             Complaint::factory()->forCustomer($neighbour)->count(3)->create();
         });
@@ -72,7 +72,7 @@ class ComplaintApiTest extends TestCase
         [$user] = $this->customerAccount($this->ourBranch);
         [, $neighbour] = $this->customerAccount($this->ourBranch);
 
-        $theirs = BranchContext::withoutScope(
+        $theirs = SectorContext::withoutScope(
             fn () => Complaint::factory()->forCustomer($neighbour)->create()
         );
 
@@ -83,7 +83,7 @@ class ComplaintApiTest extends TestCase
 
     public function test_a_franchise_owner_sees_only_their_branch(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             Complaint::factory()->count(2)->create(['branch_id' => $this->ourBranch->id]);
             Complaint::factory()->count(4)->create(['branch_id' => $this->theirBranch->id]);
         });
@@ -97,7 +97,7 @@ class ComplaintApiTest extends TestCase
 
     public function test_the_queue_reports_how_many_are_overdue(): void
     {
-        BranchContext::withoutScope(function () {
+        SectorContext::withoutScope(function () {
             Complaint::factory()->overdue()->count(3)->create(['branch_id' => $this->ourBranch->id]);
             Complaint::factory()->count(2)->create([
                 'branch_id' => $this->ourBranch->id, 'due_at' => now()->addDay(),
@@ -120,7 +120,7 @@ class ComplaintApiTest extends TestCase
 
     public function test_a_cleaner_cannot_assign_a_complaint(): void
     {
-        $complaint = BranchContext::withoutScope(
+        $complaint = SectorContext::withoutScope(
             fn () => Complaint::factory()->create(['branch_id' => $this->ourBranch->id])
         );
 
@@ -136,7 +136,7 @@ class ComplaintApiTest extends TestCase
         $mine = User::factory()->cleaner($this->ourBranch)->create();
         $theirs = User::factory()->cleaner($this->ourBranch)->create();
 
-        $complaint = BranchContext::withoutScope(fn () => Complaint::factory()->create([
+        $complaint = SectorContext::withoutScope(fn () => Complaint::factory()->create([
             'branch_id' => $this->ourBranch->id,
             'status' => ComplaintStatus::Assigned,
             'assigned_to' => $theirs->id,
@@ -151,7 +151,7 @@ class ComplaintApiTest extends TestCase
     {
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
 
-        $complaint = BranchContext::withoutScope(fn () => Complaint::factory()->create([
+        $complaint = SectorContext::withoutScope(fn () => Complaint::factory()->create([
             'branch_id' => $this->ourBranch->id,
             'status' => ComplaintStatus::Assigned,
             'assigned_to' => $cleaner->id,
@@ -166,7 +166,7 @@ class ComplaintApiTest extends TestCase
     {
         $cleaner = User::factory()->cleaner($this->ourBranch)->create();
 
-        $complaint = BranchContext::withoutScope(fn () => Complaint::factory()->create([
+        $complaint = SectorContext::withoutScope(fn () => Complaint::factory()->create([
             'branch_id' => $this->ourBranch->id,
             'status' => ComplaintStatus::Resolved,
             'assigned_to' => $cleaner->id,
@@ -182,7 +182,7 @@ class ComplaintApiTest extends TestCase
     {
         $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
 
-        $complaint = BranchContext::withoutScope(fn () => Complaint::factory()->closed()->create([
+        $complaint = SectorContext::withoutScope(fn () => Complaint::factory()->closed()->create([
             'branch_id' => $this->ourBranch->id,
         ]));
 
@@ -221,7 +221,7 @@ class ComplaintApiTest extends TestCase
         $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
         $outsider = User::factory()->cleaner($this->theirBranch)->create();
 
-        $complaint = BranchContext::withoutScope(
+        $complaint = SectorContext::withoutScope(
             fn () => Complaint::factory()->create(['branch_id' => $this->ourBranch->id])
         );
 
@@ -239,7 +239,7 @@ class ComplaintApiTest extends TestCase
     {
         $user = User::factory()->customer($branch)->create();
 
-        $customer = BranchContext::withoutScope(fn () => Customer::factory()->create([
+        $customer = SectorContext::withoutScope(fn () => Customer::factory()->create([
             'branch_id' => $branch->id,
             'user_id' => $user->id,
         ]));

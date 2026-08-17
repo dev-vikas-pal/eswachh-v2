@@ -18,7 +18,7 @@ use App\Models\VehicleCategory;
 use App\Models\VehicleModel;
 use App\Support\Content\RichText;
 use App\Support\Settings\SiteSettings;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +44,7 @@ class CatalogueController extends Controller
      */
     public function __invoke(): JsonResponse
     {
-        return BranchContext::withoutScope(fn () => response()->json([
+        return SectorContext::withoutScope(fn () => response()->json([
             'data' => [
                 'vehicle_types' => VehicleCategory::query()->where('status', true)->orderBy('name')
                     ->get(['id', 'name', 'price_paise'])
@@ -93,14 +93,25 @@ class CatalogueController extends Controller
                         'discount' => $row->discount_paise / 100,
                     ]),
 
-                'cloth_bundles' => ClothBundle::query()->where('status', true)->orderBy('cloth_count')
-                    ->get(['id', 'name', 'cloth_count', 'price_paise'])
-                    ->map(fn ($row) => [
-                        'id' => $row->id,
-                        'name' => $row->name,
-                        'count' => $row->cloth_count,
-                        'price' => $row->price_paise / 100,
-                    ]),
+                /*
+                 * Empty while the service is switched off.
+                 *
+                 * Filtered here rather than in each form, because there are
+                 * four of them - signup, renewal, add-a-car, top-up - and one
+                 * that forgot the condition went on selling something the
+                 * business had turned off. An empty list is the same signal
+                 * everywhere and needs no condition at all.
+                 */
+                'cloth_bundles' => ! SiteSettings::get('cloth_service_enabled')
+                    ? []
+                    : ClothBundle::query()->where('status', true)->orderBy('cloth_count')
+                        ->get(['id', 'name', 'cloth_count', 'price_paise'])
+                        ->map(fn ($row) => [
+                            'id' => $row->id,
+                            'name' => $row->name,
+                            'count' => $row->cloth_count,
+                            'price' => $row->price_paise / 100,
+                        ]),
             ],
         ]));
     }
@@ -181,6 +192,16 @@ class CatalogueController extends Controller
                     'hours' => SiteSettings::get('office_hours'),
                 ],
 
+                /*
+                 * The cloth ironing service, business-wide.
+                 *
+                 * Built and working on both sides, switched off while the
+                 * business decides whether to run it. Everything that offers
+                 * the service reads this one flag, so turning it on is one
+                 * checkbox rather than a release.
+                 */
+                'cloth_service' => (bool) SiteSettings::get('cloth_service_enabled'),
+
                 'faqs' => Faq::query()->live()->get()->map(fn (Faq $f) => [
                     'id' => $f->id,
                     'question' => $f->question,
@@ -205,7 +226,7 @@ class CatalogueController extends Controller
             'parent_id' => ['required_unless:level,states', 'nullable', 'string'],
         ]);
 
-        return BranchContext::withoutScope(function () use ($input) {
+        return SectorContext::withoutScope(function () use ($input) {
             $rows = match ($input['level']) {
                 'states' => State::query()->where('status', true)->orderBy('name')->get(['id', 'name']),
 
@@ -216,13 +237,21 @@ class CatalogueController extends Controller
                     ->where('city_id', $input['parent_id'])->orderBy('name')->get(['id', 'name']),
 
                 /*
-                 * Only sectors a franchise actually covers. Offering an address
-                 * nobody services takes a customer's money for a round that
-                 * will never happen - which is how v1 accumulated subscriptions
-                 * with no cleaner attached.
+                 * Only sectors somebody actually covers.
+                 *
+                 * Offering an address nobody services takes a customer's money
+                 * for a round that will never happen - which is how v1
+                 * accumulated subscriptions with no cleaner attached.
+                 *
+                 * Read from the assignment, not from a column on the sector. It
+                 * used to ask for a branch_id, which stopped meaning anything
+                 * the moment territory moved to user_sector - a sector with a
+                 * branch and nobody on it would still have been offered.
                  */
                 'sectors' => Sector::query()->where('status', true)
-                    ->whereNotNull('branch_id')
+                    ->whereExists(fn ($q) => $q->selectRaw(1)
+                        ->from('user_sector')
+                        ->whereColumn('user_sector.sector_id', 'sectors.id'))
                     ->where('area_id', $input['parent_id'])->orderBy('name')->get(['id', 'name']),
 
                 'societies' => Society::query()->where('status', true)

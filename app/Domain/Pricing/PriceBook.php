@@ -9,7 +9,7 @@ use App\Models\ServiceType;
 use App\Models\Society;
 use App\Models\Subscription;
 use App\Models\VehicleModel;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use RuntimeException;
 
 /**
@@ -56,7 +56,7 @@ class PriceBook
          * this is the only reason a quote works on the public site, where
          * there is no signed in user at all.
          */
-        return BranchContext::withoutScope(function () use (
+        return SectorContext::withoutScope(function () use (
             $vehicleModelId, $packageId, $serviceTypeId, $durationId, $societyId, $clothBundleId
         ) {
             $duration = $durationId ? Duration::find($durationId) : null;

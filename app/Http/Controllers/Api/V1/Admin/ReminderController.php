@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Enums\MessageStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
+use App\Support\Http\FiltersBySector;
 use App\Support\Http\SortsLists;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * What has been said to customers, and what is about to be.
@@ -20,6 +23,7 @@ use Illuminate\Support\Carbon;
  */
 class ReminderController extends Controller
 {
+    use FiltersBySector;
     use SortsLists;
 
     private const SORTABLE = [
@@ -56,15 +60,27 @@ class ReminderController extends Controller
             ->with('customer:id,name', 'subscription:id,vehicle_id', 'subscription.vehicle:id,registration')
             ->latest('created_at');
 
-        // Branch scoping: Message is not a BaseModel, so it is applied here.
-        if (\App\Support\Tenancy\BranchContext::isRestricted()) {
-            $branchId = \App\Support\Tenancy\BranchContext::currentBranchId();
+        /*
+         * Sector scoping, applied here because Message is not a BaseModel and
+         * so carries no global scope.
+         *
+         * Through the customer the message was sent to, like everything else:
+         * a message is about somebody, and whoever covers that somebody's
+         * sector is who may read it.
+         */
+        if (SectorContext::isRestricted()) {
+            $sectorIds = SectorContext::currentSectorIds();
 
-            // Same rule as the global scope: restricted with no branch sees
-            // nothing, never everything.
-            $branchId === null
-                ? $query->whereRaw('1 = 0')
-                : $query->where('branch_id', $branchId);
+            // Same rule as the global scope: restricted while covering nothing
+            // sees nothing, never everything.
+            if ($sectorIds === null || $sectorIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn(
+                    'customer_id',
+                    DB::table('customers')->select('id')->whereIn('sector_id', $sectorIds),
+                );
+            }
         }
 
         if ($status = $filters['status'] ?? null) {
@@ -88,6 +104,9 @@ class ReminderController extends Controller
                 ->orWhere('body', 'like', "%{$search}%")
                 ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%")));
         }
+
+        // The sector picker in the top bar.
+        $this->applySectorFilter($query, $request, 'customer');
 
         $this->applySort($query, $request, self::SORTABLE, 'sent');
 

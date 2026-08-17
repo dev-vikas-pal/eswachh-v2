@@ -38,18 +38,29 @@ class PhoneLoginController extends Controller
         $this->throttle($request, $phone);
 
         /*
-         * The code is only made when there is somebody to send it to, and the
-         * reply is the same either way. v1 answered "User does not exist",
-         * which turns a login form into a way of asking whether somebody is a
-         * customer of ours.
+         * Said plainly, at the owner's request.
+         *
+         * This was deliberately vague - "if that number is on our books" - so
+         * the form could not be used to ask whether somebody is a customer. The
+         * reason it can be plain now is that the *signup* form already answers
+         * the same question outright: it refuses a number it knows with "that
+         * number is already registered". The information was public either way,
+         * and the vague wording only cost a real customer their bearings when a
+         * code never arrived because they had mistyped a digit.
+         *
+         * Still throttled per number and per address, which is what actually
+         * stops a list being walked through.
          */
-        if ($user = $this->userFor($phone)) {
-            $this->codes->issue($phone, PhoneCodes::LOGIN, $request->ip());
-            unset($user);
+        if (! $this->userFor($phone)) {
+            throw ValidationException::withMessages([
+                'phone' => 'We have no account for that number. Check the digits, or subscribe to start one.',
+            ]);
         }
 
+        $this->codes->issue($phone, PhoneCodes::LOGIN, $request->ip());
+
         return response()->json([
-            'message' => 'If that number is on our books, a code is on its way.',
+            'message' => 'A code is on its way. It lasts five minutes.',
             'expires_in' => $this->codes->lifetimeSeconds(),
         ]);
     }

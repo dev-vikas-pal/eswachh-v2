@@ -30,6 +30,34 @@ use Illuminate\Support\Facades\Log;
 class Messenger
 {
     /**
+     * A number the provider will actually route to.
+     *
+     * Numbers are stored as ten digits, because that is what a customer reads
+     * off their own phone and what every screen shows. The provider needs the
+     * country code, and a bare ten digit number is not rejected loudly - it is
+     * accepted and dropped, which looks exactly like a message that was sent.
+     *
+     * v1 did the same thing at the same point: '91'.$mobileNo.
+     */
+    public static function dialable(string $phone): string
+    {
+        $digits = (string) preg_replace('/\D+/', '', $phone);
+
+        // Already carries a country code - from an import, or typed in full.
+        if (strlen($digits) > 10) {
+            return $digits;
+        }
+
+        return self::COUNTRY_CODE.$digits;
+    }
+
+    /**
+     * India. Kept as a constant rather than scattered through the code, so the
+     * day this business crosses a border there is one line to find.
+     */
+    private const COUNTRY_CODE = '91';
+
+    /**
      * Is a message actually going to leave the building?
      */
     public function deliveryEnabled(): bool
@@ -79,6 +107,54 @@ class Messenger
      * hand. A missing or switched-off template sends nothing rather than
      * falling back to wording nobody has approved.
      */
+    /**
+     * Send the message for a purpose, using whatever wording is stored for it.
+     *
+     * This is what the triggers around the application call, so each of them is
+     * one line and none of them knows about templates, placeholders or the
+     * suppression rules. A purpose with no template, or one switched off, sends
+     * nothing and says so in the log - deliberately, because falling back to
+     * wording nobody has approved is worse than staying quiet.
+     *
+     * @param  array<string, string>  $extra  Values only the caller knows
+     */
+    public function notify(
+        Subscription $subscription,
+        MessagePurpose $purpose,
+        array $extra = [],
+        ?string $toPhone = null,
+    ): ?Message {
+        $template = MessageTemplate::query()->where('key', $purpose->value)->first();
+
+        if (! $template) {
+            Log::warning('No message template for this purpose; nothing sent.', [
+                'purpose' => $purpose->value,
+                'subscription_id' => $subscription->id,
+            ]);
+
+            return null;
+        }
+
+        if (! $template->status) {
+            Log::info('Not sending: that template is switched off.', [
+                'template' => $template->key,
+                'subscription_id' => $subscription->id,
+            ]);
+
+            return null;
+        }
+
+        // The relations the wording may refer to are loaded by valuesFor, so
+        // every caller here is a single line.
+        return $this->send(
+            $subscription,
+            $purpose,
+            $template->render(MessageTemplate::valuesFor($subscription, $extra)),
+            template: $template,
+            toPhone: $toPhone,
+        );
+    }
+
     public function sendTemplate(
         Subscription $subscription,
         MessageTemplate $template,
@@ -122,10 +198,16 @@ class Messenger
         ?Carbon $on = null,
         ?MessageTemplate $template = null,
         ?string $dedupeKey = null,
+        ?string $toPhone = null,
     ): ?Message {
         $on ??= Carbon::today();
 
-        $recipient = $subscription->customer?->phone;
+        /*
+         * Almost always the customer. The exception is the message that tells
+         * the office a new plan needs a cleaner, which goes to a number in the
+         * settings - v1 had that number written into the source.
+         */
+        $recipient = $toPhone ?: $subscription->customer?->phone;
 
         if (! $recipient) {
             Log::info('Nothing to message: the customer has no phone number.', [
@@ -171,7 +253,9 @@ class Messenger
             // Logged in full so development can see exactly what a customer
             // would have received.
             Log::info('Message suppressed: '.$reason, [
-                'to' => $recipient,
+                // As it would have been addressed, country code and all, so the
+                // log shows what would really have gone out.
+                'to' => self::dialable($recipient),
                 'purpose' => $purpose->value,
                 'body' => $body,
             ]);
@@ -200,7 +284,10 @@ class Messenger
                     'integrated_number' => config('services.whatsapp.number'),
                     'content_type' => 'template',
                     'payload' => [
-                        'to' => $message->recipient,
+                        // With the country code, as v1 sent it. A bare ten
+                        // digit number is not routable and the provider
+                        // silently drops it.
+                        'to' => self::dialable($message->recipient),
                         'type' => 'template',
                         'template' => [
                             'name' => $message->template,

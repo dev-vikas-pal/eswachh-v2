@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AttendanceStatus;
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -17,7 +17,19 @@ use Illuminate\Support\Carbon;
  */
 class Attendance extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
+
+    /**
+     * Belongs to a person, not to a customer.
+     *
+     * Whether somebody turned up has no customer attached to derive a sector
+     * from, so this is scoped to the staff who cover the viewer's sectors -
+     * which is the same pivot, asked from the other end.
+     */
+    protected static function sectorScope(): array
+    {
+        return ['staff' => 'cleaner_id'];
+    }
 
     protected $attributes = [
         'status' => 'present',

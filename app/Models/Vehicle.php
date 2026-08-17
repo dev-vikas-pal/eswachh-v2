@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Vehicle extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
 
     protected $fillable = [
         'branch_id', 'customer_id', 'vehicle_model_id',

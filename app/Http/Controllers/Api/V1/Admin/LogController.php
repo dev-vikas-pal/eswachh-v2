@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Reading the application log from a screen.
@@ -76,6 +77,39 @@ class LogController extends Controller implements HasMiddleware
     /**
      * One day's entries, newest first.
      */
+    /**
+     * Empty one day's log.
+     *
+     * Truncated rather than deleted: the logger holds the file open, and a
+     * deleted file on a running process is written to a handle nobody can read
+     * until the next rotation - so the log would appear to keep growing while
+     * the screen showed nothing.
+     *
+     * Today's file is emptied, not removed, for the same reason.
+     */
+    public function destroy(string $date): JsonResponse
+    {
+        abort_unless(preg_match(self::PATTERN, $date) === 1, 404);
+
+        $path = storage_path('logs/laravel-'.$date.'.log');
+
+        abort_unless(is_file($path), 404);
+
+        file_put_contents($path, '');
+
+        /*
+         * Recorded in the log it just emptied, which is the point: "the log is
+         * empty" and "somebody emptied the log" look identical afterwards, and
+         * only one of them is worth knowing.
+         */
+        Log::info('Log file emptied by hand.', [
+            'file' => 'laravel-'.$date.'.log',
+            'by' => auth()->user()?->name,
+        ]);
+
+        return response()->json(['message' => 'That day has been emptied.']);
+    }
+
     public function show(Request $request, string $date): JsonResponse
     {
         // Matched, never trusted. The filename is built from our own constant

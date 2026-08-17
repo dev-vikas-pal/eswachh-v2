@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\Cloth\ClothLedger;
 use App\Models\ClothEntry;
 use App\Models\Subscription;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +30,7 @@ class CheckClothBalances extends Command
 
     public function handle(): int
     {
-        return BranchContext::withoutScope(function () {
+        return SectorContext::withoutScope(function () {
             $repair = (bool) $this->option('repair');
 
             // The ledger total per subscription, in one query rather than one

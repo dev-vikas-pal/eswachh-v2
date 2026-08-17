@@ -27,6 +27,20 @@ export interface PaymentResult {
     message: string;
     /** True when the customer closed the dialog rather than anything failing. */
     cancelled?: boolean;
+    /**
+     * The captured payment, when there is one.
+     *
+     * Carried back so the page that follows can show a receipt - an invoice
+     * number and what was paid - rather than a sentence saying it worked.
+     */
+    payment?: PaymentReceipt;
+}
+
+export interface PaymentReceipt {
+    invoice_number: string | null;
+    amount: number;
+    method: string | null;
+    paid_at: string | null;
 }
 
 declare global {
@@ -80,6 +94,27 @@ export async function payForSubscription(
 }
 
 /**
+ * The receipt out of whatever the server sent back.
+ *
+ * Both paths - the simulated one and the real callback - return the payment
+ * resource, but neither is guaranteed to: a response shape that changes must
+ * degrade to "no receipt", never to a page that throws after the money has
+ * been taken.
+ */
+function receiptFrom(data: { data?: Record<string, unknown> }): PaymentReceipt | undefined {
+    const payment = data?.data;
+
+    if (!payment) return undefined;
+
+    return {
+        invoice_number: (payment.invoice_number as string) ?? null,
+        amount: Number(payment.amount ?? 0),
+        method: (payment.method as string) ?? null,
+        paid_at: (payment.paid_at as string) ?? null,
+    };
+}
+
+/**
  * The gateway half: simulated stand-in, or the real dialog.
  *
  * Shared by every flow that takes money, so there is one place that decides
@@ -94,7 +129,7 @@ export async function completeCheckout(
         // real gateway is configured, so it cannot leak into production.
         try {
             const { data } = await api.post(`/payments/${checkout.payment_id}/simulate`);
-            return { ok: true, message: data.message ?? 'Payment recorded.' };
+            return { ok: true, message: data.message ?? 'Payment recorded.', payment: receiptFrom(data) };
         } catch (error) {
             return { ok: false, message: describeError(error).message };
         }
@@ -137,7 +172,7 @@ export async function completeCheckout(
                         razorpay_signature: response.razorpay_signature,
                     });
 
-                    resolve({ ok: true, message: data.message ?? 'Payment received.' });
+                    resolve({ ok: true, message: data.message ?? 'Payment received.', payment: receiptFrom(data) });
                 } catch (error) {
                     // The money may well have been taken even though this
                     // failed, so the wording never says the payment failed -
@@ -175,11 +210,19 @@ export async function completeCheckout(
 export async function payForRenewal(
     subscriptionId: string,
     customer: { name?: string; email?: string; phone?: string } = {},
+    /**
+     * What they want to renew onto, when it differs from what they have.
+     *
+     * Ids only. The server applies them and prices the result - so a customer
+     * choosing six months instead of one is charged for six months, worked out
+     * by the price book rather than sent from here.
+     */
+    choices: Record<string, string | null> = {},
 ): Promise<PaymentResult> {
     let checkout: Checkout;
 
     try {
-        const { data } = await api.post(`/subscriptions/${subscriptionId}/renew`);
+        const { data } = await api.post(`/subscriptions/${subscriptionId}/renew`, choices);
         checkout = data.data;
     } catch (error) {
         return { ok: false, message: describeError(error).message };
@@ -206,6 +249,58 @@ export async function payForClothTopUp(
     }
 
     return completeCheckout(checkout, customer);
+}
+
+/**
+ * Add a second car to an account that already exists.
+ *
+ * No code step and no address: the customer is signed in, which proves more
+ * than a code sent to a phone does, and everything about who they are comes
+ * from the session. Only the car and what they want on it are sent.
+ */
+export async function payForNewPlan(
+    plan: Record<string, string | null>,
+    customer: { name?: string; email?: string; phone?: string } = {},
+): Promise<PaymentResult> {
+    let checkout: Checkout;
+
+    try {
+        const { data } = await api.post('/portal/plans', plan);
+        checkout = data.data;
+    } catch (error) {
+        return { ok: false, message: describeError(error).message };
+    }
+
+    return completeCheckout(checkout, customer);
+}
+
+/**
+ * Top up cloths for a car found by number, with nobody signed in.
+ *
+ * The registration goes with the id, as it does on the renewal page: an id
+ * alone would be enough to top up somebody else's car, and ids leak far more
+ * easily than the pairing of the two does.
+ */
+export async function payForClothTopUpByCar(
+    subscriptionId: string,
+    registration: string,
+    clothBundleId: string,
+): Promise<PaymentResult> {
+    let checkout: Checkout;
+
+    try {
+        const { data } = await api.post('/public/cloth/pay', {
+            subscription_id: subscriptionId,
+            registration,
+            cloth_bundle_id: clothBundleId,
+        });
+
+        checkout = data.data;
+    } catch (error) {
+        return { ok: false, message: describeError(error).message };
+    }
+
+    return completeCheckout(checkout, {});
 }
 
 /**

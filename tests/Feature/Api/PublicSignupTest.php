@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
 use App\Models\Branch;
+use App\Models\ClothBundle;
 use App\Models\Customer;
 use App\Models\Duration;
 use App\Models\LoginCode;
@@ -19,7 +20,8 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleCategory;
 use App\Models\VehicleModel;
-use App\Support\Tenancy\BranchContext;
+use App\Support\Settings\SiteSettings;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -50,10 +52,15 @@ class PublicSignupTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        BranchContext::reset();
+        SectorContext::reset();
 
         $this->branch = Branch::factory()->create();
         $this->sector = Sector::factory()->create(['branch_id' => $this->branch->id]);
+
+        // Somebody has to cover it, or the signup is correctly refused: an
+        // address nobody services takes money for a round that never happens.
+        User::factory()->franchiseOwner($this->branch)->create()
+            ->sectors()->syncWithoutDetaching([$this->sector->id]);
 
         $category = VehicleCategory::create(['name' => 'Hatchback', 'price_paise' => 30000, 'status' => true]);
         $this->model = VehicleModel::create([
@@ -74,7 +81,7 @@ class PublicSignupTest extends TestCase
 
     protected function tearDown(): void
     {
-        BranchContext::reset();
+        SectorContext::reset();
         parent::tearDown();
     }
 
@@ -89,7 +96,11 @@ class PublicSignupTest extends TestCase
         $customer = Customer::withoutGlobalScopes()->firstOrFail();
 
         $this->assertSame('9876543210', $customer->phone);
-        $this->assertSame($this->branch->id, $customer->branch_id, 'The sector decides the franchise.');
+
+        // The territory comes from the address they gave, and it is the only
+        // thing that decides who services them. It used to be checked as a
+        // branch_id copied onto the customer, which nothing reads any more.
+        $this->assertSame($this->sector->id, $customer->sector_id, 'The address decides the territory.');
 
         $plan = Subscription::withoutGlobalScopes()->firstOrFail();
 
@@ -206,6 +217,144 @@ class PublicSignupTest extends TestCase
             ->assertJsonValidationErrors('code');
 
         $this->assertDatabaseCount('customers', 1);
+    }
+
+    public function test_a_refused_order_does_not_burn_the_code(): void
+    {
+        /*
+         * The code used to be spent before the car number was checked, so a
+         * plate already on the books burned it too. The customer corrected the
+         * plate, retyped the same code, and was told it was invalid - with
+         * nothing on screen to explain why, and asking for a new one did it
+         * again on the next mistake.
+         */
+        SectorContext::withoutScope(fn () => Vehicle::factory()->create([
+            'registration' => 'UP42BJ9003',
+        ]));
+
+        $this->provedNumber('9876543210');
+
+        $this->postJson('/api/v1/public/signup', $this->order())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('registration');
+
+        // Same code, corrected plate. This is the whole point.
+        $this->postJson('/api/v1/public/signup', $this->order(['registration' => 'UP42BJ9004']))
+            ->assertCreated();
+    }
+
+    public function test_a_wrong_code_still_counts_against_the_attempt_limit(): void
+    {
+        // Checking without spending must not make guessing free.
+        $this->provedNumber('9876543210');
+
+        $this->postJson('/api/v1/public/signup', $this->order(['code' => '000000']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('code');
+
+        $this->assertSame(
+            1,
+            (int) LoginCode::query()->latest('created_at')->first()->attempts
+        );
+    }
+
+    public function test_a_sector_nobody_covers_is_refused(): void
+    {
+        $orphan = SectorContext::withoutScope(fn () => Sector::factory()->create());
+
+        $this->provedNumber('9876543210');
+
+        /*
+         * Read from the assignment, not from a branch_id on the sector. That
+         * column stopped meaning anything when territory moved to user_sector,
+         * so a sector the address form had happily offered was refused here.
+         */
+        $this->postJson('/api/v1/public/signup', $this->order(['sector_id' => $orphan->id]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('sector_id');
+    }
+
+    public function test_the_address_form_only_offers_sectors_somebody_covers(): void
+    {
+        $orphan = SectorContext::withoutScope(
+            fn () => Sector::factory()->create(['area_id' => $this->sector->area_id])
+        );
+
+        $offered = $this->getJson('/api/v1/public/locations?level=sectors&parent_id='.$this->sector->area_id)
+            ->assertOk()
+            ->json('data.*.id');
+
+        // Offering one and then refusing it at the payment step is the worst of
+        // both: the two answers come from the same fact now.
+        $this->assertContains($this->sector->id, $offered);
+        $this->assertNotContains($orphan->id, $offered);
+    }
+
+    public function test_a_taken_car_number_is_refused_before_a_code_is_sent(): void
+    {
+        SectorContext::withoutScope(fn () => Vehicle::factory()->create([
+            'registration' => 'UP42BJ9003',
+        ]));
+
+        /*
+         * The customer used to hear this at the payment step, with the whole
+         * form filled in and a code already typed - and nothing to do but start
+         * again. Refused here, no message is spent on it either.
+         */
+        $this->postJson('/api/v1/public/signup/code', [
+            'phone' => '9876543210',
+            'registration' => 'UP42BJ9003',
+        ])->assertStatus(422)->assertJsonValidationErrors('registration');
+
+        $this->assertDatabaseCount('login_codes', 0);
+    }
+
+    public function test_an_uncovered_sector_is_refused_before_a_code_is_sent(): void
+    {
+        $orphan = SectorContext::withoutScope(fn () => Sector::factory()->create());
+
+        $this->postJson('/api/v1/public/signup/code', [
+            'phone' => '9876543210',
+            'sector_id' => $orphan->id,
+        ])->assertStatus(422)->assertJsonValidationErrors('sector_id');
+
+        $this->assertDatabaseCount('login_codes', 0);
+    }
+
+    public function test_the_payment_is_stamped_with_the_customers_sector(): void
+    {
+        $this->provedNumber('9876543210');
+
+        $this->postJson('/api/v1/public/signup', $this->order())->assertCreated();
+
+        $payment = SectorContext::withoutScope(fn () => Payment::query()->firstOrFail());
+
+        /*
+         * It used to read the customer through a sector-scoped relation, from a
+         * request with nobody signed in - so the scope returned nothing and the
+         * stamp landed null. Every payment taken from the public form was then
+         * invisible to the franchise that had just earned it.
+         */
+        $this->assertSame($this->sector->id, $payment->sector_id);
+    }
+
+    public function test_cloths_are_not_sold_while_the_service_is_off(): void
+    {
+        $bundle = ClothBundle::create([
+            'name' => '30 cloths', 'cloth_count' => 30, 'price_paise' => 30000, 'status' => true,
+        ]);
+
+        SiteSettings::put(['cloth_service_enabled' => '0']);
+
+        // The form is not what enforces this: a stale page would otherwise
+        // still sell something the business has switched off.
+        $this->assertSame([], $this->getJson('/api/v1/public/catalogue')->json('data.cloth_bundles'));
+
+        $this->provedNumber('9876543210');
+
+        $this->postJson('/api/v1/public/signup', $this->order(['cloth_bundle_id' => $bundle->id]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cloth_bundle_id');
     }
 
     // --------------------------------------------------------------- helpers

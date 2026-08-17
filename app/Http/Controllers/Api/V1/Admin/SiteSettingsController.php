@@ -38,6 +38,9 @@ class SiteSettingsController extends Controller implements HasMiddleware
                 // GSTIN does not. The form picks its control from this rather
                 // than from the field's name.
                 'rich' => (bool) ($definition['rich'] ?? false),
+                // A yes or no question deserves a checkbox, not a text box
+                // somebody has to know to type 1 into.
+                'boolean' => (bool) ($definition['boolean'] ?? false),
             ];
         }
 

@@ -3,16 +3,22 @@
 namespace App\Domain\Billing;
 
 use App\Domain\Cloth\ClothLedger;
+use App\Domain\Messaging\Messenger;
+use App\Enums\MessagePurpose;
 use App\Enums\PaymentPurpose;
 use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
+use App\Mail\WelcomeToEswachh;
 use App\Models\ClothBundle;
 use App\Models\Payment;
-use App\Support\Tenancy\BranchContext;
+use App\Models\Subscription;
+use App\Support\Settings\SiteSettings;
+use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Turns a gateway callback into money on the books and, if all is well, a
@@ -52,7 +58,7 @@ class RecordPayment
          * the caller's identity. So this runs deliberately unscoped, and every
          * row it touches is reached through that payment.
          */
-        return BranchContext::withoutScope(fn () => $this->capturePayment($callback, $details));
+        return SectorContext::withoutScope(fn () => $this->capturePayment($callback, $details));
     }
 
     /**
@@ -116,6 +122,14 @@ class RecordPayment
                 // the payment, not a separate step somebody has to remember.
                 PaymentPurpose::ClothTopUp => $this->creditCloths($payment),
             };
+
+            /*
+             * Told after the plan has actually moved, so a message never
+             * promises something the record does not show. Messaging failures
+             * are swallowed inside the notifier: not telling somebody is bad,
+             * but losing a captured payment over it is worse.
+             */
+            $this->announce($payment);
         } catch (\Throwable $e) {
             Log::error('Payment captured but the subscription could not be extended.', [
                 'payment_id' => $payment->id,
@@ -137,15 +151,31 @@ class RecordPayment
      */
     public function extendAfterReconciliation(Payment $payment): void
     {
-        if ($payment->status !== PaymentStatus::Captured
-            || $payment->purpose !== PaymentPurpose::Subscription) {
+        if ($payment->status !== PaymentStatus::Captured) {
             return;
         }
 
         try {
             // Same reasoning as complete(): a console command has no user, and
             // the payment's own branch is the authority.
-            BranchContext::withoutScope(fn () => $this->extendSubscription($payment));
+            SectorContext::withoutScope(function () use ($payment) {
+                match ($payment->purpose) {
+                    PaymentPurpose::Subscription => $this->extendSubscription($payment),
+                    // A cloth top-up taken in cash still has to credit the
+                    // cloths. This path was subscription-only, so an office
+                    // recording a cash top-up banked the money and gave nothing.
+                    PaymentPurpose::ClothTopUp => $this->creditCloths($payment),
+                };
+
+                /*
+                 * And the customer is told, exactly as they would be for a
+                 * payment taken online. Somebody who pays the cleaner in cash
+                 * should not get a worse experience than somebody who pays by
+                 * card - that difference is invisible to them and looks like
+                 * the message was simply forgotten.
+                 */
+                $this->announce($payment);
+            });
         } catch (\Throwable $e) {
             // Never abort the whole reconciliation run because one
             // subscription would not move; the money is already safely
@@ -172,7 +202,7 @@ class RecordPayment
                 'reference' => $details['reference'] ?? null,
                 // The moment the money moved, recorded once and never rewritten.
                 'paid_at' => now(),
-                'invoice_number' => $payment->invoice_number ?? InvoiceNumber::next($payment->branch_id),
+                'invoice_number' => $payment->invoice_number ?? InvoiceNumber::next(),
             ])->save();
         });
     }
@@ -216,13 +246,159 @@ class RecordPayment
      * Renewal adds the next period rather than editing this one, so the history
      * of a vehicle stays readable and revenue reconciles against periods.
      */
-    private function extendSubscription(Payment $payment): void
+    /**
+     * Tell the customer - and, for a first payment, the office.
+     *
+     * The three messages the requirements document numbers [1], [2], [3] and
+     * [4]. Which one goes out is decided from the payment itself rather than
+     * from a flag passed around: a plan that was pending before this payment is
+     * a new subscription, one that was already running is a renewal.
+     *
+     * Wrapped so a messaging problem can never undo a captured payment.
+     */
+    private function announce(Payment $payment): void
     {
-        $subscription = $payment->subscription;
+        $subscription = $payment->subscription?->fresh();
 
         if (! $subscription) {
             return;
         }
+
+        try {
+            $messenger = app(Messenger::class);
+
+            if ($payment->purpose === PaymentPurpose::ClothTopUp) {
+                $messenger->notify($subscription, MessagePurpose::ClothTopUp);
+
+                return;
+            }
+
+            if ($this->wasFirstPayment) {
+                $messenger->notify($subscription, MessagePurpose::SubscriptionStarted);
+
+                $this->emailWelcome($subscription);
+
+                // And the office, so somebody assigns a cleaner. v1 sent this
+                // to a number written into the source; this reads a setting.
+                if ($office = trim((string) SiteSettings::get('admin_notify_phone'))) {
+                    $messenger->notify(
+                        $subscription,
+                        MessagePurpose::SubscriptionStartedAdmin,
+                        toPhone: $office,
+                    );
+                }
+
+                return;
+            }
+
+            $messenger->notify($subscription, MessagePurpose::Renewed);
+        } catch (\Throwable $e) {
+            Log::error('A payment was captured but the customer could not be told.', [
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * The period this payment should actually move on.
+     *
+     * Not simply the one the payment points at. A plan is a chain of periods,
+     * and paying against a link that has already been superseded used to create
+     * a second live period beside the real one - so a car had two plans running,
+     * ending on the same day, and would have been billed twice and cleaned once.
+     *
+     * The car's live period is the only sensible thing to extend, whichever row
+     * the office happened to click.
+     */
+    private function periodToExtend(Payment $payment): ?Subscription
+    {
+        $subscription = $payment->subscription;
+
+        if (! $subscription || $subscription->status !== SubscriptionStatus::Ended) {
+            return $subscription;
+        }
+
+        $live = Subscription::query()
+            ->where('vehicle_id', $subscription->vehicle_id)
+            ->whereNot('id', $subscription->id)
+            ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::Hold, SubscriptionStatus::Pending])
+            ->orderByDesc('sequence')
+            ->first();
+
+        if (! $live) {
+            // Nothing running: this ended period is the plan, and paying for it
+            // is a genuine restart.
+            return $subscription;
+        }
+
+        Log::info('A payment was made against a period that had already been renewed; extending the live one instead.', [
+            'payment_id' => $payment->id,
+            'paid_against' => $subscription->id,
+            'extended' => $live->id,
+        ]);
+
+        // Re-pointed so the money hangs off the period it actually paid for.
+        $payment->forceFill(['subscription_id' => $live->id])->save();
+
+        return $live;
+    }
+
+    /**
+     * The next period number for this car, counted across every period it has.
+     */
+    private function nextSequenceFor(Subscription $subscription): int
+    {
+        return 1 + (int) Subscription::query()
+            ->where('vehicle_id', $subscription->vehicle_id)
+            ->max('sequence');
+    }
+
+    /**
+     * The welcome email, when there is an address to send it to.
+     *
+     * Optional on purpose. Most customers give a phone number and no email, so
+     * the same information is in the WhatsApp welcome as well - this is the
+     * fuller version for the ones who did, not the only copy.
+     *
+     * Failures are swallowed and logged. A mail server being down must not
+     * roll back a payment that has already been taken.
+     */
+    private function emailWelcome(Subscription $subscription): void
+    {
+        $email = $subscription->customer?->email;
+
+        if (! $email) {
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new WelcomeToEswachh($subscription));
+        } catch (\Throwable $e) {
+            Log::warning('The welcome email could not be sent.', [
+                'subscription_id' => $subscription->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Was the payment just captured the one that started this plan?
+     *
+     * Set by extendSubscription, which is the only thing that knows - by the
+     * time announce() runs the plan is already active either way.
+     */
+    private bool $wasFirstPayment = false;
+
+    private function extendSubscription(Payment $payment): void
+    {
+        $subscription = $this->periodToExtend($payment);
+
+        if (! $subscription) {
+            return;
+        }
+
+        $this->wasFirstPayment = $subscription->status === SubscriptionStatus::Pending;
 
         DB::transaction(function () use ($payment, $subscription) {
             $months = $subscription->duration?->months ?? 1;
@@ -249,7 +425,15 @@ class RecordPayment
 
             $next = $subscription->replicate(['held_at', 'ended_at']);
             $next->forceFill([
-                'sequence' => $subscription->sequence + 1,
+                /*
+                 * Counted from the highest this car has reached, not from the
+                 * row in hand.
+                 *
+                 * Renewing from a superseded period produced a second row with
+                 * the same sequence, which is how one car ended up with two
+                 * live plans numbered 2 - billed twice and cleaned once.
+                 */
+                'sequence' => $this->nextSequenceFor($subscription),
                 'status' => SubscriptionStatus::Active,
                 'period_start' => $start,
                 'period_end' => $start->copy()->addMonths($months),

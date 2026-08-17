@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ServiceOutcome;
-use App\Models\Concerns\BelongsToBranch;
+use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -17,7 +17,13 @@ use Illuminate\Support\Carbon;
  */
 class ServiceLog extends BaseModel
 {
-    use BelongsToBranch;
+    use ScopedToSectors;
+
+    /** No customer of its own: it reaches one through the plan it belongs to. */
+    protected static function sectorScope(): array
+    {
+        return ['customer' => 'subscription_id', 'through' => 'subscriptions'];
+    }
 
     protected $attributes = [
         'outcome' => 'cleaned',
