@@ -67,6 +67,27 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+         * A file of its own for the test suite.
+         *
+         * The suite deliberately provokes failures - a cloth top-up with no
+         * matching bundle, a balance that disagrees with its ledger, a hundred
+         * sign-in codes - and every one of them was landing in the same daily
+         * file the Logs screen reads. A run left two hundred entries against
+         * nine real ones, so the screen showed alarming errors that were
+         * nothing but tests doing their job.
+         *
+         * Kept rather than discarded: a failing test is still easier to explain
+         * with its log beside it. It is simply not the application's log, and
+         * the Logs screen only lists laravel-*.log.
+         */
+        'testing' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/testing.log'),
+            'level' => 'debug',
+            'replace_placeholders' => true,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),
