@@ -311,7 +311,7 @@ code {
         <h2>What is in this guide</h2>
     </div>
     <ol>
-        <li><div><span class="t">The shape of the thing</span><span class="d">Three doors into one system, and what a franchise is</span></div></li>
+        <li><div><span class="t">The shape of the thing</span><span class="d">Three doors into one system, and how territory works</span></div></li>
         <li><div><span class="t">What a customer can do</span><span class="d">The four choices, and what each one sets off</span></div></li>
         <li><div><span class="t">Inside a customer's account</span><span class="d">Plans, adding a second car, payments, complaints</span></div></li>
         <li><div><span class="t">The office, screen by screen</span><span class="d">All seventeen pages and what each is for</span></div></li>
@@ -321,7 +321,7 @@ code {
         <li><div><span class="t">What happens overnight</span><span class="d">Six jobs, and the order they run in</span></div></li>
         <li><div><span class="t">Built, but switched off</span><span class="d">What is hidden today and what turning it on involves</span></div></li>
         <li><div><span class="t">What you can change yourself</span><span class="d">Every setting, without needing a developer</span></div></li>
-        <li><div><span class="t">Keeping the data safe</span><span class="d">Backups, retention, and what a franchise cannot see</span></div></li>
+        <li><div><span class="t">Keeping the data safe</span><span class="d">Backups, retention, and what a sector-scoped user cannot see</span></div></li>
     </ol>
 </nav>
 
@@ -356,21 +356,48 @@ code {
 <div class="sheet">
     <div class="rail"><div class="num">1.2</div></div>
     <div class="flow">
-        <h3>Franchises</h3>
-        <p>The business is divided into <strong>branches</strong>, and every branch owns
-        a set of <strong>sectors</strong> — the societies and neighbourhoods it services.
-        A franchise owner sees their branch and nothing else: not another franchise's
-        customers, not their payments, not their complaints, not even the fact that
-        they exist. Asking for a record that belongs to another branch produces the same
-        answer as asking for one that was never created.</p>
+        <h3>Sectors are the territory</h3>
+        <p>The business is divided into <strong>sectors</strong> — the neighbourhoods it
+        services. Each customer lives in one, and each member of staff is given the ones
+        they cover. That single pairing decides everything:</p>
 
-        <p>A franchise with several sectors needs no special treatment. Sectors are
-        assigned to a branch, so a franchise covering four societies simply has four
-        sectors attached. That assignment is made by an administrator, on the sector
-        record itself.</p>
+        <div class="plain">
+            <p style="margin:0;"><strong>You see the customers in the sectors you
+            cover.</strong> Nobody else's, and nothing else decides it.</p>
+        </div>
 
-        <p>Only an <strong>administrator</strong> sees across every branch, and there is
-        a branch selector in the top bar for switching between them.</p>
+        <p>A franchise user covering four neighbourhoods simply holds four sectors. Two
+        people can cover the same sector — an owner and the cleaners working it — and
+        somebody covering none sees nothing at all.</p>
+
+        <p>Asking for a record in a sector you do not cover produces the same answer as
+        asking for one that was never created. Only an <strong>administrator</strong> sees
+        every sector, and there is a sector filter in the top bar for narrowing the
+        screens to one.</p>
+
+        <h3>Setting somebody up</h3>
+        <p>Two steps, in this order, as an administrator.</p>
+
+        <div class="steps">
+            <div class="step"><span>01</span><div><b>Masters &rarr; Geography &rarr; Sectors.</b> Add the sector if it does not exist yet, and add its societies beneath it.</div></div>
+            <div class="step"><span>02</span><div><b>People &rarr; Add.</b> Create the login, pick the role, and <b>tick the sectors they cover</b>. <strong>That tick is the whole of who-sees-what</strong> — it takes effect immediately, and an account with nothing ticked signs in to empty screens.</div></div>
+        </div>
+
+        <div class="note">
+            <span class="eyebrow">Handing work to somebody else</span>
+            <p>Change the ticks. That is all. Nothing is migrated, no customer record is
+            touched, and it takes effect on their next screen — so it is also instantly
+            reversible if it was a mistake.</p>
+            <p>The People list shows each person's sectors, and flags anyone covering
+            <strong>None</strong>, because that is an account that will report nothing is
+            wrong while seeing nothing at all.</p>
+        </div>
+
+        <h3>One thing that does not move</h3>
+        <p>Payments stay with whoever took them. Hand a sector to somebody else and they
+        get the customers and the plans from that moment, but the revenue already
+        collected — and last year's figures — stay exactly as they were. Money is a record
+        of something that happened, not a view that can be rearranged.</p>
     </div>
 </div>
 </section>
@@ -503,7 +530,7 @@ code {
         <p>Two refusals are deliberate, and both explain themselves:</p>
         <ul>
             <li>A car <strong>already registered to somebody else</strong> — checked across
-            every franchise, because a car on another branch's books is still taken.
+            every sector, because a car on somebody else’s books is still taken.
             Finding that out at the payment step would be far worse.</li>
             <li>A car that <strong>already has a running plan</strong>, which is sent to
             renew instead. Two live plans on one car would be billed twice and cleaned once.</li>
@@ -554,7 +581,7 @@ code {
                 <tr><td class="name">Messages</td><td>What has been sent and to whom, plus sending one by hand — including society by society over WhatsApp.</td><td>Owners, admin</td></tr>
                 <tr><td class="name">Reports</td><td>Money, renewals, cloth balances, service history, over any period.</td><td>Owners, admin</td></tr>
                 <tr><td class="name">People</td><td>Staff accounts. A franchise owner may create cleaners; only an administrator creates owners or other administrators.</td><td>Owners, admin</td></tr>
-                <tr><td class="name">Masters</td><td>The price list and the geography: cities, areas, societies, sectors, car categories and models, packages, service types, durations, cloth bundles.</td><td>Admin</td></tr>
+                <tr><td class="name">Masters</td><td>The geography (states, cities, areas, sectors, societies); the price list (car types and models, packages, interior cleaning, durations, cloth bundles); and the website lists (banners, blog categories and tags, team, questions, message wording).</td><td>Admin</td></tr>
                 <tr><td class="name">Blog</td><td>The advice articles on the public site, with categories, tags and comments.</td><td>Admin</td></tr>
                 <tr><td class="name">Settings</td><td>Everything in section 10.</td><td>Admin</td></tr>
                 <tr><td class="name">Logs</td><td>The application log, readable without a server login.</td><td>Admin</td></tr>
@@ -673,7 +700,7 @@ code {
 
         <p>A custom role always <strong>refines</strong> one of the four: it starts from
         that role's permissions and takes things away or adds from within what that role
-        could already do. It can never grant sight of another branch. That limit is not
+        could already do. It can never grant sight of another sector. That limit is not
         a setting; there is no way to express it.</p>
     </div>
 </div>
@@ -857,6 +884,11 @@ code {
                     <td class="num-col">09:30</td>
                     <td class="name">Renewal reminders</td>
                     <td>Chases plans running out and plans overdue. After settlement, so a customer who paid last night is not chased for it.</td>
+                </tr>
+                <tr>
+                    <td class="num-col">19:00</td>
+                    <td class="name">The day's update</td>
+                    <td>One message per customer with what happened to each of their cars — cleaned, not cleaned and why, cloths collected or returned. The hour is a setting. This used to be four separate messages sent the moment the cleaner tapped, which on an early round is six in the morning, and a household with two cars was woken twice.</td>
                 </tr>
                 <tr>
                     <td class="num-col">10:00</td>
@@ -1050,13 +1082,14 @@ code {
             </tbody>
         </table>
 
-        <h3>What a franchise cannot see</h3>
-        <p>Branch separation is enforced at the point every query is made, not by
-        remembering to filter each screen. It is closed by default: a query that has not
-        been told which branch it belongs to returns nothing rather than everything. A
-        record belonging to another branch produces the same response as one that does
-        not exist, so refusing an answer never confirms that there was something to
-        refuse.</p>
+        <h3>What somebody cannot see</h3>
+        <p>Separation is enforced at the point every query is made, not by remembering to
+        filter each screen. It is closed by default: somebody covering no sectors sees
+        nothing rather than everything. A record in a sector they do not cover produces
+        the same response as one that does not exist, so refusing an answer never
+        confirms that there was something to refuse.</p>
+        <p>A customer with no sector recorded is visible only to an administrator, and
+        stays that way until one is given — which is why the form insists on it.</p>
 
         <h3>Signing in</h3>
         <p>Every account carried over from the previous system — customers, franchises

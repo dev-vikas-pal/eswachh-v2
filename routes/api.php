@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\AbandonedSignupController;
 use App\Http\Controllers\Api\V1\Admin\AlertController;
 use App\Http\Controllers\Api\V1\Admin\BackupController;
 use App\Http\Controllers\Api\V1\Admin\ClothController;
@@ -114,6 +115,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // phone numbers and payment references.
     Route::get('logs', [LogController::class, 'index']);
     Route::get('logs/{date}', [LogController::class, 'show']);
+    // Emptying a day, for when a noisy job has buried everything else.
+    Route::delete('logs/{date}', [LogController::class, 'destroy']);
 
     // Your own password. No user id in the route: the account being changed is
     // the one signed in.
@@ -213,6 +216,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('complaints', [ComplaintController::class, 'store'])->middleware('can:create.complaint');
     Route::get('complaints/{complaint}', [ComplaintController::class, 'show'])->middleware('can:view.complaint');
     Route::post('complaints/{complaint}/assign', [ComplaintController::class, 'assign']);
+    // Several at once, for the ones auto-assignment could not route.
+    Route::post('complaints-bulk/assign', [ComplaintController::class, 'assignMany']);
     Route::post('complaints/{complaint}/notes', [ComplaintController::class, 'addNote']);
     Route::post('complaints/{complaint}/resolve', [ComplaintController::class, 'resolve']);
     Route::post('complaints/{complaint}/reopen', [ComplaintController::class, 'reopen']);
@@ -261,6 +266,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // What has been said to customers. 'Did we tell them?' is asked on every
     // chasing call, and a log file is not an answer.
     Route::get('reminders', [ReminderController::class, 'index']);
+
+    // People who reached the payment page and stopped. The warmest call the
+    // office will make all week.
+    Route::get('abandoned-signups', AbandonedSignupController::class);
 
     Route::get('reports', [ReportController::class, 'index']);
     Route::get('reports/revenue', [ReportController::class, 'revenue']);

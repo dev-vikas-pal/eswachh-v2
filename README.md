@@ -1,59 +1,124 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Eswachh
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Doorstep car cleaning, sold as a subscription. One system with three doors into
+it: a public site, an office, and a customer's own pages.
 
-## About Laravel
+This is v2 — a rebuild of the previous Laravel 10 / nwidart-modules system,
+carrying its data and its logins across.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| | |
+|---|---|
+| **Back end** | Laravel 12 · PHP 8.2+ · MySQL |
+| **Front end** | Vue 3.5 · TypeScript 5.9 · Vite 7 · Pinia · TanStack Query · Tailwind 4 |
+| **Auth** | Sanctum, SPA cookie |
+| **Payments** | Razorpay |
+| **Messaging** | WhatsApp via MSG91 |
+| **Tests** | 395 passing, 1102 assertions, ~65s |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Getting it running
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+composer setup     # composer, .env, key, migrate, npm, build
+php artisan db:seed
+composer dev       # server + queue + log tail + vite, all four
+```
 
-## Learning Laravel
+Two things in `.env` are not optional:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+- **`APP_TIMEZONE=Asia/Kolkata`** — v1 ran on it. On UTC every imported
+  timestamp is out by five and a half hours and date filters silently find
+  nothing.
+- **`DB_CONNECTION=mysql`** — the importer reads a v1 database directly. The
+  working database is `u841499718_eswachh_testing_v2`; the suite has its own
+  (`..._phpunit`) because it drops every table.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+`php artisan eswachh:check-integrations` will tell you whether payments and
+messaging are wired up and, when they are not, what is stopping them.
 
-## Laravel Sponsors
+## The three doors
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+| URL | Who | Bundle |
+|---|---|---|
+| `/` | Anybody | `resources/js/site` |
+| `/app` | Administrators, franchise owners, cleaners | `resources/js/admin` |
+| `/my` | Customers | `resources/js/portal`, shipped inside the admin bundle |
 
-### Premium Partners
+Signing in at `/login` sends a person to whichever of the last two is theirs.
+The role decides; nobody chooses.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Documentation
 
-## Contributing
+| | |
+|---|---|
+| [`docs/admin-guide.pdf`](docs/admin-guide.pdf) | What the system does, screen by screen — for owners, administrators, and explaining it to a client. Includes what is built but deliberately switched off. |
+| [`docs/developer-guide.pdf`](docs/developer-guide.pdf) | Where every flag lives, what to edit for a given change, the conventions, and the bugs this codebase has already had. Read section 13 before anything else. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The short version of how the code is filed. |
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Both PDFs are generated from the HTML beside them. Edit the HTML and re-render:
 
-## Code of Conduct
+```bash
+chrome --headless --disable-gpu --no-pdf-header-footer \
+       --print-to-pdf=docs/admin-guide.pdf docs/admin-guide.html
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Who sees what
 
-## Security Vulnerabilities
+A **sector is the territory**. Staff are assigned sectors through `user_sector`;
+a customer sits in one sector; a record is visible when those two meet.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```
+users ──< user_sector >── sectors ──< customers ──< subscriptions
+```
 
-## License
+There is no franchise entity above this, and nothing is copied onto the customer,
+so handing a sector to somebody else is one pivot row and takes effect on their
+next request. Territory is assigned on the **People** screen.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The one exception is money: `payments.sector_id` is stamped at capture and never
+recomputed, so revenue already collected stays with whoever collected it.
+
+Fail closed is the rule that matters — covering nothing returns nothing, never
+everything. `tests/Feature/SectorScopeTest.php` pins it.
+
+## Two rules that are not negotiable
+
+**No amount ever comes from a request.** Every price is worked out from the
+masters by `Domain\Pricing\PriceBook`, on the server, at the moment it is
+charged. The figure the browser shows is a quote and is thrown away. v1 read
+`final_price` straight from the form.
+
+**Nothing is marked paid except a verified callback.** Signup, renewal, top-up
+and add-a-car all open a payment and stop. `Domain\Billing\RecordPayment` moves
+it, and only after the Razorpay signature checks out and the gateway confirms
+what it holds.
+
+## Messages never leave a non-production copy
+
+`Messenger::deliveryEnabled()` requires production *and* `WHATSAPP_ENABLED`, and
+returns false during tests whatever the configuration says. Everywhere else a
+message is written to the `messages` table exactly as it would have been sent,
+with the reason it was held back. A demonstration against real data cannot
+message a real customer.
+
+## Tests
+
+```bash
+php artisan test                            # all of them
+php artisan test --filter=AddSecondCarTest  # one file
+npx vue-tsc --noEmit                        # the front end
+```
+
+`tests/Concerns/MigratesOnlyWhenStale` skips `migrate:fresh` when the test
+database already matches every migration on disk — 217s down to about 47.
+Adding a migration rebuilds it automatically.
+
+Use `vue-tsc` rather than `npm run build` while working; `npm run dev` is
+normally already running and a build fights it.
+
+## Working on this repository
+
+- **Don't commit.** The owner commits manually.
+- Finish the whole task, then run `php artisan test` once — not after each step.
+- Don't edit PHP through shell heredocs or node scripts. Passing PHP through a
+  shell strips `$` sigils and `\` namespace separators, silently producing
+  `AppModelsPayment`. It has caused real bugs here.

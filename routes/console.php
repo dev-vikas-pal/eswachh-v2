@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\SendDailySummary;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -33,6 +34,24 @@ Artisan::command('inspire', function () {
  */
 Schedule::command('eswachh:reconcile-payments --days=7')
     ->dailyAt('00:20')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->runInBackground();
+
+/*
+ * The day's round, told once, at an hour somebody is awake.
+ *
+ * Every outcome the cleaner records used to message the customer the moment
+ * they tapped it - six in the morning on an early round, and twice over for a
+ * household with two cars. Nothing in it is urgent, so it waits.
+ *
+ * Runs hourly and does its own work only in the configured hour, because the
+ * hour is a setting the business can move without a release, and a schedule
+ * fixed at boot could not follow it.
+ */
+Schedule::command('eswachh:send-daily-summary')
+    ->hourly()
+    ->when(fn () => (int) now()->format('G') === SendDailySummary::hour())
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();

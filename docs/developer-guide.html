@@ -284,7 +284,7 @@ td.path { font-family: var(--mono); font-size: 8pt; color: var(--deep); word-bre
 
     <dl>
         <dt>Stack</dt><dd>Laravel 12 · PHP 8.2+ · Vue 3.5 · TypeScript 5.9 · Vite 7 · Pinia · TanStack Query · Tailwind 4 · MySQL</dd>
-        <dt>Suite</dt><dd>303 tests, 806 assertions, ~47s</dd>
+        <dt>Suite</dt><dd>395 tests, 1102 assertions, ~65s</dd>
         <dt>Companion</dt><dd>admin-guide.pdf, for what the system does and why</dd>
         <dt>Revised</dt><dd>15 August 2026</dd>
     </dl>
@@ -298,7 +298,7 @@ td.path { font-family: var(--mono); font-size: 8pt; color: var(--deep); word-bre
     <ol>
         <li><div><span class="t">Getting it running</span><span class="d">From clone to a working local copy</span></div></li>
         <li><div><span class="t">How the code is arranged</span><span class="d">Filed by audience, not by resource</span></div></li>
-        <li><div><span class="t">Branch scoping</span><span class="d">Fail-closed tenancy, and why it answers 404</span></div></li>
+        <li><div><span class="t">Sector scoping</span><span class="d">Territory as tenancy, fail-closed, and why it answers 404</span></div></li>
         <li><div><span class="t">Roles and abilities</span><span class="d">In code, not in tables — and custom roles on top</span></div></li>
         <li><div><span class="t">Money</span><span class="d">Paise, PriceBook, and the two unbreakable rules</span></div></li>
         <li><div><span class="t">Messaging</span><span class="d">The delivery gate, templates, and the dedupe key</span></div></li>
@@ -443,54 +443,110 @@ composer dev</code></pre>
 <section>
 <div class="head">
     <span class="eyebrow">Section 03</span>
-    <h2>Branch scoping</h2>
+    <h2>Sector scoping</h2>
 </div>
 
 <div class="sheet">
     <div class="rail"><div class="num">3.1</div></div>
     <div class="flow">
-        <div class="where"><b>app/Support/Tenancy/BranchContext.php</b> · app/Models/Concerns/BelongsToBranch.php</div>
+        <div class="where"><b>app/Support/Tenancy/SectorContext.php</b> &middot; app/Models/Concerns/ScopedToSectors.php</div>
 
-        <p class="lede">Multi-tenancy is a global scope applied by a trait, and it is
-        <strong>fail-closed</strong>: a query that has not established which branch it
-        belongs to returns nothing, never everything.</p>
+        <p class="lede">A <strong>sector is the territory</strong>, and it is the whole of
+        tenancy. Staff are assigned sectors through <code>user_sector</code>; a customer
+        sits in one sector; a record is visible when those two meet.</p>
 
-<pre><code>BranchContext::currentBranchId()      <span class="c">// null for an admin, the id otherwise</span>
-BranchContext::isRestricted()         <span class="c">// false only for super_admin</span>
-BranchContext::withoutScope(fn () =&gt; ...)   <span class="c">// masters, cross-branch checks</span>
-BranchContext::forBranch($id, fn () =&gt; ...) <span class="c">// jobs, importers, tests</span>
-BranchContext::forBranchOrAll($id, fn () =&gt; ...)
-BranchContext::reset()                <span class="c">// tests, in setUp and tearDown</span></code></pre>
+<pre><code>users &mdash;&lt; user_sector &gt;&mdash; sectors &mdash;&lt; customers &mdash;&lt; subscriptions &mdash;&lt; service_logs
+                                     &there4; vehicles, complaints, cloth_entries</code></pre>
 
-        <p>Put <code>use BelongsToBranch;</code> on any model with a
-        <code>branch_id</code> and the scope applies everywhere, including relations and
-        counts. There is no "else" branch anywhere that means unrestricted.</p>
+        <p>One rule: <strong>a customer is visible to whoever covers the sector the
+        customer sits in.</strong> Nothing is copied onto the customer, so reassigning a
+        sector is one pivot row and takes effect on the next request.</p>
+
+<pre><code>SectorContext::currentSectorIds()     <span class="c">// null for an admin, their ids otherwise</span>
+SectorContext::currentCustomerId()    <span class="c">// set only when the viewer IS a customer</span>
+SectorContext::isRestricted()         <span class="c">// false only for super_admin</span>
+SectorContext::withoutScope(fn () =&gt; ...)   <span class="c">// masters, cross-sector checks</span>
+SectorContext::forSectors($ids, fn () =&gt; ...) <span class="c">// jobs, importers, tests</span>
+SectorContext::forget($userId)        <span class="c">// after their assignment changes</span>
+SectorContext::reset()                <span class="c">// tests, in setUp and tearDown</span></code></pre>
+
+        <div class="danger">
+            <span class="eyebrow">currentSectorIds answers null inside withoutScope</span>
+            <p>Null means "ask nothing of this query", which is right for the scope and
+            wrong everywhere else. Called inside an unscoped block it turned every
+            franchise user's own territory into an empty list on <code>/me</code>. Resolve
+            it <em>before</em> lifting the scope.</p>
+        </div>
+
+        <h3>What each model declares</h3>
+        <p>Put <code>use ScopedToSectors;</code> on a model and it reduces to "which
+        customers may this viewer see". Three tables do not and say so in
+        <code>sectorScope()</code>:</p>
+        <table>
+            <thead><tr><th class="narrow">Table</th><th>Scoped by</th></tr></thead>
+            <tbody>
+                <tr><td class="path">payments</td><td>A <strong>stamped</strong> <code>sector_id</code>, written at capture and never recomputed. A payment records something that happened, so who took the money does not change when territory is rearranged &mdash; hand a sector over and the new holder gets the customers and the plans, but last year's figures do not change shape.</td></tr>
+                <tr><td class="path">attendances</td><td><code>cleaner_id</code> against the staff covering the viewer's sectors &mdash; the same pivot, asked from the other end.</td></tr>
+                <tr><td class="path">sectors</td><td>Their own id: you see the ones you are assigned.</td></tr>
+            </tbody>
+        </table>
 
         <div class="note">
             <span class="eyebrow">404, not 403</span>
-            <p>A record belonging to another branch must produce the same response as one
-            that never existed. A 403 confirms there is something there to be refused,
-            which is itself a leak — it tells a franchise owner that a car number belongs to
-            somebody, somewhere.</p>
+            <p>A record in another sector must produce the same response as one that never
+            existed. A 403 confirms there is something there to be refused, which is itself
+            a leak &mdash; it tells a franchise user that a car number belongs to somebody,
+            somewhere.</p>
         </div>
+    </div>
+</div>
 
-        <h3>When to use withoutScope</h3>
-        <p>Only for things that are genuinely shared, and always with a comment saying
-        why. Two legitimate uses in the codebase today:</p>
+<div class="sheet">
+    <div class="rail"><div class="num">3.2</div></div>
+    <div class="flow">
+        <h3>Three rules that are easy to get wrong</h3>
         <ul>
-            <li><strong>Masters.</strong> Every franchise sells from the same price list.
-            This is also the only reason a quote works on the public site, where there is
-            no signed-in user at all.</li>
-            <li><strong>Uniqueness of a car number.</strong> A car on another branch's books
-            is still taken, so <code>AddPlanController</code> and the signup flow both check
-            across every branch before refusing.</li>
+            <li><strong>Fail closed.</strong> Covering nothing returns nothing, never
+            everything. That is the difference between a quiet screen and a leak.</li>
+            <li><strong>A customer with no <code>sector_id</code> belongs to nobody</strong>
+            until one is given. SQL <code>IN</code> never matches null, so the rule needs no
+            special case &mdash; but <code>sector_id</code> is therefore <em>required</em>
+            when the office creates a customer, or it silently makes an invisible one.</li>
+            <li><strong>A customer is never in the pivot.</strong> Their territory comes
+            from their address; an assignment would let them see their neighbours. The
+            scope asks <code>currentCustomerId()</code> first and narrows to their own
+            records instead.</li>
         </ul>
 
-        <h3>Sectors and societies</h3>
-        <p>A branch owns many sectors; a sector holds societies. A franchise covering four
-        societies simply has four sectors attached to its branch, so multi-sector
-        franchises need no special code. Assigning a sector's branch is an administrator
-        action on the Masters screen.</p>
+        <h3>Assigning territory</h3>
+        <p>On the <strong>person</strong>, under People &mdash; that is the moment it
+        matters, because an account created without a sector signs in to empty screens.
+        The Sectors screen reports who covers each one but does not edit it.</p>
+        <p>Nobody hands out territory they do not hold: a franchise owner adding a cleaner
+        can only give them sectors from their own, or assigning a colleague elsewhere would
+        be a way to read another franchise's customers through them.</p>
+
+        <h3>When to use withoutScope</h3>
+        <p>Only for things that are genuinely shared, and always with a comment saying why:
+        <strong>masters</strong> (every franchise sells from the same price list, and this
+        is why a quote works on the public site with nobody signed in), and
+        <strong>uniqueness of a car number</strong>, since a car on another sector's books
+        is still taken.</p>
+
+        <div class="plain">
+            <p>The scope's own subqueries use the query builder rather than Eloquent,
+            deliberately: they run inside the global scope that would otherwise call them
+            again, and they must see soft-deleted rows so withdrawing a society does not
+            hide its customers from the person still servicing them.</p>
+        </div>
+
+        <h3>What this replaced</h3>
+        <p>A <code>branch_id</code> copied onto the customer and onto everything of theirs.
+        That column was a cache of where somebody lived, and it went stale: a sector was
+        pointed at another franchise and two hundred customers stayed in the old owner's
+        books while the sector claimed otherwise, with nothing anywhere reporting the
+        disagreement. The columns are still on the tables, nullable and unread, until the
+        model has run long enough to be trusted.</p>
     </div>
 </div>
 </section>
@@ -952,7 +1008,7 @@ Route::view('/{any?}', 'site')
 <div class="sheet">
     <div class="rail"><div class="num">11.1</div></div>
     <div class="flow">
-<pre><code>php artisan test                                  <span class="c"># all 303</span>
+<pre><code>php artisan test                                  <span class="c"># all 395</span>
 php artisan test --filter=AddSecondCarTest        <span class="c"># one file</span>
 npx vue-tsc --noEmit                              <span class="c"># the front end</span></code></pre>
 
@@ -975,17 +1031,18 @@ npx vue-tsc --noEmit                              <span class="c"># the front en
             <thead><tr><th class="narrow">Test</th><th>Catches</th></tr></thead>
             <tbody>
                 <tr><td class="path">Support/ClassNamesResolveTest</td><td>Walks <code>app/</code> and fails if any referenced class name will not resolve. It exists because a missing <code>use Log;</code> made complaint creation return 500 <em>after</em> successfully creating the complaint.</td></tr>
+                <tr><td class="path">Api/MasterListingTest</td><td>Walks <code>MasterRegistry</code> and opens every master, with and without filters. A master added later is covered the day it is added, without anybody remembering to come back.</td></tr>
                 <tr><td class="path">BranchScopeTest</td><td>That the tenancy scope is still fail-closed.</td></tr>
             </tbody>
         </table>
 
         <h3>Writing one</h3>
         <ul>
-            <li><code>BranchContext::reset()</code> in both <code>setUp</code> and
+            <li><code>SectorContext::reset()</code> in both <code>setUp</code> and
             <code>tearDown</code>. Leaked branch state makes an unrelated test fail later and
             somewhere else.</li>
             <li><code>fromSpa()</code> when the route needs the Origin header.</li>
-            <li>Assert reads through <code>BranchContext::withoutScope()</code>, or the scope
+            <li>Assert reads through <code>SectorContext::withoutScope()</code>, or the scope
             will hide the row you just created.</li>
             <li>Any paying route gets a "price is not taken from the request" test.</li>
         </ul>
@@ -1061,6 +1118,40 @@ npx vue-tsc --noEmit                              <span class="c"># the front en
         touched the row and pushed the expiry forward, so a code lived forever. Migration
         <code>0001_01_01_000022</code> changes it to <code>DATETIME</code> and spends the
         outstanding ones. <strong>Never use <code>TIMESTAMP</code> for an expiry.</strong></p>
+
+        <h3>Two hundred customers in the wrong books</h3>
+        <p>A sector was pointed at another franchise and nothing anybody could see
+        changed. Every record carried its own <code>branch_id</code> &mdash; a copy of
+        where the customer lived &mdash; and that copy was what the scope read, so the
+        picker appeared to work while two hundred customers stayed put and the new owner
+        signed in to a screen of zeroes.</p>
+        <p>A cache of a derived fact will drift, and nothing was comparing the two. The
+        fix was to stop storing it: territory is now worked out from
+        <code>customers.sector_id</code> against <code>user_sector</code> on every query.
+        See section 03.</p>
+
+        <div class="danger">
+            <span class="eyebrow">PowerShell will corrupt your files</span>
+            <p>Two ways, both silent. <code>Set-Content -Encoding utf8</code> on 5.1 writes
+            a <strong>BOM</strong>, and PHP will not parse a file that starts with one &mdash;
+            62 files at once. And a <code>-replace</code> round-trip through
+            <code>ReadAllText</code>/<code>WriteAllText</code> mangled every non-ASCII
+            character in eight more, turning <code>&hellip;</code> into mojibake that a
+            second "repair" pass made worse.</p>
+            <p>Use <code>sed</code>, which is byte-oriented, or the editor. If a file is
+            already mangled, restore it from git rather than trying to decode it back.</p>
+        </div>
+
+        <h3>Every master list at once</h3>
+        <p>A variable that the listing closure never captured —
+        <code>use ($definition, $filters)</code> where the body also wanted
+        <code>$request</code>. One line, and it took out all twenty masters
+        simultaneously: the price list, the geography, the banners, the templates.
+        The screen said "Something went wrong" and the reason was only in the log.</p>
+        <p>PHP closures capture explicitly, so this class of mistake is silent until the
+        line runs. It shipped because the Masters screen had <em>no test at all</em> —
+        the single most load-bearing screen in the system, and nothing opened it.
+        <code>MasterListingTest</code> now walks the registry.</p>
 
         <h3>The missing use statement</h3>
         <p>A complaint was created and then the notification's own catch block threw,

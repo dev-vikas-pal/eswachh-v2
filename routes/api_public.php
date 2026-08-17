@@ -62,16 +62,25 @@ Route::middleware('throttle:120,1')->prefix('public')->group(function () {
      * Signing up.
      *
      * The only unauthenticated route that creates records, so the number is
-     * proved with a code first and both halves are throttled hard. The price is
-     * the server's, worked out from the masters that were chosen.
+     * proved with a code first and the price is the server's, worked out from
+     * the masters that were chosen.
+     *
+     * The two halves are throttled differently on purpose. Asking for a code
+     * sends a message and costs money, so it stays tight - and it is limited
+     * per number and per address inside the controller as well. Submitting the
+     * form sends nothing and creates nothing until every check has passed, and
+     * a customer correcting a car number, an address and a typo can easily need
+     * five or six attempts. At ten per five minutes they were being locked out
+     * of their own signup for getting something wrong, which reads as the site
+     * being broken.
      */
     Route::post('signup/code', [SignupController::class, 'requestCode'])->middleware('throttle:10,5');
-    Route::post('signup', [SignupController::class, 'store'])->middleware('throttle:10,5');
+    Route::post('signup', [SignupController::class, 'store'])->middleware('throttle:40,5');
 
     // Topping up cloths by quoting a car number, as v1 had it.
     Route::post('cloth/lookup', [ClothTopUpController::class, 'lookup'])->middleware('throttle:10,5');
-    Route::post('cloth/pay', [ClothTopUpController::class, 'pay'])->middleware('throttle:10,5');
+    Route::post('cloth/pay', [ClothTopUpController::class, 'pay'])->middleware('throttle:40,5');
 
     Route::post('renew/lookup', [RenewalController::class, 'lookup'])->middleware('throttle:10,5');
-    Route::post('renew/pay', [RenewalController::class, 'payWithoutSigningIn'])->middleware('throttle:10,5');
+    Route::post('renew/pay', [RenewalController::class, 'payWithoutSigningIn'])->middleware('throttle:40,5');
 });

@@ -24,13 +24,26 @@
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <!--
+            Its own log file. The suite provokes failures on purpose, and they
+            were landing in the daily file the Logs screen reads - two hundred
+            test entries against nine real ones, all of them alarming and none
+            of them real.
+        -->
+        <env name="LOG_CHANNEL" value="testing"/>
+        <env name="LOG_STACK" value="testing"/>
+        <!--
             Tests run on MySQL, not sqlite, so they exercise the same engine and
             the same char(36) key behaviour as production. This database is
             dedicated to the suite: RefreshDatabase drops every table in it, so
             it must never be the one .env points at.
         -->
         <env name="DB_CONNECTION" value="mysql"/>
-        <env name="DB_DATABASE" value="eswachh_v2_testing"/>
+        <!--
+            Its own database, never the one the site runs on: the suite drops
+            and rebuilds every table, so pointing this at a working copy would
+            delete it on the next `php artisan test`.
+        -->
+        <env name="DB_DATABASE" value="u841499718_eswachh_testing_v2_phpunit"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
