@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
 import {
     deleteRole, fetchCatalogue, fetchRoles, saveRole,
     type CustomRole, type RoleInput,
@@ -98,7 +99,7 @@ async function save() {
             editing.value?.id,
         );
 
-        await queryClient.invalidateQueries({ queryKey: ['roles'] });
+        await refreshAfter(queryClient, 'roles');
         notice.value = 'Saved.';
         close();
     } catch (e) {
@@ -120,7 +121,7 @@ async function remove(role: CustomRole) {
 
     try {
         notice.value = await deleteRole(role.id);
-        await queryClient.invalidateQueries({ queryKey: ['roles'] });
+        await refreshAfter(queryClient, 'roles');
     } catch (e) {
         problem.value = describeError(e).message;
     } finally {

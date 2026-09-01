@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
 import { useAuthStore } from '@/shared/stores/auth';
 
 /**
@@ -50,7 +51,14 @@ const form = ref({
 const lastPayment = computed(() => existing.value?.last_payment ?? null);
 
 const customerSearch = ref('');
-const chosenCustomer = ref<{ id: string; name: string; phone: string | null; sector: string | null } | null>(null);
+const chosenCustomer = ref<{
+    id: string;
+    name: string;
+    phone: string | null;
+    sector: string | null;
+    // Where they live, which carries the surcharge the price depends on.
+    society_id?: string | null;
+} | null>(null);
 const saving = ref(false);
 const error = ref<string | null>(null);
 
@@ -75,22 +83,6 @@ const { data: cleaners } = useQuery({
     staleTime: 5 * 60 * 1000,
 });
 
-/** A quote, refreshed whenever the plan changes. Display only. */
-const { data: quote, isFetching: pricing } = useQuery({
-    queryKey: computed(() => [
-        'quote', form.value.vehicle_model_id, form.value.package_id,
-        form.value.service_type_id, form.value.duration_id, form.value.cloth_bundle_id,
-    ]),
-    enabled: computed(() => !!form.value.duration_id),
-    queryFn: async () => (await api.post('/pricing/quote', {
-        vehicle_model_id: form.value.vehicle_model_id || null,
-        package_id: form.value.package_id || null,
-        service_type_id: form.value.service_type_id || null,
-        duration_id: form.value.duration_id,
-        cloth_bundle_id: form.value.cloth_bundle_id || null,
-    })).data.data,
-});
-
 /**
  * Load the plan being edited.
  *
@@ -103,6 +95,55 @@ const { data: existing } = useQuery({
     queryFn: async () => (await api.get(`/subscriptions/${props.subscriptionId}`)).data.data,
 });
 
+/**
+ * Where the customer lives, which is part of what the plan costs.
+ *
+ * Either the plan being edited or the customer just picked for a new one.
+ */
+const societyId = computed<string | null>(
+    () => existing.value?.customer?.society_id ?? chosenCustomer.value?.society_id ?? null,
+);
+
+/**
+ * A quote, refreshed whenever the plan changes. Display only.
+ *
+ * The society goes with it. Without it this priced the plan as though the
+ * customer lived nowhere in particular: the panel showed ₹699 for a plan that
+ * was ₹779, and the office had no way to tell which of the two figures was
+ * wrong - the ₹80 missing from it is a surcharge that is not mentioned
+ * anywhere on this screen.
+ */
+const { data: quote, isFetching: pricing } = useQuery({
+    queryKey: computed(() => [
+        'quote', form.value.vehicle_model_id, form.value.package_id,
+        form.value.service_type_id, form.value.duration_id, form.value.cloth_bundle_id,
+        societyId.value,
+    ]),
+    enabled: computed(() => !!form.value.duration_id),
+    queryFn: async () => (await api.post('/pricing/quote', {
+        vehicle_model_id: form.value.vehicle_model_id || null,
+        package_id: form.value.package_id || null,
+        service_type_id: form.value.service_type_id || null,
+        duration_id: form.value.duration_id,
+        society_id: societyId.value,
+        cloth_bundle_id: form.value.cloth_bundle_id || null,
+    })).data.data,
+});
+
+/*
+ * Fill the form from the plan - including when the plan is already in hand.
+ *
+ * `immediate` is the whole point. The query is cached by plan id, so the second
+ * time somebody opens this dialog for the same plan the data is there before
+ * the watcher is even registered: nothing changes, the watcher never fires, and
+ * the form opens completely blank. Every dropdown on Choose…, no car number, no
+ * price. It looks exactly like a plan that has lost its details, and saving from
+ * that state is the obvious next thing somebody does.
+ *
+ * It showed up as "open the payment window, cancel it, then press Edit" only
+ * because that sequence involves opening the dialog twice. Opening it twice with
+ * nothing in between does it just as reliably.
+ */
 watch(existing, (plan) => {
     if (!plan) return;
 
@@ -124,7 +165,7 @@ watch(existing, (plan) => {
         // The server sends a full timestamp; the date input wants a day.
         payment_paid_at: (plan.last_payment?.paid_at ?? '').slice(0, 10),
     };
-});
+}, { immediate: true });
 
 watch(chosenCustomer, (c) => {
     form.value.customer_id = c?.id ?? '';
@@ -184,7 +225,7 @@ async function save() {
             await api.post('/subscriptions', payload);
         }
 
-        await queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        await refreshAfter(queryClient, 'subscriptions', 'customers');
         emit('saved');
     } catch (e) {
         error.value = describeError(e).message;

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useQueryClient } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
 
 /**
  * Recording money taken outside the gateway.
@@ -61,8 +62,7 @@ async function record() {
             ? `Recorded. The plan is now ${data.subscription.status} to ${data.subscription.period_end}.`
             : 'Recorded. The plan was left as it was.';
 
-        await queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
-        await queryClient.invalidateQueries({ queryKey: ['payments'] });
+        await refreshAfter(queryClient, 'payments');
         emit('recorded');
     } catch (e) {
         error.value = describeError(e).message;

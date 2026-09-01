@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/shared/stores/auth';
 import { assignRole, fetchRoles } from '@/admin/shared/roles.api';
 
@@ -49,7 +51,7 @@ async function applyRole(userId: string, event: Event) {
 
     try {
         roleNotice.value = await assignRole(userId, roleId || null);
-        await queryClient.invalidateQueries({ queryKey: ['users'] });
+        await refreshAfter(queryClient, 'people');
     } catch (e) {
         roleNotice.value = describeError(e).message;
     }
@@ -67,6 +69,22 @@ const form = ref<{
 }>({ name: '', email: '', phone: '', role: '', branch_id: '', password: '', status: true, sector_ids: [] });
 const formError = ref<string | null>(null);
 const saving = ref(false);
+
+/**
+ * Arriving from the dashboard's Cleaners tile, or a bookmark.
+ *
+ * Read once, then left alone - the role box is an ordinary control afterwards.
+ */
+const route = useRoute();
+
+watch(
+    () => route.query,
+    (query) => {
+        if (typeof query.role === 'string') roleFilter.value = query.role;
+        if (typeof query.search === 'string') search.value = query.search;
+    },
+    { immediate: true },
+);
 
 watch([search, roleFilter, includeRemoved], () => { page.value = 1; });
 
@@ -159,7 +177,7 @@ async function save() {
             await api.post('/users', payload);
         }
         editing.value = null;
-        await queryClient.invalidateQueries({ queryKey: ['users'] });
+        await refreshAfter(queryClient, 'people');
     } catch (e) {
         formError.value = describeError(e).message;
     } finally {
@@ -172,7 +190,7 @@ async function removeAccess(row: UserRow) {
 
     try {
         await api.delete(`/users/${row.id}`);
-        await queryClient.invalidateQueries({ queryKey: ['users'] });
+        await refreshAfter(queryClient, 'people');
     } catch (e) {
         alert(describeError(e).message);
     }
@@ -180,7 +198,7 @@ async function removeAccess(row: UserRow) {
 
 async function restore(row: UserRow) {
     await api.post(`/users/${row.id}/restore`);
-    await queryClient.invalidateQueries({ queryKey: ['users'] });
+    await refreshAfter(queryClient, 'people');
 }
 
 const roleFilters = [

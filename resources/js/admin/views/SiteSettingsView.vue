@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { useAuthStore } from '@/shared/stores/auth';
 import RichTextEditor from '@/admin/components/RichTextEditor.vue';
 
 interface Field { key: string; label: string; value: string; long: boolean; rich: boolean; boolean: boolean }
@@ -35,7 +36,18 @@ async function save() {
     try {
         await api.patch('/site-settings', form.value);
         saved.value = true;
-        await refetch();
+
+        /*
+         * Some of these settings decide what the application is, not just what
+         * it says: switching the blog, the team page or the cloth service off
+         * removes screens, menu items and routes.
+         *
+         * Those are drawn from the flags that arrived with the session, so
+         * without this the menu went on offering a screen the server had just
+         * started refusing - and the only way to see the change was a full
+         * reload, which nobody thinks to do after pressing Save.
+         */
+        await Promise.all([refetch(), useAuthStore().loadSession()]);
     } catch (e) {
         error.value = describeError(e).message;
     } finally {

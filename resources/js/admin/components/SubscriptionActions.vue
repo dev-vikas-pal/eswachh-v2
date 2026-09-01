@@ -2,9 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
 import { payForSubscription } from '@/shared/api/checkout';
 import RecordPaymentPanel from '@/admin/components/RecordPaymentPanel.vue';
 import SubscriptionPaymentsPanel from '@/shared/SubscriptionPaymentsPanel.vue';
+import RenewalNotice, { type RenewalTiming } from '@/shared/RenewalNotice.vue';
 import { useAuthStore } from '@/shared/stores/auth';
 
 /**
@@ -13,7 +15,24 @@ import { useAuthStore } from '@/shared/stores/auth';
  * A menu rather than three buttons per row: a table with three controls on
  * every line is unreadable, and these are all occasional actions.
  */
-const props = defineProps<{ subscriptionId: string; status: string; car: string; amount?: number; customerName?: string; customerPhone?: string }>();
+const props = defineProps<{
+    subscriptionId: string;
+    status: string;
+    car: string;
+    amount?: number;
+    customerName?: string;
+    customerPhone?: string;
+    /**
+     * Where the plan stands against its end date.
+     *
+     * Shown above the two payment options rather than left to whoever is on the
+     * phone to work out from the Renews column. Taking money on a plan with
+     * four months still to run is a fine thing to do and is not stopped - but
+     * doing it without noticing is how a customer gets told the wrong thing
+     * about when their cleaning runs to.
+     */
+    timing?: RenewalTiming | null;
+}>();
 
 const emit = defineEmits<{ (e: 'edit'): void }>();
 const recording = ref(false);
@@ -80,7 +99,10 @@ const { data: cleaners } = useQuery({
     queryFn: async () => (await api.get(`/subscriptions/${props.subscriptionId}/cleaners`)).data,
 });
 
-async function run(fn: () => Promise<string>) {
+/**
+ * @param sticky  Stays until dismissed, rather than clearing itself.
+ */
+async function run(fn: () => Promise<string>, sticky = false) {
     busy.value = true;
     notice.value = null;
     error.value = null;
@@ -99,12 +121,22 @@ async function run(fn: () => Promise<string>) {
         open.value = false;
         picking.value = false;
 
-        // Clears itself, so it does not sit on the screen for the rest of the
-        // afternoon. Long enough to read, and closeable if it is in the way.
-        const shown = notice.value;
-        setTimeout(() => { if (notice.value === shown) notice.value = null; }, 6000);
+        /*
+         * Assigning a cleaner clears itself after a few seconds; a payment does
+         * not.
+         *
+         * They are not the same kind of news. "Cleaner assigned" is worth a
+         * glance and then it is in the way, but somebody who has just taken
+         * money over the phone is usually still on that phone, and the
+         * confirmation was disappearing while they were reading the invoice
+         * number out. It looked exactly like the payment had not gone through.
+         */
+        if (! sticky) {
+            const shown = notice.value;
+            setTimeout(() => { if (notice.value === shown) notice.value = null; }, 6000);
+        }
 
-        await queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+        await refreshAfter(queryClient, 'subscriptions');
     } catch (e) {
         error.value = e instanceof Error && !(e as any).response ? e.message : describeError(e).message;
     } finally {
@@ -127,9 +159,14 @@ const takePayment = () => run(async () => {
 
     if (!result.ok) throw new Error(result.message);
 
-    await queryClient.invalidateQueries({ queryKey: ['payments'] });
-    return result.message;
-});
+    await refreshAfter(queryClient, 'payments');
+
+    // The invoice number with it, because the person taking the payment is
+    // usually reading it back to somebody on the phone.
+    return result.payment?.invoice_number
+        ? `${result.message} Invoice ${result.payment.invoice_number}.`
+        : result.message;
+}, true);
 
 const remind = () => run(async () => (await api.post(`/subscriptions/${props.subscriptionId}/remind`, {})).data.message);
 
@@ -172,6 +209,14 @@ const setStatus = (status: string) => run(async () =>
                     Edit this plan
                     <span class="block text-xs text-faint">Package, cleaning type, dates, cleaner</span>
                 </button>
+
+                <!-- Said once, above both ways of taking money. -->
+                <RenewalNotice
+                    v-if="timing && (timing.overdue || timing.early)"
+                    :timing="timing"
+                    audience="office"
+                    class="mx-1 mb-1 mt-1 !text-xs"
+                />
 
                 <button
                     v-if="auth.can('view.payment')"

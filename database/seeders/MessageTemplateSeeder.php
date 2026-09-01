@@ -287,9 +287,15 @@ class MessageTemplateSeeder extends Seeder
                 'provider_template' => 'eswachh_payment_receipt',
                 // Not offered in the bulk picker: a receipt for money that was
                 // not just taken is worse than no receipt.
+                //
+                // {paid_amount} rather than {amount}: the first is what was
+                // taken, the second is what the plan costs today, and on a
+                // receipt those are not interchangeable.
                 'body' => "Dear {name},\n"
-                    ."We have received Rs {amount} for {car}.\n"
+                    ."We have received Rs {paid_amount} for {car} on {paid_on}.\n"
+                    ."Receipt no - {invoice_number}\n"
                     ."The plan now runs to {renew_date}.\n"
+                    ."Your bill: {invoice_link}\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => false,
             ],

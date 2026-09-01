@@ -2,7 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { api } from '@/shared/api/client';
-import { payForRenewal } from '@/shared/api/checkout';
+import { payForRenewal, type PaymentReceipt } from '@/shared/api/checkout';
+import RenewalNotice, { type RenewalTiming } from '@/shared/RenewalNotice.vue';
 import type { PortalPlan } from '@/portal/portal.api';
 
 /**
@@ -18,7 +19,18 @@ import type { PortalPlan } from '@/portal/portal.api';
  * payment is opened.
  */
 const props = defineProps<{ plan: PortalPlan; clothServiceOn: boolean }>();
-const emit = defineEmits<{ (e: 'close'): void; (e: 'done'): void }>();
+
+const emit = defineEmits<{
+    (e: 'close'): void;
+    /**
+     * Paid, with the receipt.
+     *
+     * Carried out of here rather than left behind: the panel closes on success,
+     * and a customer who has just been charged should not be returned to the
+     * same list with no acknowledgement that anything happened.
+     */
+    (e: 'done', receipt: PaymentReceipt | undefined): void;
+}>();
 
 const busy = ref(false);
 const problem = ref<string | null>(null);
@@ -54,18 +66,29 @@ watch(current, (plan) => {
     };
 }, { immediate: true });
 
-/** A quote, refreshed as the choices change. Display only. */
+/**
+ * A quote, refreshed as the choices change. Display only.
+ *
+ * The society goes with it. Without it this priced the plan as though the
+ * customer lived nowhere in particular, dropped the surcharge their address
+ * carries, and showed a total the payment window then disagreed with - which
+ * is the one moment in the whole flow where a surprise is least affordable.
+ */
 const { data: quote, isFetching: pricing } = useQuery({
     queryKey: computed(() => ['quote', 'renew', props.plan.id, ...Object.values(choice.value)]),
-    enabled: computed(() => !!choice.value.duration_id),
+    enabled: computed(() => !!choice.value.duration_id && !!current.value),
     queryFn: async () => (await api.post('/public/quote', {
         vehicle_model_id: current.value?.vehicle?.vehicle_model_id ?? null,
+        society_id: current.value?.customer?.society_id ?? null,
         package_id: choice.value.package_id || null,
         service_type_id: choice.value.service_type_id || null,
         duration_id: choice.value.duration_id,
         cloth_bundle_id: props.clothServiceOn ? (choice.value.cloth_bundle_id || null) : null,
     })).data.data,
 });
+
+/** Where the plan stands against its end date, from the plan itself. */
+const timing = computed<RenewalTiming | null>(() => current.value?.timing ?? null);
 
 async function pay() {
     busy.value = true;
@@ -88,7 +111,7 @@ async function pay() {
     busy.value = false;
 
     if (result.ok) {
-        emit('done');
+        emit('done', result.payment);
         return;
     }
 
@@ -109,6 +132,13 @@ function money(rupees: number): string {
             <p class="mt-1 text-sm text-muted">
                 Keep what you have, or change it before you pay.
             </p>
+
+            <!--
+                Whether this is early, due or overdue - said before the form
+                rather than after it, because it changes whether somebody wants
+                to be on this screen at all.
+            -->
+            <RenewalNotice :timing="timing" class="mt-4" />
 
             <div class="mt-4 flex flex-col gap-3">
                 <label class="block">

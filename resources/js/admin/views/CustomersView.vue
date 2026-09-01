@@ -2,6 +2,8 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/shared/stores/auth';
 import SortableHeader from '@/admin/components/SortableHeader.vue';
 
@@ -34,6 +36,18 @@ const detail = ref<string | null>(null);
 const form = ref<Record<string, unknown>>({});
 const formError = ref<string | null>(null);
 const saving = ref(false);
+
+/** Filters carried in from elsewhere, read once on arrival. */
+const route = useRoute();
+
+watch(
+    () => route.query,
+    (query) => {
+        if (query.with_active === '1') activeOnly.value = true;
+        if (typeof query.search === 'string') search.value = query.search;
+    },
+    { immediate: true },
+);
 
 watch([search, activeOnly, sort, direction], () => { page.value = 1; });
 
@@ -161,8 +175,7 @@ async function addVehicle() {
         addingCar.value = false;
 
         // Both lists move: the panel gains a car and the table's count changes.
-        await queryClient.invalidateQueries({ queryKey: ['customer', detail.value] });
-        await queryClient.invalidateQueries({ queryKey: ['customers'] });
+        await refreshAfter(queryClient, 'customers');
     } catch (e) {
         carError.value = describeError(e).message;
     } finally {
@@ -176,8 +189,7 @@ async function removeVehicle(id: string, registration: string) {
 
     try {
         await api.delete(`/customers/${detail.value}/vehicles/${id}`);
-        await queryClient.invalidateQueries({ queryKey: ['customer', detail.value] });
-        await queryClient.invalidateQueries({ queryKey: ['customers'] });
+        await refreshAfter(queryClient, 'customers');
     } catch (e) {
         // Refused while a plan is running against it, which is the message
         // worth showing rather than a generic failure.
@@ -260,7 +272,7 @@ async function save() {
             await api.post('/customers', form.value);
         }
         editing.value = null;
-        await queryClient.invalidateQueries({ queryKey: ['customers'] });
+        await refreshAfter(queryClient, 'customers');
     } catch (e) {
         formError.value = describeError(e).message;
     } finally {

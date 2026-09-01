@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api, describeError } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
 
 /**
  * Cloths: collecting them and giving them back.
@@ -57,7 +58,7 @@ async function collect() {
         found.value = null;
         registration.value = '';
 
-        await queryClient.invalidateQueries({ queryKey: ['cloth'] });
+        await refreshAfter(queryClient, 'cloth');
     } catch (e) {
         problem.value = describeError(e).message;
     } finally {
@@ -107,7 +108,7 @@ async function deliver() {
         notice.value = `${done} delivery/deliveries recorded.`;
         returning.value = {};
 
-        await queryClient.invalidateQueries({ queryKey: ['cloth'] });
+        await refreshAfter(queryClient, 'cloth');
     } catch (e) {
         problem.value = `${describeError(e).message} ${done} were recorded before this.`;
     } finally {

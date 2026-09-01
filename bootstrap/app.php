@@ -40,6 +40,17 @@ return Application::configure(basePath: dirname(__DIR__))
         // Every API response is JSON, including auth failures. Without this a
         // 401 redirects to a login route that does not exist here.
         $middleware->redirectGuestsTo(fn () => null);
+
+        /*
+         * Whole features the business has switched off - `feature:blog`.
+         *
+         * Registered as an alias so it reads as part of the route definition,
+         * which is where somebody adding an endpoint to a gated group will
+         * actually look.
+         */
+        $middleware->alias([
+            'feature' => \App\Http\Middleware\RequiresFeature::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         /*

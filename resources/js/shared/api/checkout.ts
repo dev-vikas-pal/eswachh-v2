@@ -1,4 +1,5 @@
 import { api, describeError } from '@/shared/api/client';
+import { setPaymentPhase } from '@/shared/paymentProgress';
 
 /**
  * Taking a payment in the browser.
@@ -74,6 +75,34 @@ function loadRazorpay(): Promise<void> {
 }
 
 /**
+ * Ask our server to open a payment, then hand off to the gateway.
+ *
+ * Every flow below is the same two steps and differs only in what it posts, so
+ * they share one of these. That matters beyond tidiness: the phase the progress
+ * sheet reads is set here, and a flow written without it would take somebody's
+ * money behind an unmarked screen.
+ */
+export async function openThenPay(
+    open: () => Promise<{ data: { data: Checkout } }>,
+    customer: { name?: string; email?: string; phone?: string } = {},
+): Promise<PaymentResult> {
+    setPaymentPhase('opening');
+
+    let checkout: Checkout;
+
+    try {
+        const { data } = await open();
+        checkout = data.data;
+    } catch (error) {
+        setPaymentPhase('idle');
+
+        return { ok: false, message: describeError(error).message };
+    }
+
+    return completeCheckout(checkout, customer);
+}
+
+/**
  * @param subscriptionId  What is being paid for
  * @param customer        Prefilled into the dialog, so nobody retypes it
  */
@@ -81,16 +110,7 @@ export async function payForSubscription(
     subscriptionId: string,
     customer: { name?: string; email?: string; phone?: string } = {},
 ): Promise<PaymentResult> {
-    let checkout: Checkout;
-
-    try {
-        const { data } = await api.post(`/subscriptions/${subscriptionId}/pay`);
-        checkout = data.data;
-    } catch (error) {
-        return { ok: false, message: describeError(error).message };
-    }
-
-    return completeCheckout(checkout, customer);
+    return openThenPay(() => api.post(`/subscriptions/${subscriptionId}/pay`), customer);
 }
 
 /**
@@ -127,22 +147,35 @@ export async function completeCheckout(
     if (checkout.simulated) {
         // No gateway on this machine. The server refuses this the moment a
         // real gateway is configured, so it cannot leak into production.
+        setPaymentPhase('confirming');
+
         try {
             const { data } = await api.post(`/payments/${checkout.payment_id}/simulate`);
             return { ok: true, message: data.message ?? 'Payment recorded.', payment: receiptFrom(data) };
         } catch (error) {
             return { ok: false, message: describeError(error).message };
+        } finally {
+            setPaymentPhase('idle');
         }
     }
 
     try {
         await loadRazorpay();
     } catch {
+        setPaymentPhase('idle');
+
         return {
             ok: false,
             message: 'The payment window could not be opened. Check your connection and try again.',
         };
     }
+
+    /*
+     * The gateway draws its own dialog, so our sheet comes down for as long as
+     * it is up. Covering it would block the very thing the customer has been
+     * asked to use.
+     */
+    setPaymentPhase('gateway');
 
     return new Promise<PaymentResult>((resolve) => {
         const razorpay = new window.Razorpay!({
@@ -160,6 +193,14 @@ export async function completeCheckout(
             theme: { color: '#EA580C' },
 
             handler: async (response: Record<string, string>) => {
+                /*
+                 * The money has been taken. Everything from here to the reply
+                 * below is the window where a refresh leaves a customer charged
+                 * and looking at a page that never said so, which is what the
+                 * sheet is there to prevent.
+                 */
+                setPaymentPhase('confirming');
+
                 /*
                  * What the dialog returns is not proof of anything. It is
                  * posted to our callback, which checks the signature and asks
@@ -183,15 +224,21 @@ export async function completeCheckout(
                             describeError(error).message
                             + ' If money has left your account it will be applied automatically.',
                     });
+                } finally {
+                    setPaymentPhase('idle');
                 }
             },
 
             modal: {
-                ondismiss: () => resolve({
-                    ok: false,
-                    cancelled: true,
-                    message: 'Payment cancelled. Nothing has been charged.',
-                }),
+                ondismiss: () => {
+                    setPaymentPhase('idle');
+
+                    resolve({
+                        ok: false,
+                        cancelled: true,
+                        message: 'Payment cancelled. Nothing has been charged.',
+                    });
+                },
             },
         });
 
@@ -219,16 +266,7 @@ export async function payForRenewal(
      */
     choices: Record<string, string | null> = {},
 ): Promise<PaymentResult> {
-    let checkout: Checkout;
-
-    try {
-        const { data } = await api.post(`/subscriptions/${subscriptionId}/renew`, choices);
-        checkout = data.data;
-    } catch (error) {
-        return { ok: false, message: describeError(error).message };
-    }
-
-    return completeCheckout(checkout, customer);
+    return openThenPay(() => api.post(`/subscriptions/${subscriptionId}/renew`, choices), customer);
 }
 
 /** Buy another bundle of cloths for a running plan. */
@@ -237,18 +275,10 @@ export async function payForClothTopUp(
     clothBundleId: string,
     customer: { name?: string; email?: string; phone?: string } = {},
 ): Promise<PaymentResult> {
-    let checkout: Checkout;
-
-    try {
-        const { data } = await api.post(`/subscriptions/${subscriptionId}/top-up`, {
-            cloth_bundle_id: clothBundleId,
-        });
-        checkout = data.data;
-    } catch (error) {
-        return { ok: false, message: describeError(error).message };
-    }
-
-    return completeCheckout(checkout, customer);
+    return openThenPay(
+        () => api.post(`/subscriptions/${subscriptionId}/top-up`, { cloth_bundle_id: clothBundleId }),
+        customer,
+    );
 }
 
 /**
@@ -262,16 +292,7 @@ export async function payForNewPlan(
     plan: Record<string, string | null>,
     customer: { name?: string; email?: string; phone?: string } = {},
 ): Promise<PaymentResult> {
-    let checkout: Checkout;
-
-    try {
-        const { data } = await api.post('/portal/plans', plan);
-        checkout = data.data;
-    } catch (error) {
-        return { ok: false, message: describeError(error).message };
-    }
-
-    return completeCheckout(checkout, customer);
+    return openThenPay(() => api.post('/portal/plans', plan), customer);
 }
 
 /**
@@ -286,21 +307,11 @@ export async function payForClothTopUpByCar(
     registration: string,
     clothBundleId: string,
 ): Promise<PaymentResult> {
-    let checkout: Checkout;
-
-    try {
-        const { data } = await api.post('/public/cloth/pay', {
-            subscription_id: subscriptionId,
-            registration,
-            cloth_bundle_id: clothBundleId,
-        });
-
-        checkout = data.data;
-    } catch (error) {
-        return { ok: false, message: describeError(error).message };
-    }
-
-    return completeCheckout(checkout, {});
+    return openThenPay(() => api.post('/public/cloth/pay', {
+        subscription_id: subscriptionId,
+        registration,
+        cloth_bundle_id: clothBundleId,
+    }));
 }
 
 /**
@@ -314,17 +325,8 @@ export async function payForFoundPlan(
     subscriptionId: string,
     registration: string,
 ): Promise<PaymentResult> {
-    let checkout: Checkout;
-
-    try {
-        const { data } = await api.post('/public/renew/pay', {
-            subscription_id: subscriptionId,
-            registration,
-        });
-        checkout = data.data;
-    } catch (error) {
-        return { ok: false, message: describeError(error).message };
-    }
-
-    return completeCheckout(checkout, {});
+    return openThenPay(() => api.post('/public/renew/pay', {
+        subscription_id: subscriptionId,
+        registration,
+    }));
 }

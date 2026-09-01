@@ -88,6 +88,64 @@ class ImportLegacyData extends Command
             return self::FAILURE;
         }
 
+        /*
+         * Is there anywhere to put it?
+         *
+         * Checked because the failure without it is genuinely misleading. The
+         * first thing this command does with any record is ask the legacy map
+         * whether it has been imported before - so against an empty database
+         * the error names `legacy_references`, as though that one table were
+         * missing, when in fact none of them exist yet. Somebody reasonably
+         * concludes the map table failed to migrate and goes looking for a
+         * broken migration.
+         */
+        if (! Schema::hasTable('legacy_references')) {
+            $this->error('This database has no tables yet, so there is nowhere to import to.');
+            $this->newLine();
+            $this->line('  Run these first, in this order:');
+            $this->line('    <fg=cyan>php artisan migrate</>    the tables');
+            $this->line('    <fg=cyan>php artisan db:seed</>    an administrator to sign in as, and the words on the site');
+            $this->newLine();
+            $this->line('  Then this command again. Importing on top of a seeded database is');
+            $this->line('  expected - the seeder creates no masters and no customers.');
+
+            return self::FAILURE;
+        }
+
+        /*
+         * Is what it is pointed at actually v1?
+         *
+         * Reachable is not the same as right, and the way this goes wrong is
+         * quiet: LEGACY_DB_DATABASE gets pointed at a v2 database - an old
+         * working copy, a backup, the database this command last imported into
+         * - and every one of those connects perfectly well. The command then
+         * reads `states` from a schema that has a `states` table of its own and
+         * gets partway through importing v2 data into v2 before anything looks
+         * obviously wrong.
+         *
+         * `orders` is the tell. v1 kept subscriptions there; v2 has no such
+         * table and never will.
+         */
+        $missing = array_values(array_filter(
+            ['orders', 'carcategories', 'payment_history'],
+            fn (string $table) => ! Schema::connection('legacy')->hasTable($table),
+        ));
+
+        if ($missing !== []) {
+            $legacy = config('database.connections.legacy.database');
+
+            $this->error("LEGACY_DB_DATABASE points at '{$legacy}', which is not a v1 database.");
+            $this->newLine();
+            $this->line('  Missing v1 tables: <fg=yellow>'.implode(', ', $missing).'</>');
+            $this->newLine();
+            $this->line('  This wants the <fg=cyan>old</> system\'s database - the one with `orders` in it -');
+            $this->line('  not a copy of this one. Pointing it at a v2 database connects fine and');
+            $this->line('  then imports nonsense, which is why it is checked here rather than found');
+            $this->line('  out later.');
+
+            return self::FAILURE;
+        }
+
         if ($this->dryRun) {
             $this->warn('Dry run: nothing will be written.');
         }
@@ -650,7 +708,7 @@ class ImportLegacyData extends Command
                 continue;
             }
 
-            $gatewayPaymentId = $this->blankToNull($row->payment_id);
+            $gatewayPaymentId = $this->blankToNull($this->column($row, 'payment_id'));
 
             if (! $gatewayPaymentId) {
                 $withoutGatewayId++;
@@ -668,15 +726,15 @@ class ImportLegacyData extends Command
                 'amount_paise' => $this->toPaise($row->payment_amount ?? 0),
                 'currency' => $row->currency ?: 'INR',
                 'gateway' => strtolower((string) ($row->payment_gateway ?: 'razorpay')),
-                'gateway_order_id' => $this->blankToNull($row->razorpay_order_id),
+                'gateway_order_id' => $this->blankToNull($this->column($row, 'razorpay_order_id')),
                 'gateway_payment_id' => $gatewayPaymentId,
                 'method' => $this->blankToNull($row->payment_method),
                 'reference' => $this->blankToNull($row->transaction_id),
                 // The date v1 recorded, kept exactly. Not touched again: the
                 // column that used to rewrite itself on every update is gone.
                 'paid_at' => $this->toDate($row->payment_date_time),
-                'verified_by' => LegacyMap::find('user', $row->verified_by),
-                'verified_at' => $this->toDate($row->verified_at),
+                'verified_by' => LegacyMap::find('user', $this->column($row, 'verified_by')),
+                'verified_at' => $this->toDate($this->column($row, 'verified_at')),
                 'notes' => $this->blankToNull($row->additional_notes),
             ]));
         }
@@ -705,6 +763,25 @@ class ImportLegacyData extends Command
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * A column that may not be in this copy of v1.
+     *
+     * v1 was not one schema. The columns Razorpay needed - the gateway payment
+     * id, the order id - and the two that record who confirmed a payment by
+     * hand were added to `payment_history` part way through its life, so an
+     * older backup has the table without them.
+     *
+     * Reading one of those directly is a fatal error seven steps into an import
+     * that has already written the customers, the cars and the plans, which is
+     * the worst place to stop: the destination is half full and the command
+     * cannot tell you that all it lost was an optional column. Missing is
+     * treated as empty, which is exactly what it means - v1 did not record it.
+     */
+    private function column(object $row, string $name): mixed
+    {
+        return $row->{$name} ?? null;
+    }
 
     private function blankToNull(mixed $value): ?string
     {

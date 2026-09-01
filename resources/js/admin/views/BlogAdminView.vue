@@ -74,6 +74,12 @@ const { data: editing } = useQuery({
     queryFn: async () => (await api.get(`/posts/${editingId.value}`)).data.data,
 });
 
+/*
+ * `immediate` guards the same trap that opened the plan editor blank: a query
+ * whose key is already cached hands its data over before the watcher is
+ * registered, so nothing ever changes and nothing ever fills the form. It costs
+ * one no-op call here and removes the possibility.
+ */
 watch(editing, (post) => {
     if (!post) return;
     form.value = {
@@ -83,7 +89,7 @@ watch(editing, (post) => {
         post_category_id: post.category?.id ?? '',
         comments_open: post.comments_open ?? true,
     };
-});
+}, { immediate: true });
 
 function startNew() {
     formError.value = null;

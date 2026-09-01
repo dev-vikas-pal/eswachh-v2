@@ -3,7 +3,9 @@ import { computed, ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { fetchOverview, type PortalPlan } from '@/portal/portal.api';
 import { describeError } from '@/shared/api/client';
+import type { PaymentReceipt } from '@/shared/api/checkout';
 import SubscriptionPaymentsPanel from '@/shared/SubscriptionPaymentsPanel.vue';
+import RenewalNotice from '@/shared/RenewalNotice.vue';
 import RenewPlanPanel from '@/portal/RenewPlanPanel.vue';
 import ClothTopUpPanel from '@/portal/ClothTopUpPanel.vue';
 import AddCarPanel from '@/portal/AddCarPanel.vue';
@@ -25,6 +27,37 @@ const { data, isLoading, error, refetch } = useQuery({
 const busy = ref<string | null>(null);
 const problem = ref<string | null>(null);
 const outcome = ref<string | null>(null);
+
+/**
+ * What was just paid for, and what it cost. Cleared by hand.
+ *
+ * All three of the things a customer can pay for on this page land here -
+ * renewing, topping up cloths, adding a car. Before this the panel simply
+ * closed and the list refreshed underneath, which from the customer's side is
+ * indistinguishable from having been charged and told nothing.
+ */
+const paid = ref<{ what: string; car: string; receipt: PaymentReceipt | undefined } | null>(null);
+
+const money = (rupees: number) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(rupees);
+
+/**
+ * Close the panel, say what happened, and reload the plans.
+ *
+ * One function for all three payments so none of them can end differently
+ * from the others - which is how the top-up came to close in silence while the
+ * renewal did not.
+ */
+function confirm(
+    what: string,
+    car: string | null | undefined,
+    receipt: PaymentReceipt | undefined,
+    close: () => void,
+) {
+    paid.value = { what, car: car ?? 'Your plan', receipt };
+    close();
+    refetch();
+}
 
 /** Which plan has its payment history open. */
 const historyFor = ref<{ id: string; car: string | null } | null>(null);
@@ -99,6 +132,44 @@ function standing(plan: PortalPlan): { label: string; tone: string } {
                 {{ outcome }}
             </p>
 
+            <!--
+                A receipt, not a sentence, and it stays until it is closed.
+
+                Paying used to close the panel and return the customer to a
+                list that looked exactly as it had before, which from their side
+                is indistinguishable from having been charged and told nothing.
+                A confirmation that clears itself after a few seconds has the
+                same problem for anybody who looked away.
+            -->
+            <section v-if="paid" class="rounded-lg border border-ok bg-ok-soft p-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <svg class="h-6 w-6 shrink-0 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <div>
+                        <p class="font-semibold text-ink">
+                            <span class="uppercase">{{ paid.car }}</span> — {{ paid.what }}
+                        </p>
+                        <p class="text-sm text-body">
+                            <template v-if="paid.receipt">
+                                {{ money(paid.receipt.amount) }} paid<template v-if="paid.receipt.invoice_number">,
+                                invoice {{ paid.receipt.invoice_number }}</template>.
+                            </template>
+                            <template v-else>Payment received.</template>
+                            The card below is up to date.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="ms-auto rounded border border-line-strong bg-surface px-3 py-1.5 text-sm text-body transition hover:bg-sunk"
+                        @click="paid = null"
+                    >
+                        Close
+                    </button>
+                </div>
+            </section>
+
             <p v-if="!plans.length" class="rounded border border-line bg-surface px-4 py-6 text-center text-sm text-muted">
                 There is nothing on your account yet. Once the office sets up your plan it will appear here.
             </p>
@@ -168,6 +239,17 @@ function standing(plan: PortalPlan): { label: string; tone: string } {
                     </div>
                 </dl>
 
+                <!--
+                    Only when it needs saying. A plan sitting comfortably in
+                    date with months to run does not need a paragraph about it,
+                    and a notice on every card is a notice nobody reads.
+                -->
+                <RenewalNotice
+                    v-if="plan.status.value !== 'ended' && (plan.timing?.overdue || plan.timing?.due_today)"
+                    :timing="plan.timing"
+                    class="mt-3"
+                />
+
                 <div class="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
                     <button
                         v-if="plan.status.value !== 'ended'"
@@ -226,14 +308,14 @@ function standing(plan: PortalPlan): { label: string; tone: string } {
             :plan="renewing"
             :cloth-service-on="clothServiceOn"
             @close="renewing = null"
-            @done="renewing = null; refetch()"
+            @done="(receipt) => confirm('renewed', renewing?.vehicle?.registration, receipt, () => (renewing = null))"
         />
 
         <ClothTopUpPanel
             v-if="toppingUp"
             :plan="toppingUp"
             @close="toppingUp = null"
-            @done="toppingUp = null; refetch()"
+            @done="(receipt) => confirm('cloths topped up', toppingUp?.vehicle?.registration, receipt, () => (toppingUp = null))"
         />
 
         <AddCarPanel
@@ -241,7 +323,7 @@ function standing(plan: PortalPlan): { label: string; tone: string } {
             :cloth-service-on="clothServiceOn"
             :profile="data?.profile"
             @close="addingCar = false"
-            @done="addingCar = false; refetch()"
+            @done="(receipt, registration) => confirm('added to your account', registration, receipt, () => (addingCar = false))"
         />
     </div>
 </template>

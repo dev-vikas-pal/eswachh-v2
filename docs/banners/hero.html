@@ -1,0 +1,316 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    /*
+       The home page banners: water beading on a freshly cleaned car flank.
+
+       Rendered to 2400x1000 PNGs with headless Chrome, one per palette:
+
+           chrome --headless=new --window-size=2400,1000 \
+                  --screenshot=out.png "hero.html?p=dusk"
+
+       Drawn rather than photographed, and drawn on the subject rather than
+       around it. What the banner master held before was stock - a laptop with
+       a padlock on it, an office meeting, and a purple circuit-board pattern -
+       none of which has anything to do with cleaning a car, and all of which
+       say "template" to anybody who has seen a website before.
+
+       This is the one image the business could own: the moment just after the
+       wash, close enough that the beads are the subject. Each has to work as a
+       full-bleed background under white text sitting on the LEFT, so the left
+       third is kept dark and free of detail and everything with structure in
+       it is pushed right of centre.
+    */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body { width: 2400px; height: 1000px; overflow: hidden; background: #0B0908; }
+
+    .stage { position: relative; width: 2400px; height: 1000px; overflow: hidden; }
+
+    /*
+       The paintwork.
+
+       A dark body colour lit from the upper right, the way a car sits under a
+       low sun. The two stops close together near the top are the horizon
+       reflected in the panel - it is that hard edge, more than any amount of
+       gloss, that makes a surface read as automotive.
+    */
+    .panel { position: absolute; inset: 0; background: var(--panel); }
+
+    /* The light source itself, off the top right corner. */
+    .sun {
+        position: absolute;
+        right: -120px;
+        top: -320px;
+        width: 1600px;
+        height: 1100px;
+        background: radial-gradient(closest-side, var(--sun-core), var(--sun-mid) 45%, transparent 76%);
+        filter: blur(40px);
+    }
+
+    /*
+       The body line: the crease that runs the length of a car's flank,
+       catching light along its whole length. Held off the left edge so it does
+       not cut across the headline.
+    */
+    .crease {
+        position: absolute;
+        left: 24%;
+        right: -6%;
+        top: 40%;
+        height: 9px;
+        background: linear-gradient(to right, transparent, var(--crease-a) 34%, var(--crease-b) 56%, var(--crease-a) 78%, transparent);
+        /*
+           Softer than a hairline. At two pixels of blur this read as a scratch
+           down the panel rather than as light gathering along an edge - the
+           difference between a car that has just been polished and one that
+           has been keyed.
+        */
+        filter: blur(7px);
+        transform: rotate(-4.2deg);
+    }
+
+    .crease-soft {
+        position: absolute;
+        left: 18%;
+        right: -8%;
+        top: 40.6%;
+        height: 90px;
+        background: linear-gradient(to right, transparent, var(--crease-wash) 50%, transparent);
+        filter: blur(28px);
+        transform: rotate(-4.2deg);
+    }
+
+    /* A cool reflection low on the panel, so it is not all one colour. */
+    .sky {
+        position: absolute;
+        left: 30%;
+        right: -10%;
+        bottom: -160px;
+        height: 620px;
+        background: radial-gradient(60% 80% at 55% 40%, var(--sky) , transparent 72%);
+        filter: blur(50px);
+    }
+
+    #beads { position: absolute; inset: 0; }
+
+    /*
+       One bead.
+
+       Three things in the same element, which is what makes it read as water
+       rather than as a dot: a bright specular pin high-left where the light
+       is, the darker refracted body of the drop, and a lit lower-right rim
+       where light has passed through and come back out.
+    */
+    .bead {
+        position: absolute;
+        border-radius: 50%;
+        background:
+            radial-gradient(circle at 32% 26%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.35) 12%, transparent 30%),
+            radial-gradient(circle at 68% 76%, var(--bead-warm) 0%, transparent 42%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,0.10) 0%, var(--bead-body) 62%, var(--bead-edge) 100%);
+        box-shadow:
+            inset 0 -1px 2px var(--bead-rim),
+            0 2px 4px rgba(0, 0, 0, 0.35);
+    }
+
+    /* A few beads have run, as they do on a vertical panel. */
+    .run {
+        position: absolute;
+        border-radius: 999px;
+        background: linear-gradient(to bottom, rgba(255,255,255,0.28), var(--bead-warm) 60%, transparent);
+        filter: blur(0.6px);
+    }
+
+    /*
+       The left third stays dark so the headline has somewhere to live.
+       Laid over everything, deliberately.
+    */
+    .text-side {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to right,
+            var(--ink) 0%,
+            color-mix(in srgb, var(--ink) 95%, transparent) 20%,
+            color-mix(in srgb, var(--ink) 72%, transparent) 36%,
+            color-mix(in srgb, var(--ink) 28%, transparent) 52%,
+            transparent 66%);
+    }
+
+    .vignette {
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(130% 120% at 55% 45%, transparent 48%, rgba(0, 0, 0, 0.62) 100%),
+            linear-gradient(to top, rgba(0,0,0,0.45), transparent 32%);
+    }
+</style>
+</head>
+<body>
+<div class="stage">
+    <div class="panel"></div>
+    <div class="sun"></div>
+    <div class="sky"></div>
+    <div class="crease-soft"></div>
+    <div class="crease"></div>
+
+    <div id="beads"></div>
+
+    <div class="text-side"></div>
+    <div class="vignette"></div>
+</div>
+
+<script>
+/*
+   Three palettes off one composition.
+
+   The slider runs several banners and they should look like a set rather than
+   like three unrelated pictures - same light, same beads, same geometry, moved
+   round the clock. "dusk" is the default and carries the brand orange; the
+   other two exist so the monsoon banner and the everyday one are not the same
+   picture with different words on top.
+*/
+const PALETTES = {
+    // Low sun on the brand's own orange. The default.
+    dusk: {
+        panel: 'linear-gradient(168deg, #2B1508 0%, #6E3410 13%, #C2591A 20%, #7A3A12 25%, #2A1608 38%, #170F0B 58%, #100B09 78%, #1B120C 100%)',
+        sunCore: 'rgba(255, 176, 84, 0.62)', sunMid: 'rgba(234, 88, 12, 0.24)',
+        creaseA: 'rgba(255, 214, 170, 0.55)', creaseB: 'rgba(255, 236, 214, 0.72)',
+        creaseWash: 'rgba(255, 190, 130, 0.18)',
+        sky: 'rgba(56, 132, 190, 0.22)',
+        beadWarm: 'rgba(255, 208, 160, 0.55)', beadBody: 'rgba(120, 70, 40, 0.16)',
+        beadEdge: 'rgba(30, 16, 10, 0.30)', beadRim: 'rgba(255, 225, 200, 0.35)',
+        ink: '#0C0806',
+        wet: 1,
+    },
+    // Overcast and wet through. For the monsoon banner.
+    monsoon: {
+        panel: 'linear-gradient(168deg, #10171C 0%, #1E313C 13%, #3E6072 20%, #26404E 25%, #16242C 38%, #0E171C 58%, #0B1216 78%, #101A20 100%)',
+        sunCore: 'rgba(168, 214, 240, 0.42)', sunMid: 'rgba(96, 150, 190, 0.20)',
+        creaseA: 'rgba(198, 226, 244, 0.42)', creaseB: 'rgba(228, 244, 255, 0.62)',
+        creaseWash: 'rgba(150, 196, 226, 0.16)',
+        sky: 'rgba(40, 92, 130, 0.30)',
+        beadWarm: 'rgba(196, 228, 250, 0.55)', beadBody: 'rgba(40, 72, 92, 0.20)',
+        beadEdge: 'rgba(8, 18, 24, 0.34)', beadRim: 'rgba(210, 236, 255, 0.35)',
+        ink: '#080D10',
+        // Heavier: this is the one banner where the water is the weather
+        // rather than the wash.
+        wet: 1.5,
+    },
+    /*
+       After dark under a forecourt light. Cool, with the brand orange only
+       where the light actually falls - the fourth banner needed to be
+       recognisably one of this set without being a fourth sunset.
+    */
+    night: {
+        panel: 'linear-gradient(168deg, #0B1116 0%, #16242F 13%, #2C4A5E 20%, #1B3040 25%, #101C25 38%, #0A1015 58%, #080C10 78%, #0D1319 100%)',
+        sunCore: 'rgba(255, 186, 110, 0.34)', sunMid: 'rgba(234, 120, 40, 0.14)',
+        creaseA: 'rgba(255, 206, 152, 0.34)', creaseB: 'rgba(255, 232, 204, 0.56)',
+        creaseWash: 'rgba(230, 170, 110, 0.12)',
+        sky: 'rgba(34, 78, 112, 0.32)',
+        beadWarm: 'rgba(255, 204, 152, 0.48)', beadBody: 'rgba(36, 62, 82, 0.20)',
+        beadEdge: 'rgba(6, 12, 18, 0.34)', beadRim: 'rgba(224, 238, 255, 0.30)',
+        ink: '#070B0E',
+        wet: 1.15,
+    },
+    // First light, calmer. For the everyday banner.
+    dawn: {
+        panel: 'linear-gradient(168deg, #1C1710 0%, #4A3418 13%, #9A7434 20%, #5A431F 25%, #241C12 38%, #14100C 58%, #0F0C09 78%, #171309 100%)',
+        sunCore: 'rgba(255, 224, 158, 0.50)', sunMid: 'rgba(214, 156, 62, 0.20)',
+        creaseA: 'rgba(255, 234, 194, 0.44)', creaseB: 'rgba(255, 248, 226, 0.66)',
+        creaseWash: 'rgba(255, 220, 160, 0.14)',
+        sky: 'rgba(70, 120, 150, 0.18)',
+        beadWarm: 'rgba(255, 226, 178, 0.52)', beadBody: 'rgba(104, 80, 44, 0.16)',
+        beadEdge: 'rgba(26, 20, 10, 0.30)', beadRim: 'rgba(255, 238, 210, 0.32)',
+        ink: '#0A0806',
+        wet: 0.75,
+    },
+};
+
+const name = new URLSearchParams(location.search).get('p') || 'dusk';
+const p = PALETTES[name] || PALETTES.dusk;
+
+const root = document.documentElement.style;
+root.setProperty('--panel', p.panel);
+root.setProperty('--sun-core', p.sunCore);
+root.setProperty('--sun-mid', p.sunMid);
+root.setProperty('--crease-a', p.creaseA);
+root.setProperty('--crease-b', p.creaseB);
+root.setProperty('--crease-wash', p.creaseWash);
+root.setProperty('--sky', p.sky);
+root.setProperty('--bead-warm', p.beadWarm);
+root.setProperty('--bead-body', p.beadBody);
+root.setProperty('--bead-edge', p.beadEdge);
+root.setProperty('--bead-rim', p.beadRim);
+root.setProperty('--ink', p.ink);
+
+/*
+   Beads are generated rather than hand-placed: several hundred of them, and
+   the whole point is that no two are alike. Seeded off the palette name, so
+   re-rendering produces the same image every time - a hero that quietly
+   changes whenever somebody regenerates it is not an asset, it is a surprise -
+   while the three still differ from each other.
+*/
+let seed = 20260817 + [...name].reduce((a, c) => a + c.charCodeAt(0), 0) * 7919;
+const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+};
+
+const host = document.getElementById('beads');
+const W = 2400, H = 1000;
+
+for (let i = 0; i < Math.round(620 * p.wet); i++) {
+    /*
+       Weighted to the right and to the light.
+
+       Beads on the dark left would be invisible anyway, and crowding them
+       towards the lit half is also how it actually looks: the ones you can see
+       are the ones with light behind them.
+    */
+    const x = Math.pow(rand(), 0.55) * W * 1.02 + W * 0.06;
+    const y = rand() * H;
+
+    // Density falls away from the crease, where water gathers.
+    const nearCrease = 1 - Math.min(1, Math.abs(y - (H * 0.44 - (x - W * 0.3) * 0.07)) / 420);
+    if (rand() > 0.30 + nearCrease * 0.72) continue;
+
+    // Mostly small, occasionally a fat one that has gathered several others.
+    const r = rand();
+    const size = r > 0.975 ? 26 + rand() * 20
+               : r > 0.87  ? 14 + rand() * 12
+               : r > 0.55  ? 7 + rand() * 7
+               :             2.5 + rand() * 4.5;
+
+    const bead = document.createElement('div');
+    bead.className = 'bead';
+    bead.style.left = (x - size / 2) + 'px';
+    bead.style.top = (y - size / 2) + 'px';
+    bead.style.width = size + 'px';
+    bead.style.height = (size * (0.88 + rand() * 0.2)) + 'px';
+    bead.style.opacity = String(0.42 + Math.min(0.58, (x / W) * 0.72));
+    host.appendChild(bead);
+
+    /*
+       The big ones sometimes leave a trail.
+
+       Rare and faint on purpose. At a third of the big beads and full opacity
+       these stopped reading as water running down a panel and started reading
+       as scratches, or worse, as compression artefacts in the image.
+    */
+    if (size > 30 && rand() > 0.72) {
+        const run = document.createElement('div');
+        run.className = 'run';
+        run.style.left = (x - size * 0.10) + 'px';
+        run.style.top = (y + size * 0.34) + 'px';
+        run.style.width = Math.max(2, size * 0.22) + 'px';
+        run.style.height = (30 + rand() * 90) + 'px';
+        run.style.opacity = String(0.16 + rand() * 0.18);
+        host.appendChild(run);
+    }
+}
+</script>
+</body>
+</html>

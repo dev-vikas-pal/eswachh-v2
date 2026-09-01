@@ -57,22 +57,54 @@ export interface Money {
     formatted: string;
 }
 
+/**
+ * How a plan stands against its own end date.
+ *
+ * Mirrors Subscription::renewalTiming() on the server. The component that
+ * renders it re-exports this name, so a screen only has to import one of them.
+ */
+export interface RenewalTiming {
+    renews_on: string | null;
+    days_remaining: number | null;
+    early: boolean;
+    due_today: boolean;
+    overdue: boolean;
+    days_overdue: number;
+    /**
+     * What renewing right now would do to the dates.
+     *
+     * 'end_date' carries on from where the last term finished; 'today' starts
+     * afresh, which happens only when the plan is so far past its date that
+     * carrying on would issue a term that had already run out. Decided on the
+     * server because it depends on how long a term is.
+     */
+    starts_from: 'end_date' | 'today';
+    next_period_start: string;
+    next_period_end: string;
+}
+
 export interface Subscription {
     id: string;
     sequence: number;
     status: { value: string; label: string };
     is_expired: boolean;
     period: { start: string | null; end: string | null };
+    /**
+     * Early, due today, or overdue — worked out on the server so the four
+     * screens that offer a renewal cannot disagree about it.
+     */
+    timing: RenewalTiming;
     amount: Money;
     paid: Money;
     cloth: { enabled: boolean; balance: number };
     vehicle?: {
         id: string;
         registration: string;
+        vehicle_model_id?: string | null;
         model: string | null;
         cleaner: { id: string; name: string } | null;
     };
-    customer?: { id: string; name: string; phone: string | null };
+    customer?: { id: string; name: string; phone: string | null; society_id?: string | null };
     package?: string | null;
     /**
      * The most recent payment against this plan.

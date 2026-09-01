@@ -28,7 +28,17 @@ class SiteContentSeeder extends Seeder
                 'cta_route' => 'subscribe',
                 'secondary_label' => 'What is included',
                 'secondary_route' => 'packages',
-                'image_path' => '/images/banners/hero.png',
+                /*
+                 * Drawn for this business rather than bought in - water beading
+                 * on a lit panel, dark down the left so the headline has
+                 * somewhere to sit. What shipped here before was a stock
+                 * illustration of a laptop with a padlock on it, which is a
+                 * picture of a different company entirely.
+                 *
+                 * The source is docs/banners/hero.html: open it with ?p=dusk,
+                 * ?p=dawn, ?p=monsoon or ?p=night and screenshot at 2400x1000.
+                 */
+                'image_path' => '/images/banners/beaded-dusk.jpg',
                 'sort_order' => 0,
                 'status' => true,
             ]);
@@ -41,7 +51,7 @@ class SiteContentSeeder extends Seeder
                 'cta_route' => 'subscribe',
                 'secondary_label' => 'Meet the team',
                 'secondary_route' => 'team',
-                'image_path' => '/images/banners/daily-clean.jpg',
+                'image_path' => '/images/banners/beaded-dawn.jpg',
                 'sort_order' => 1,
                 'status' => true,
             ]);
@@ -54,7 +64,7 @@ class SiteContentSeeder extends Seeder
                 'cta_route' => 'subscribe',
                 'secondary_label' => 'Read the guide',
                 'secondary_route' => 'blog',
-                'image_path' => '/images/banners/monsoon.jpg',
+                'image_path' => '/images/banners/beaded-monsoon.jpg',
                 'sort_order' => 2,
                 'status' => true,
             ]);

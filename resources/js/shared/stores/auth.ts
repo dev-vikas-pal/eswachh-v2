@@ -17,6 +17,9 @@ export const useAuthStore = defineStore('auth', () => {
     const selectedSectorId = ref<string | null>(null);
     const ready = ref(false);
 
+    /** Which features the business is running. Arrives with the session. */
+    const features = ref<Record<string, boolean>>({});
+
     const isSignedIn = computed(() => user.value !== null);
     const canSwitchSector = computed(() => sectors.value.length > 1);
 
@@ -34,11 +37,27 @@ export const useAuthStore = defineStore('auth', () => {
         return user.value?.abilities.includes('*') || user.value?.abilities.includes(ability) || false;
     }
 
+    /**
+     * Is the business running this feature?
+     *
+     * A different question from `can`, and worth keeping separate: an ability
+     * says what this person is allowed to do, a feature says what the business
+     * does at all. No amount of permission brings back a blog that is switched
+     * off, and the server agrees - its endpoints answer 404.
+     *
+     * Optimistic before the session lands, so the menu does not shed items and
+     * put them back on first paint.
+     */
+    function featureOn(feature: string): boolean {
+        return features.value[feature] ?? !ready.value;
+    }
+
     async function loadSession(): Promise<void> {
         try {
             const { data } = await api.get('/me');
             user.value = data.data;
             sectors.value = data.sectors ?? [];
+            features.value = data.features ?? {};
 
             // Their theme and layout arrive with the session, so the interface
             // draws itself correctly on the first paint instead of flashing the
@@ -98,8 +117,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     return {
-        user, sectors, selectedSectorId, ready,
+        user, sectors, selectedSectorId, ready, features,
         isSignedIn, canSwitchSector, isCustomer,
-        can, loadSession, signIn, signOut, signInWithCode, requestCode, selectSector,
+        can, featureOn, loadSession, signIn, signOut, signInWithCode, requestCode, selectSector,
     };
 });

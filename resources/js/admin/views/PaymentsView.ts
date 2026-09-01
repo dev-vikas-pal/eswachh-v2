@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, keepPreviousData } from '@tanstack/vue-query';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { api } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/stores/auth';
 import type { Payment, PaymentPage } from '@/shared/types';
@@ -28,6 +28,26 @@ export function usePaymentsScreen() {
     const page = ref(1);
     const sort = ref('created');
     const direction = ref<'asc' | 'desc'>('asc');
+
+    /**
+     * Filters carried in from the dashboard's money block.
+     *
+     * Read once on arrival: after that these are ordinary controls, and a URL
+     * that kept forcing itself back would fight whoever tried to widen the
+     * range they had just been shown.
+     */
+    const route = useRoute();
+
+    watch(
+        () => route.query,
+        (query) => {
+            if (typeof query.status === 'string') status.value = query.status;
+            if (typeof query.from === 'string') from.value = query.from;
+            if (typeof query.to === 'string') to.value = query.to;
+            if (typeof query.search === 'string') search.value = query.search;
+        },
+        { immediate: true },
+    );
 
     const { data, isPending, isError, isFetching } = useQuery({
         queryKey: computed(() => [

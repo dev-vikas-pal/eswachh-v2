@@ -1,6 +1,7 @@
 import { computed, ref, type Ref } from 'vue';
 import { api, describeError, type ValidationErrors } from '@/shared/api/client';
 import { completeCheckout, type Checkout, type PaymentReceipt } from '@/shared/api/checkout';
+import { setPaymentPhase } from '@/shared/paymentProgress';
 import { useCodeCooldown } from '@/shared/useCodeCooldown';
 
 /**
@@ -177,6 +178,11 @@ export function useSignup(form: Ref<SignupForm>) {
 
         let checkout: Checkout;
 
+        // The screen is held from here, not from when the gateway appears: the
+        // plan is being created on the server and the customer should not be
+        // pressing the button again while it is.
+        setPaymentPhase('opening');
+
         try {
             const { data } = await api.post('/public/signup', {
                 ...form.value,
@@ -189,6 +195,7 @@ export function useSignup(form: Ref<SignupForm>) {
 
             checkout = data.data;
         } catch (e) {
+            setPaymentPhase('idle');
             fail(e);
             busy.value = false;
 

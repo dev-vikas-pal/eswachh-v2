@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Site;
 
 use App\Http\Controllers\Controller;
+use App\Support\Settings\Features;
 use App\Models\Area;
 use App\Models\Banner;
 use App\Models\City;
@@ -201,6 +202,16 @@ class CatalogueController extends Controller
                  * checkbox rather than a release.
                  */
                 'cloth_service' => (bool) SiteSettings::get('cloth_service_enabled'),
+
+                /*
+                 * Every switchable feature, so the site can draw its menu and
+                 * its routes from the same answer the server enforces.
+                 *
+                 * `cloth_service` above says the same thing and is kept because
+                 * screens already read it. This is the list a new one should
+                 * use.
+                 */
+                'features' => Features::all(),
 
                 'faqs' => Faq::query()->live()->get()->map(fn (Faq $f) => [
                     'id' => $f->id,

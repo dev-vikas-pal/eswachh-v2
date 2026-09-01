@@ -267,6 +267,22 @@ class RecordPayment
         try {
             $messenger = app(Messenger::class);
 
+            /*
+             * The receipt, whatever the money was for.
+             *
+             * Sent alongside the "welcome", "renewed" or "cloths" message
+             * rather than folded into one of them: those say what happens next,
+             * this is the proof of what was paid, and a customer who asks for a
+             * bill wants the second one. It carries a link to the document
+             * itself, which opens without an account - most customers never
+             * make one.
+             *
+             * First, and above the cloth branch, deliberately. Every captured
+             * payment earns a receipt, and if one of these messages is going to
+             * fail this is the one that should already have gone.
+             */
+            $this->sendReceipt($messenger, $subscription, $payment);
+
             if ($payment->purpose === PaymentPurpose::ClothTopUp) {
                 $messenger->notify($subscription, MessagePurpose::ClothTopUp);
 
@@ -355,6 +371,37 @@ class RecordPayment
     }
 
     /**
+     * The receipt message, with the payment's own figures on it.
+     *
+     * The values are passed in rather than read from the plan, and that is the
+     * point of it. The plan's `amount` is what it costs today; a receipt has to
+     * say what was actually taken, on the day it was taken, under the invoice
+     * number it was taken under - three things that can all differ from the
+     * plan by the time anybody reads the message.
+     */
+    private function sendReceipt(Messenger $messenger, Subscription $subscription, Payment $payment): void
+    {
+        // Nothing to give a receipt for. Belt and braces: announce() only runs
+        // on capture, but a receipt for money that did not move would be a
+        // document saying otherwise.
+        if ($payment->status !== PaymentStatus::Captured) {
+            return;
+        }
+
+        $messenger->notify($subscription, MessagePurpose::PaymentReceipt, [
+            'invoice_number' => (string) ($payment->invoice_number ?? ''),
+            'paid_amount' => number_format($payment->amount(), 0),
+            'paid_on' => ($payment->paid_at ?? now())->format('j M Y'),
+            'method' => (string) ($payment->method ?? ''),
+            /*
+             * The document itself. Signed, so it opens for somebody with no
+             * account and refuses a link whose id has been edited.
+             */
+            'invoice_link' => $payment->receiptUrl(),
+        ]);
+    }
+
+    /**
      * The welcome email, when there is an address to send it to.
      *
      * Optional on purpose. Most customers give a phone number and no email, so
@@ -403,12 +450,10 @@ class RecordPayment
         DB::transaction(function () use ($payment, $subscription) {
             $months = $subscription->duration?->months ?? 1;
 
-            // A subscription still in date is extended from its end date, so a
-            // customer who renews early keeps the time they paid for. One that
-            // has lapsed restarts from today.
-            $start = $subscription->period_end?->isFuture()
-                ? $subscription->period_end->copy()
-                : Carbon::today();
+            // The one place this is decided lives on the model, so the dates
+            // written here and the dates every renewal screen promises cannot
+            // drift apart.
+            $start = $subscription->nextPeriodStart();
 
             if ($subscription->status === SubscriptionStatus::Pending) {
                 // First payment: this period becomes live rather than a new one

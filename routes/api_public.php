@@ -34,17 +34,27 @@ Route::middleware('throttle:120,1')->prefix('public')->group(function () {
     // page does not download twenty thousand characters to show a headline.
     Route::get('policy/{page}', [CatalogueController::class, 'policy']);
 
-    // The blog and the team page. Only published articles are ever reachable:
-    // the query starts from the published scope rather than filtering after.
-    Route::get('posts', [BlogController::class, 'index']);
-    Route::get('posts/{slug}', [BlogController::class, 'show']);
-    Route::get('team', [BlogController::class, 'team']);
+    /*
+     * The blog and the team page. Only published articles are ever reachable:
+     * the query starts from the published scope rather than filtering after.
+     *
+     * Both sit behind their own switch in Settings. Gated here rather than
+     * inside the controller so that hiding the blog hides the endpoints too -
+     * a menu that no longer offers the articles does nothing about the search
+     * results already pointing at them.
+     */
+    Route::middleware('feature:blog')->group(function () {
+        Route::get('posts', [BlogController::class, 'index']);
+        Route::get('posts/{slug}', [BlogController::class, 'show']);
 
-    // Anyone may leave a comment; nothing appears until it is approved.
-    // Throttled harder than the read endpoints, because a comment box is the
-    // one thing on the public site that writes to the database.
-    Route::post('posts/{slug}/comments', [BlogController::class, 'comment'])
-        ->middleware('throttle:5,1');
+        // Anyone may leave a comment; nothing appears until it is approved.
+        // Throttled harder than the read endpoints, because a comment box is
+        // the one thing on the public site that writes to the database.
+        Route::post('posts/{slug}/comments', [BlogController::class, 'comment'])
+            ->middleware('throttle:5,1');
+    });
+
+    Route::get('team', [BlogController::class, 'team'])->middleware('feature:team');
 
 
     // The price comes from here and nowhere else. Nothing accepts an amount
@@ -77,9 +87,17 @@ Route::middleware('throttle:120,1')->prefix('public')->group(function () {
     Route::post('signup/code', [SignupController::class, 'requestCode'])->middleware('throttle:10,5');
     Route::post('signup', [SignupController::class, 'store'])->middleware('throttle:40,5');
 
-    // Topping up cloths by quoting a car number, as v1 had it.
-    Route::post('cloth/lookup', [ClothTopUpController::class, 'lookup'])->middleware('throttle:10,5');
-    Route::post('cloth/pay', [ClothTopUpController::class, 'pay'])->middleware('throttle:40,5');
+    /*
+     * Topping up cloths by quoting a car number, as v1 had it.
+     *
+     * Behind the same switch as the rest of the service. The catalogue already
+     * withheld the bundles when it is off, which left these answering with
+     * nothing to sell rather than not answering.
+     */
+    Route::middleware('feature:cloth_service')->group(function () {
+        Route::post('cloth/lookup', [ClothTopUpController::class, 'lookup'])->middleware('throttle:10,5');
+        Route::post('cloth/pay', [ClothTopUpController::class, 'pay'])->middleware('throttle:40,5');
+    });
 
     Route::post('renew/lookup', [RenewalController::class, 'lookup'])->middleware('throttle:10,5');
     Route::post('renew/pay', [RenewalController::class, 'payWithoutSigningIn'])->middleware('throttle:40,5');

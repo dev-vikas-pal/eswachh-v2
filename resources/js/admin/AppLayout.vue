@@ -26,7 +26,7 @@ const navigation = computed(() =>
         { name: 'Customers', to: { name: 'customers' }, ability: 'view.customer', icon: 'contact' },
         { name: 'Payments', to: { name: 'payments' }, ability: 'view.payment', icon: 'rupee' },
         { name: 'Complaints', to: { name: 'complaints' }, ability: 'view.complaint', icon: 'flag' },
-        { name: 'Cloths', to: { name: 'cloths' }, ability: 'record.cloth', icon: 'card' },
+        { name: 'Cloths', to: { name: 'cloths' }, ability: 'record.cloth', icon: 'card', feature: 'cloth_service' },
         { name: 'Coverage', to: { name: 'coverage' }, ability: 'view.attendance', icon: 'route' },
         { name: 'Messages', to: { name: 'reminders' }, ability: 'view.subscription', icon: 'chat' },
         // People who reached the payment page and stopped. Beside Messages
@@ -35,7 +35,9 @@ const navigation = computed(() =>
         { name: 'Reports', to: { name: 'reports' }, ability: 'view.report', icon: 'chart' },
         { name: 'People', to: { name: 'users' }, ability: 'view.staff', icon: 'people' },
         { name: 'Masters', to: { name: 'masters' }, ability: 'manage.master', icon: 'sliders' },
-        { name: 'Blog', to: { name: 'blog-admin' }, ability: 'manage.master', icon: 'pen' },
+        // Hidden with the blog itself. A screen for writing articles nobody
+        // can reach is worse than no screen.
+        { name: 'Blog', to: { name: 'blog-admin' }, ability: 'manage.master', icon: 'pen', feature: 'blog' },
         { name: 'Settings', to: { name: 'settings' }, ability: 'manage.master', icon: 'cog' },
         { name: 'Logs', to: { name: 'logs' }, ability: 'manage.master', icon: 'chat' },
         // The page existed and the nightly job wrote to it, but nothing linked
@@ -47,7 +49,14 @@ const navigation = computed(() =>
         { name: 'Roles', to: { name: 'roles' }, ability: 'manage.master', superAdmin: true, icon: 'people' },
     ].filter((item) => auth.can(item.ability)
         && (!item.superAdmin || auth.user?.role.value === 'super_admin')
-        && (!item.notCleaner || auth.user?.role.value !== 'cleaner')),
+        && (!item.notCleaner || auth.user?.role.value !== 'cleaner')
+        /*
+         * Two different reasons a screen is not shown, kept apart on purpose.
+         * An ability answers "you may not use this"; a feature answers "the
+         * business is not doing this". Conflating them would mean granting a
+         * permission to bring the blog back.
+         */
+        && (!item.feature || auth.featureOn(item.feature))),
 );
 
 const sideways = computed(() => settings.menuPosition === 'left');

@@ -1,0 +1,40 @@
+# Fallback only — prefer changing the subdomain's document root.
+#
+# Upload this as `.htaccess` in the folder the subdomain points at (the one
+# holding app/, config/, public/ …) when the hosting panel will not let you set
+# the document root to that folder's `public` directory.
+#
+# What it does: serves everything out of public/, and refuses the rest.
+#
+# The refusing half is not optional. With the document root one level too high,
+# `https://your-site/.env` is a plain text file containing the database password
+# and the payment keys, and `storage/logs/laravel.log` is readable by anybody
+# who guesses the path. Changing the document root avoids the problem entirely;
+# this only works around it.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Nothing outside public/ is ever served, whatever the request looks like.
+    RewriteRule ^(app|bootstrap|config|database|docs|resources|routes|storage|tests|vendor)(/|$) - [F,L]
+
+    # Dotfiles: .env, .git, .env.backup and anything else beginning with a dot.
+    RewriteRule (^|/)\. - [F,L]
+
+    # composer.json, composer.lock, package.json, artisan, and the rest of the
+    # files that sit beside them.
+    RewriteRule ^(artisan|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|tsconfig\.json|vite\.config\.ts|README\.md)$ - [F,L]
+
+    # Everything else goes to public/, where Laravel's own .htaccess takes over.
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Belt and braces: if mod_rewrite is off, these are still refused.
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^(artisan|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>

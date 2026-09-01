@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { api, describeError } from '@/shared/api/client';
-import { payForClothTopUpByCar } from '@/shared/api/checkout';
+import { payForClothTopUpByCar, type PaymentReceipt } from '@/shared/api/checkout';
 
 /**
  * Buying more cloths by quoting a car number.
@@ -29,6 +29,20 @@ const busy = ref(false);
 const problem = ref<string | null>(null);
 const outcome = ref<string | null>(null);
 const offerSignup = ref(false);
+
+/**
+ * Paid, and what for. Stays until the page is left.
+ *
+ * Deliberately not a line of green text that clears itself: this is the only
+ * acknowledgement a customer with no account ever gets, and the new balance is
+ * the thing they came to find out.
+ */
+const paid = ref<{
+    car: string;
+    bought: number | null;
+    balance: number;
+    receipt: PaymentReceipt | undefined;
+} | null>(null);
 
 async function lookup() {
     busy.value = true;
@@ -69,7 +83,24 @@ async function pay() {
     busy.value = false;
 
     if (result.ok) {
-        outcome.value = result.message;
+        /*
+         * The receipt, not just "Payment received".
+         *
+         * Same as the renewal page: this is the last thing the customer sees
+         * and it has to be worth reading. The car and the new balance matter
+         * more than the sentence, because "how many have I got now" is the
+         * question that brought them here.
+         */
+        const bundle = found.value.bundles.find((b) => b.id === chosen.value);
+
+        paid.value = {
+            car: found.value.registration,
+            bought: bundle?.cloths ?? null,
+            balance: found.value.balance + (bundle?.cloths ?? 0),
+            receipt: result.payment,
+        };
+
+        outcome.value = null;
         found.value = null;
         registration.value = '';
         return;
@@ -117,6 +148,30 @@ function money(rupees: number): string {
                 </div>
             </label>
         </form>
+
+        <!-- Paid. The balance first, because that is what they came for. -->
+        <div v-if="paid" class="mt-4 rounded-lg border border-ok bg-ok-soft p-5">
+            <div class="flex items-start gap-3">
+                <svg class="mt-0.5 h-6 w-6 shrink-0 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <div>
+                    <p class="font-semibold text-ink">Payment received</p>
+                    <p class="mt-1 text-sm text-body">
+                        <template v-if="paid.bought">{{ paid.bought }} cloths added to </template>
+                        <span class="font-medium uppercase text-ink">{{ paid.car }}</span>.
+                        The balance is now <strong class="tabular-nums text-ink">{{ paid.balance }}</strong>.
+                    </p>
+                    <p v-if="paid.receipt" class="mt-1 text-sm text-muted">
+                        {{ money(paid.receipt.amount) }} paid<template v-if="paid.receipt.invoice_number">,
+                        invoice {{ paid.receipt.invoice_number }}</template>.
+                    </p>
+                    <p class="mt-2 text-xs text-faint">
+                        The cleaner brings them on the next round.
+                    </p>
+                </div>
+            </div>
+        </div>
 
         <p v-if="outcome" class="mt-4 rounded border border-ok-soft bg-ok-soft px-3 py-2 text-sm text-ok">
             {{ outcome }}

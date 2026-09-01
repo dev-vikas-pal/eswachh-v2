@@ -13,7 +13,7 @@ carrying its data and its logins across.
 | **Auth** | Sanctum, SPA cookie |
 | **Payments** | Razorpay |
 | **Messaging** | WhatsApp via MSG91 |
-| **Tests** | 395 passing, 1102 assertions, ~65s |
+| **Tests** | 429 passing, 1224 assertions, ~67s |
 
 ## Getting it running
 
@@ -35,6 +35,35 @@ Two things in `.env` are not optional:
 `php artisan eswachh:check-integrations` will tell you whether payments and
 messaging are wired up and, when they are not, what is stopping them.
 
+## Starting from a fresh database
+
+Three commands, in this order. The order is the whole of it — the importer
+writes into tables the first command creates, and every record it writes is
+recorded in `legacy_references` so a second run updates rather than duplicates.
+
+```bash
+php artisan migrate            # the tables
+php artisan db:seed            # an administrator, the site's words, the message wording
+php artisan eswachh:import     # everything else, out of v1
+```
+
+Seeding before importing is correct: the seeder creates no masters and no
+customers, only the things a database needs before anybody can sign in.
+
+`LEGACY_DB_DATABASE` must point at a **v1** database — the old system's, the one
+with an `orders` table. Pointing it at a v2 database connects perfectly well and
+then imports nonsense, so the command checks the shape before it starts. It also
+refuses to run against a database that has not been migrated, because the error
+without that check names `legacy_references` and reads as though that one table
+had failed to migrate.
+
+Not every copy of v1 has the same columns. The gateway payment id and the two
+`verified_*` columns were added to `payment_history` part way through its life;
+an older backup imports fine and leaves them blank.
+
+Run it against a copy until it is boring. `--dry-run` reports without writing,
+`--step=` runs one stage, and `--fresh` wipes what was imported and starts over.
+
 ## The three doors
 
 | URL | Who | Bundle |
@@ -53,6 +82,7 @@ The role decides; nobody chooses.
 | [`docs/admin-guide.pdf`](docs/admin-guide.pdf) | What the system does, screen by screen — for owners, administrators, and explaining it to a client. Includes what is built but deliberately switched off. |
 | [`docs/developer-guide.pdf`](docs/developer-guide.pdf) | Where every flag lives, what to edit for a given change, the conventions, and the bugs this codebase has already had. Read section 13 before anything else. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The short version of how the code is filed. |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Standing this up on a server, step by step. The three things that differ from v1 and each fail silently. |
 
 Both PDFs are generated from the HTML beside them. Edit the HTML and re-render:
 

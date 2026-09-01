@@ -3,6 +3,8 @@ import { LOGO } from '@/shared/branding';
 import { computed, ref } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
 import { useSiteSession } from '@/site/session';
+import { useSiteFeatures } from '@/site/features';
+import PaymentProgress from '@/shared/PaymentProgress.vue';
 
 /**
  * The public site: the marketing pages and the signup flow.
@@ -52,14 +54,18 @@ const showVisitorActions = computed(() => checked.value && session.value?.role !
  * a visitor comes here to *do*, so it sits with Subscribe rather than being
  * lost in a row of eight links.
  */
-const links = [
+const { features } = useSiteFeatures();
+
+const links = computed(() => [
     { name: 'Home', to: { name: 'home' } },
     { name: 'Packages', to: { name: 'packages' } },
-    { name: 'Advice', to: { name: 'blog' } },
-    { name: 'Team', to: { name: 'team' } },
+    // Both switchable in Settings. The routes stay registered and the server
+    // refuses them, so this only decides whether to offer the link.
+    ...(features.value.blog ? [{ name: 'Advice', to: { name: 'blog' } }] : []),
+    ...(features.value.team ? [{ name: 'Team', to: { name: 'team' } }] : []),
     { name: 'Questions', to: { name: 'faq' } },
     { name: 'Contact', to: { name: 'contact' } },
-];
+]);
 
 /*
  * Topping up cloths is not offered in the header at all.
@@ -205,5 +211,12 @@ const links = [
                 <RouterLink v-else :to="{ name: 'login' }" class="ms-auto text-accent hover:underline">Sign in</RouterLink>
             </div>
         </footer>
+
+        <!--
+            Mounted once for the whole public site, so the signup, the renewal
+            and the cloth top-up are all covered without any of them asking.
+            It draws nothing until a payment is in flight.
+        -->
+        <PaymentProgress />
     </div>
 </template>

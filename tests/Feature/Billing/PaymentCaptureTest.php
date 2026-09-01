@@ -299,12 +299,12 @@ class PaymentCaptureTest extends TestCase
         $this->assertSame(SubscriptionStatus::Ended, $subscription->fresh()->status);
     }
 
-    public function test_renewing_after_lapsing_restarts_from_today(): void
+    public function test_renewing_a_little_late_continues_the_chain_rather_than_restarting(): void
     {
         $subscription = $this->subscription([
             'status' => SubscriptionStatus::Active,
             'period_start' => Carbon::today()->subMonths(2),
-            'period_end' => Carbon::today()->subDays(20),
+            'period_end' => Carbon::today()->subDays(7),
         ]);
         $payment = $this->initiatedPayment($subscription);
 
@@ -312,9 +312,67 @@ class PaymentCaptureTest extends TestCase
 
         $next = Subscription::withoutGlobalScope('sector')->where('sequence', 2)->firstOrFail();
 
-        // A customer who lapsed for twenty days does not get billed for a
-        // period that has already gone by.
+        /*
+         * The chain has no hole in it: the new term begins the day the old one
+         * ended, not the day somebody got round to paying.
+         *
+         * This is what the customer was actually given. A plan a few days past
+         * its date is still being cleaned - the round runs through the grace
+         * period before anything is put on hold - so restarting from the
+         * payment date charged for a month and gave those days away, and walked
+         * the renewal date a little further into the month every year.
+         */
+        $this->assertTrue($next->period_start->isSameDay(Carbon::today()->subDays(7)));
+        $this->assertTrue($next->period_end->isSameDay(Carbon::today()->subDays(7)->addMonth()));
+    }
+
+    public function test_a_plan_left_unpaid_too_long_starts_afresh_instead(): void
+    {
+        $subscription = $this->subscription([
+            'status' => SubscriptionStatus::Active,
+            'period_start' => Carbon::today()->subMonths(5),
+            'period_end' => Carbon::today()->subMonths(4),
+        ]);
+        $payment = $this->initiatedPayment($subscription);
+
+        app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_very_late'), []);
+
+        $next = Subscription::withoutGlobalScope('sector')->where('sequence', 2)->firstOrFail();
+
+        // Continuing the chain here would issue a one-month period that ended
+        // three months ago - a plan expired on the day it was bought. There is
+        // nothing left to continue, so it starts today.
         $this->assertTrue($next->period_start->isSameDay(Carbon::today()));
+        $this->assertTrue($next->period_end->isFuture());
+    }
+
+    public function test_a_renewed_period_is_never_already_over(): void
+    {
+        // The property that matters, whatever the dates: nobody pays for a
+        // subscription that is expired the moment it is created.
+        foreach ([1, 7, 29, 40, 200, 900] as $daysLapsed) {
+            Subscription::withoutGlobalScope('sector')->delete();
+
+            $subscription = $this->subscription([
+                'status' => SubscriptionStatus::Active,
+                'period_start' => Carbon::today()->subDays($daysLapsed + 30),
+                'period_end' => Carbon::today()->subDays($daysLapsed),
+            ]);
+
+            app(RecordPayment::class)->complete(
+                $this->callbackFor($this->initiatedPayment($subscription), 'pay_lapse_'.$daysLapsed),
+                [],
+            );
+
+            $next = Subscription::withoutGlobalScope('sector')
+                ->where('vehicle_id', $subscription->vehicle_id)
+                ->orderByDesc('sequence')->firstOrFail();
+
+            $this->assertTrue(
+                $next->period_end->isFuture(),
+                "A plan {$daysLapsed} days lapsed was renewed into a period that had already ended.",
+            );
+        }
     }
 
     public function test_the_money_is_recorded_even_when_the_period_cannot_be_extended(): void

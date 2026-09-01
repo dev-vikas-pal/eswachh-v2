@@ -1,4 +1,5 @@
 import { api } from '@/shared/api/client';
+import type { RenewalTiming } from '@/shared/types';
 
 /**
  * The customer's own pages.
@@ -24,6 +25,8 @@ export interface PortalPlan {
     status: { value: string; label: string };
     is_expired: boolean;
     period: { start: string | null; end: string | null };
+    /** Early, due today, or overdue. Worked out on the server. */
+    timing: RenewalTiming;
     amount: { paise: number; formatted: string };
     paid: { paise: number; formatted: string };
     cloth: { enabled: boolean; balance: number };

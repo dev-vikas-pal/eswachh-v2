@@ -24,14 +24,14 @@ const router = createRouter({
                 { path: 'payments', name: 'payments', component: () => import('@/admin/views/PaymentsView.vue'), meta: { ability: 'view.payment' } },
                 { path: 'complaints', name: 'complaints', component: () => import('@/admin/views/ComplaintsView.vue'), meta: { ability: 'view.complaint' } },
                 { path: 'round', name: 'round', component: () => import('@/admin/views/RoundView.vue'), meta: { ability: 'view.round' } },
-                { path: 'cloths', name: 'cloths', component: () => import('@/admin/views/ClothView.vue'), meta: { ability: 'record.cloth' } },
+                { path: 'cloths', name: 'cloths', component: () => import('@/admin/views/ClothView.vue'), meta: { ability: 'record.cloth', feature: 'cloth_service' } },
                 { path: 'coverage', name: 'coverage', component: () => import('@/admin/views/CoverageView.vue'), meta: { ability: 'view.attendance' } },
                 { path: 'reminders', name: 'reminders', component: () => import('@/admin/views/RemindersView.vue'), meta: { ability: 'view.subscription' } },
                 { path: 'abandoned', name: 'abandoned', component: () => import('@/admin/views/AbandonedView.vue'), meta: { ability: 'view.subscription' } },
                 { path: 'reports', name: 'reports', component: () => import('@/admin/views/ReportsView.vue'), meta: { ability: 'view.report' } },
                 { path: 'people', name: 'users', component: () => import('@/admin/views/UsersView.vue'), meta: { ability: 'view.staff' } },
                 { path: 'masters', name: 'masters', component: () => import('@/admin/views/MastersView.vue'), meta: { ability: 'manage.master' } },
-                { path: 'blog', name: 'blog-admin', component: () => import('@/admin/views/BlogAdminView.vue'), meta: { ability: 'manage.master' } },
+                { path: 'blog', name: 'blog-admin', component: () => import('@/admin/views/BlogAdminView.vue'), meta: { ability: 'manage.master', feature: 'blog' } },
                 { path: 'backups', name: 'backups', component: () => import('@/admin/views/BackupsView.vue'), meta: { ability: 'manage.master' } },
                 { path: 'settings', name: 'settings', component: () => import('@/admin/views/SiteSettingsView.vue'), meta: { ability: 'manage.master' } },
                 { path: 'logs', name: 'logs', component: () => import('@/admin/views/LogsView.vue'), meta: { ability: 'manage.master' } },
@@ -111,6 +111,17 @@ router.beforeEach(async (to) => {
     }
 
     if (to.meta.ability && !auth.can(to.meta.ability as string)) {
+        return home;
+    }
+
+    /*
+     * A screen for something the business has switched off.
+     *
+     * Checked after the ability, and separately from it: "you may not" and
+     * "we do not do this" are different answers, and only the second one is
+     * fixed by a checkbox in Settings rather than by a change of role.
+     */
+    if (to.meta.feature && !auth.featureOn(to.meta.feature as string)) {
         return home;
     }
 

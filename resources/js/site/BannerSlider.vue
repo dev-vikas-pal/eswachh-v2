@@ -65,6 +65,7 @@ function onTouchEnd(event: TouchEvent) {
 <template>
     <section
         class="relative border-b border-line bg-surface"
+        :class="{ 'hero-dark': hasImage }"
         aria-roledescription="carousel"
         aria-label="Offers"
         @mouseenter="carousel.paused.value = true"
@@ -83,7 +84,7 @@ function onTouchEnd(event: TouchEvent) {
             not, and a band that stops short of the screen reads as a card that
             failed to load the rest of itself.
         -->
-        <div v-if="hasImage" class="absolute inset-0">
+        <div v-if="hasImage" class="absolute inset-0 overflow-hidden">
             <Transition name="fade" mode="out-in">
                 <img
                     v-if="current?.image"
@@ -91,48 +92,79 @@ function onTouchEnd(event: TouchEvent) {
                     :src="current.image"
                     alt=""
                     aria-hidden="true"
-                    class="h-full w-full object-cover"
+                    class="h-full w-full scale-105 object-cover"
                     :loading="carousel.index.value === 0 ? 'eager' : 'lazy'"
+                    :fetchpriority="carousel.index.value === 0 ? 'high' : 'auto'"
                 />
             </Transition>
 
             <!--
                 The words have to stay readable over whatever was uploaded, and
                 the office uploads a photograph one week and a pale illustration
-                the next. A wash from the page's own surface colour, heaviest
-                behind the text and clearing towards the far edge, keeps the
-                contrast without hiding the picture.
+                the next.
+
+                Two washes rather than one. The horizontal pass carries the text
+                side; the vertical pass darkens the foot of the band so the dots
+                and arrows keep their contrast over a bright sky, which a single
+                left-to-right gradient cannot do.
+
+                Lighter than it was on the right. The banners that ship with the
+                system are drawn dark down that side already, and stacking a
+                near-opaque wash on top of a picture that has done the work
+                itself only flattens it - but the wash stays heavy enough on the
+                left to carry a headline over something bright somebody uploads
+                next month.
             -->
-            <div class="absolute inset-0 bg-gradient-to-r from-surface via-surface/85 to-surface/40 md:to-surface/10"></div>
+            <div class="absolute inset-0 bg-gradient-to-r from-surface via-surface/75 to-surface/25 md:via-surface/45 md:to-transparent"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-surface/60 via-transparent to-transparent"></div>
         </div>
 
-        <div class="relative grid w-full gap-6 px-4 py-12 sm:px-8 md:grid-cols-2 md:items-center md:gap-12 md:py-20 lg:px-16 xl:px-24">
+        <!--
+            Taller than it was, with a minimum height so a short headline does
+            not produce a thin strip that reads as a notification bar rather
+            than the top of a page.
+        -->
+        <div class="relative grid w-full gap-6 px-4 py-16 sm:px-8 md:min-h-[30rem] md:grid-cols-2 md:items-center md:gap-12 md:py-24 lg:px-16 xl:px-24">
             <!--
                 Keyed on the banner so Vue replaces the whole block and the
                 transition runs. Without the key the text would swap in place
                 with no crossfade at all.
+
+                Both slides occupy the same grid cell and neither waits for the
+                other. This was mode="out-in", which means exactly what it says:
+                the outgoing headline is removed, and only once it has finished
+                leaving does the incoming one begin - so for a third of a second
+                every six seconds the hero had no words in it at all. It is easy
+                to miss watching for it and impossible to miss out of the corner
+                of your eye.
             -->
-            <Transition name="slide" mode="out-in">
-                <div :key="current?.id ?? 'default'">
+            <div class="relative grid">
+            <Transition name="slide">
+                <div :key="current?.id ?? 'default'" class="[grid-area:1/1]">
                     <p v-if="current?.eyebrow" class="text-sm font-semibold uppercase tracking-widest text-accent">
                         {{ current.eyebrow }}
                     </p>
 
                     <h1
-                        class="mt-3 text-3xl font-bold leading-tight tracking-tight text-ink sm:text-4xl md:text-5xl"
+                        class="mt-3 text-4xl font-bold leading-[1.08] tracking-tight text-ink sm:text-5xl md:text-6xl"
                         style="text-wrap: balance"
                     >
                         {{ current?.headline ?? 'Doorstep car cleaning, every day.' }}
                     </h1>
 
-                    <p v-if="current?.subheadline" class="mt-4 max-w-prose text-base text-body sm:text-lg">
+                    <p v-if="current?.subheadline" class="mt-5 max-w-prose text-lg leading-relaxed text-body">
                         {{ current.subheadline }}
                     </p>
 
-                    <div class="mt-7 flex flex-wrap items-center gap-3">
+                    <div class="mt-8 flex flex-wrap items-center gap-3">
+                        <!--
+                            One obvious next step, weighted so it is obvious.
+                            The shadow is on the primary only: two buttons that
+                            both lift are two buttons that neither leads.
+                        -->
                         <RouterLink
                             :to="{ name: current?.cta?.route || 'subscribe' }"
-                            class="rounded bg-accent px-6 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-accent"
+                            class="rounded-lg bg-accent px-7 py-3.5 text-sm font-semibold text-on-accent shadow-lg shadow-accent/20 transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         >
                             {{ current?.cta?.label ?? 'See your price' }}
                         </RouterLink>
@@ -140,17 +172,28 @@ function onTouchEnd(event: TouchEvent) {
                         <RouterLink
                             v-if="current?.secondary"
                             :to="{ name: current.secondary.route || 'packages' }"
-                            class="rounded border border-line-strong px-6 py-3 text-sm font-semibold text-body transition hover:bg-sunk"
+                            class="rounded-lg border border-line-strong bg-surface/70 px-7 py-3.5 text-sm font-semibold text-body backdrop-blur transition hover:bg-sunk"
                         >
                             {{ current.secondary.label }}
                         </RouterLink>
                     </div>
 
-                    <p v-if="priceFrom !== null && priceFrom !== undefined" class="mt-4 text-sm text-muted">
-                        Plans from <strong class="tabular-nums text-ink">&#8377;{{ priceFrom }}</strong> a month.
-                    </p>
+                    <!--
+                        The price, and the two things people ask before giving a
+                        phone number. Said here so neither costs a scroll.
+                    -->
+                    <div class="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted">
+                        <p v-if="priceFrom !== null && priceFrom !== undefined">
+                            Plans from <strong class="tabular-nums text-ink">&#8377;{{ priceFrom }}</strong> a month
+                        </p>
+                        <span class="hidden h-3 w-px bg-line-strong sm:block" aria-hidden="true"></span>
+                        <p>No contract</p>
+                        <span class="hidden h-3 w-px bg-line-strong sm:block" aria-hidden="true"></span>
+                        <p>Price shown before you pay</p>
+                    </div>
                 </div>
             </Transition>
+            </div>
 
             <!--
                 The picture is the background now, so this column holds the
@@ -203,6 +246,37 @@ function onTouchEnd(event: TouchEvent) {
 </template>
 
 <style scoped>
+/*
+    A hero carrying a picture is a dark band in both themes.
+
+    The banner images are lit scenes - dark paintwork with the light coming
+    from one side - and a page in light mode was laying a white wash over them
+    until they came out as grey. Rather than ship a second set of images for
+    the other theme, the band declares its own: the tokens are redefined here
+    and everything inside picks them up through the classes it already uses,
+    so nothing in the markup has to know which theme is on.
+
+    This is a deliberate one-way decision. A hero that stays dark while the
+    page around it turns light is a normal thing for a site to do and reads as
+    intentional; a hero that changes its mind about which image it can carry
+    does not.
+*/
+.hero-dark {
+    --surface: #17110D;
+    --sunk: #1F1813;
+    --ink: #FFFFFF;
+    --body: #E6DED8;
+    --muted: #B8ADA5;
+    --faint: #8B8079;
+    --line: rgba(255, 255, 255, 0.14);
+    --line-strong: rgba(255, 255, 255, 0.26);
+
+    --accent: #FB923C;
+    --accent-ink: #FDBA74;
+    --accent-soft: rgba(251, 146, 60, 0.16);
+    --on-accent: #1C1005;
+}
+
 .fade-enter-active,
 .fade-leave-active {
     transition: opacity 0.5s ease;

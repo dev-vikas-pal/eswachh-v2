@@ -230,9 +230,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('cloth-movements', [RoundController::class, 'clothLedger']);
 
     // The two cloth screens the requirements document asks for: collect a car
-    // at a time, deliver from a list ordered by society.
-    Route::post('cloth/lookup', [ClothController::class, 'lookup']);
-    Route::get('cloth/outstanding', [ClothController::class, 'outstanding']);
+    // at a time, deliver from a list ordered by society. Both behind the
+    // business-wide switch, with the screen that uses them.
+    Route::middleware('feature:cloth_service')->group(function () {
+        Route::post('cloth/lookup', [ClothController::class, 'lookup']);
+        Route::get('cloth/outstanding', [ClothController::class, 'outstanding']);
+    });
     Route::post('attendance', [RoundController::class, 'markAttendance']);
     Route::get('attendance/coverage', [RoundController::class, 'coverage']);
 
@@ -281,15 +284,21 @@ Route::middleware('auth:sanctum')->group(function () {
     /*
      * The blog. Publishing is its own endpoint rather than a field on update,
      * so an article cannot go live as a side effect of fixing a typo.
+     *
+     * Gated with the public half. Leaving the office screen working while the
+     * site is switched off would let somebody spend an afternoon writing and
+     * publishing an article that nobody can reach.
      */
-    Route::get('posts', [PostController::class, 'index']);
-    Route::post('posts', [PostController::class, 'store']);
-    Route::get('posts/comments', [PostController::class, 'comments']);
-    Route::patch('posts/comments/{comment}', [PostController::class, 'moderate']);
-    Route::get('posts/{post}', [PostController::class, 'show']);
-    Route::patch('posts/{post}', [PostController::class, 'update']);
-    Route::delete('posts/{post}', [PostController::class, 'destroy']);
-    Route::post('posts/{post}/publish', [PostController::class, 'publish']);
+    Route::middleware('feature:blog')->group(function () {
+        Route::get('posts', [PostController::class, 'index']);
+        Route::post('posts', [PostController::class, 'store']);
+        Route::get('posts/comments', [PostController::class, 'comments']);
+        Route::patch('posts/comments/{comment}', [PostController::class, 'moderate']);
+        Route::get('posts/{post}', [PostController::class, 'show']);
+        Route::patch('posts/{post}', [PostController::class, 'update']);
+        Route::delete('posts/{post}', [PostController::class, 'destroy']);
+        Route::post('posts/{post}/publish', [PostController::class, 'publish']);
+    });
 
     // Things needing attention. Read is per person, resolved is for everybody.
     Route::get('alerts', [AlertController::class, 'index']);

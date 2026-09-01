@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { api } from '@/shared/api/client';
-import { payForNewPlan } from '@/shared/api/checkout';
+import { payForNewPlan, type PaymentReceipt } from '@/shared/api/checkout';
 
 /**
  * A second car, for somebody who already has an account.
@@ -17,7 +17,11 @@ const props = defineProps<{
     profile?: { name?: string | null; email?: string | null; phone?: string | null } | null;
 }>();
 
-const emit = defineEmits<{ (e: 'close'): void; (e: 'done'): void }>();
+const emit = defineEmits<{
+    (e: 'close'): void;
+    /** Paid, with the receipt and the car it was for. */
+    (e: 'done', receipt: PaymentReceipt | undefined, registration: string): void;
+}>();
 
 const form = ref({
     registration: '',
@@ -84,7 +88,7 @@ async function pay() {
     busy.value = false;
 
     if (result.ok) {
-        emit('done');
+        emit('done', result.payment, form.value.registration);
         return;
     }
 

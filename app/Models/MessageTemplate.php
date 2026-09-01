@@ -120,6 +120,21 @@ class MessageTemplate extends BaseModel
             // Filled by whoever is sending: a pickup count, a delivery count.
             'count' => '',
             'message' => '',
+
+            /*
+             * The receipt's own figures, blank unless a payment supplied them.
+             *
+             * Deliberately not defaulted from the plan. `amount` above is what
+             * the plan costs today; a receipt has to say what was taken, when,
+             * and under which invoice number - and quietly substituting the
+             * plan's price would produce a receipt that is wrong in exactly the
+             * way nobody checks.
+             */
+            'invoice_number' => '',
+            'invoice_link' => '',
+            'paid_amount' => '',
+            'paid_on' => '',
+            'method' => '',
         ], $extra);
     }
 
@@ -130,6 +145,9 @@ class MessageTemplate extends BaseModel
             'name', 'car', 'amount', 'renew_date', 'cloths', 'business', 'phone',
             'package', 'months', 'cloth_plan', 'cleaner', 'cleaner_phone',
             'date', 'count', 'message',
+            // Only filled on the receipt, which is the only message sent from a
+            // payment rather than from a plan.
+            'invoice_number', 'invoice_link', 'paid_amount', 'paid_on', 'method',
         ];
     }
 }

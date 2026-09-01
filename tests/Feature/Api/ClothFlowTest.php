@@ -39,6 +39,13 @@ class ClothFlowTest extends TestCase
         parent::setUp();
         SectorContext::reset();
 
+        /*
+         * The service ships switched off, and its endpoints are gated on that.
+         * A test of the cloth round has to turn on the thing it is testing -
+         * the switch itself is covered by FeatureSwitchTest.
+         */
+        \App\Support\Settings\SiteSettings::put(['cloth_service_enabled' => '1']);
+
         $this->branch = Branch::factory()->create();
         $this->cleaner = User::factory()->cleaner($this->branch)->create();
 

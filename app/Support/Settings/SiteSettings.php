@@ -140,6 +140,35 @@ class SiteSettings
                 'boolean' => true,
             ],
 
+            /*
+             * The blog and the team page, business-wide.
+             *
+             * Both are built and both work; neither had anything worth showing
+             * at launch, and a site whose Advice section holds two placeholder
+             * articles looks worse than a site with no Advice section. Off
+             * hides them everywhere at once - the public menu and its routes,
+             * the public endpoints, the office screen, and the master lists
+             * behind them - so a search engine cannot go on serving an article
+             * that the menu no longer offers.
+             *
+             * Nothing is deleted. Turning either back on is this checkbox, and
+             * every article, category, tag and team member is where it was.
+             */
+            'blog_enabled' => [
+                'label' => 'Publish the advice blog',
+                'group' => 'Service',
+                'rules' => ['sometimes', 'boolean'],
+                'default' => '0',
+                'boolean' => true,
+            ],
+            'team_enabled' => [
+                'label' => 'Show the team page',
+                'group' => 'Service',
+                'rules' => ['sometimes', 'boolean'],
+                'default' => '0',
+                'boolean' => true,
+            ],
+
             'privacy_policy' => ['label' => 'Privacy policy', 'group' => 'Policies', 'rules' => ['nullable', 'string', 'max:20000'], 'default' => PolicyText::PRIVACY, 'rich' => true],
             'terms' => ['label' => 'Terms of service', 'group' => 'Policies', 'rules' => ['nullable', 'string', 'max:20000'], 'default' => PolicyText::TERMS, 'rich' => true],
             'refund_policy' => ['label' => 'Cancellation and refunds', 'group' => 'Policies', 'rules' => ['nullable', 'string', 'max:20000'], 'default' => PolicyText::REFUNDS, 'rich' => true],

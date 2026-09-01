@@ -61,11 +61,26 @@ class PaymentController extends Controller
 
         if ($subscriptionId = $filters['subscription_id'] ?? null) {
             /*
-             * No ownership check needed for the id itself: the branch scope and
+             * Every period this car has had, not just the one asked about.
+             *
+             * A plan is a chain of periods and each renewal writes a new one, so
+             * a payment sits on whichever link it bought. Filtering on the id
+             * alone meant "Payments on this order", opened from the period the
+             * car is on now, showed one payment - and the five before it, the
+             * ones somebody is actually looking for when they ask "which was the
+             * ₹949 in March", were filed under rows the office cannot see.
+             *
+             * No ownership check needed for the id itself: the sector scope and
              * the customer filter above already limit which rows can come back,
-             * so an id from another branch simply matches nothing.
+             * so an id from another sector simply matches nothing - and every
+             * period in the chain belongs to the same customer by construction.
              */
-            $query->where('subscription_id', $subscriptionId);
+            $query->whereIn('subscription_id', function ($periods) use ($subscriptionId) {
+                $periods->select('id')->from('subscriptions')
+                    ->whereIn('vehicle_id', function ($car) use ($subscriptionId) {
+                        $car->select('vehicle_id')->from('subscriptions')->where('id', $subscriptionId);
+                    });
+            });
         }
 
         if ($status = $filters['status'] ?? null) {

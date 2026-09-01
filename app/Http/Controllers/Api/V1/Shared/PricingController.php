@@ -78,6 +78,9 @@ class PricingController extends Controller
                 // Flagged rather than left for someone to spot by comparing two
                 // numbers on screen.
                 'changed' => (int) $subscription->amount_paise !== $quote->totalPaise,
+                // Early, due or overdue, from the same place every other screen
+                // reads it.
+                'timing' => $subscription->renewalTiming(),
             ]),
         ]);
     }

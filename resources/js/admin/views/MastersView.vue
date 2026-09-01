@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { api } from '@/shared/api/client';
+import { refreshAfter } from '@/shared/api/refresh';
 import { describeError } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/stores/auth';
 import RichTextEditor from '@/admin/components/RichTextEditor.vue';
@@ -213,7 +214,7 @@ async function save() {
         editing.value = null;
 
         if (notice) alert(notice);
-        await queryClient.invalidateQueries({ queryKey: ['masters'] });
+        await refreshAfter(queryClient, 'masters');
         await refreshOwnSectors();
     } catch (e) {
         formError.value = describeError(e).message;
@@ -245,7 +246,7 @@ async function withdraw(row: MasterRow) {
     try {
         const { data } = await api.delete(`/masters/${selected.value}/${row.id}`);
         if (data.in_use > 0) alert(data.message);
-        await queryClient.invalidateQueries({ queryKey: ['masters'] });
+        await refreshAfter(queryClient, 'masters');
         await refreshOwnSectors();
     } catch (e) {
         // The server refuses some of these with a reason worth reading - a
@@ -257,7 +258,7 @@ async function withdraw(row: MasterRow) {
 
 async function restore(row: MasterRow) {
     await api.post(`/masters/${selected.value}/${row.id}/restore`);
-    await queryClient.invalidateQueries({ queryKey: ['masters'] });
+    await refreshAfter(queryClient, 'masters');
 }
 </script>
 

@@ -10,6 +10,8 @@ export interface SubscriptionFilters {
     search?: string;
     status?: string;
     expired?: boolean;
+    /** Running and not yet due — the opposite of expired, derived the same way. */
+    current?: boolean;
     unassigned?: boolean;
     sector_id?: string;
     package_id?: string;

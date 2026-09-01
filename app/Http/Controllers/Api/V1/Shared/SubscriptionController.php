@@ -44,6 +44,11 @@ class SubscriptionController extends Controller
         $filters = $request->validate([
             'filter.status' => ['sometimes', 'string'],
             'filter.expired' => ['sometimes', 'boolean'],
+            // Running and not yet due. Derived like expired, and needed so the
+            // dashboard's "In date" tile can open a list that matches its own
+            // number - a tile that links to a different figure is worse than
+            // one that does not link at all.
+            'filter.current' => ['sometimes', 'boolean'],
             'filter.search' => ['sometimes', 'string', 'max:100'],
             'filter.cleaner_id' => ['sometimes', 'uuid'],
             // v1's filters, which are how the office narrows a morning's work.
@@ -58,7 +63,10 @@ class SubscriptionController extends Controller
 
         $filter = $filters['filter'] ?? [];
 
-        $query = Subscription::query()->with(['vehicle.cleaner', 'customer', 'package', 'lastPayment']);
+        // 'duration' is loaded for the renewal timing, which needs to know how
+        // long a term is before it can say what renewing now would do to the
+        // dates. Eager, because working it out per row is twenty-five queries.
+        $query = Subscription::query()->with(['vehicle.cleaner', 'customer', 'package', 'duration', 'lastPayment']);
 
         /*
          * One row per car: the period it is on now.
@@ -74,7 +82,7 @@ class SubscriptionController extends Controller
          * me what has ended" is a real question and this must not answer it
          * with nothing.
          */
-        if (empty($filter['status']) && empty($filter['expired'])) {
+        if (empty($filter['status']) && empty($filter['expired']) && empty($filter['current'])) {
             $query->whereNot('status', SubscriptionStatus::Ended);
         }
 
@@ -112,9 +120,13 @@ class SubscriptionController extends Controller
         }
 
         // Expired is derived, never stored, so it is a scope rather than a
-        // status value.
+        // status value. The same is true of its opposite.
         if (! empty($filter['expired'])) {
             $query->expired();
+        }
+
+        if (! empty($filter['current'])) {
+            $query->current();
         }
 
         if (! empty($filter['cleaner_id'])) {

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { useSiteFeatures, whenFeaturesKnown, type SiteFeatures } from '@/site/features';
 
 /**
  * The public site.
@@ -15,13 +16,19 @@ const router = createRouter({
         { path: '/packages', name: 'packages', component: () => import('@/site/views/PackagesView.vue') },
         { path: '/questions', name: 'faq', component: () => import('@/site/views/FaqView.vue') },
         { path: '/subscribe', name: 'subscribe', component: () => import('@/site/views/SubscribeView.vue') },
-        { path: '/blog', name: 'blog', component: () => import('@/site/views/BlogView.vue') },
-        { path: '/blog/:slug', name: 'article', component: () => import('@/site/views/ArticleView.vue') },
-        { path: '/team', name: 'team', component: () => import('@/site/views/TeamView.vue') },
+        /*
+         * Behind their own switches in Settings. The routes stay registered so
+         * turning either back on needs no release, and the guard below sends
+         * anybody with an old link or a bookmark to the home page rather than
+         * to a screen whose API answers 404.
+         */
+        { path: '/blog', name: 'blog', component: () => import('@/site/views/BlogView.vue'), meta: { feature: 'blog' } },
+        { path: '/blog/:slug', name: 'article', component: () => import('@/site/views/ArticleView.vue'), meta: { feature: 'blog' } },
+        { path: '/team', name: 'team', component: () => import('@/site/views/TeamView.vue'), meta: { feature: 'team' } },
         { path: '/contact', name: 'contact', component: () => import('@/site/views/ContactView.vue') },
         { path: '/renew', name: 'renew', component: () => import('@/site/views/RenewView.vue') },
         // One of the four things the requirements document puts on the home page.
-        { path: '/cloths', name: 'cloth-top-up', component: () => import('@/site/views/ClothTopUpView.vue') },
+        { path: '/cloths', name: 'cloth-top-up', component: () => import('@/site/views/ClothTopUpView.vue'), meta: { feature: 'cloth_service' } },
 
         /*
          * Privacy, terms and refunds. One route for the three, because they are
@@ -48,6 +55,28 @@ const router = createRouter({
 
         { path: '/:pathMatch(.*)*', redirect: { name: 'home' } },
     ],
+});
+
+/**
+ * Keep switched-off pages out of reach.
+ *
+ * Awaited rather than read optimistically: a bookmark or a search result opens
+ * straight onto the route, so the answer has to be in hand before deciding.
+ * Everywhere else the flags are read as they arrive, because a menu that
+ * flickers is worse than a menu that is briefly generous.
+ */
+router.beforeEach(async (to) => {
+    const wanted = to.meta.feature as keyof SiteFeatures | undefined;
+
+    if (!wanted) return true;
+
+    const { features, known } = useSiteFeatures();
+
+    if (!known.value) await whenFeaturesKnown();
+
+    // Home rather than a "not found": these pages are not missing, the
+    // business is not running them, and there is nothing to explain.
+    return features.value[wanted] ? true : { name: 'home' };
 });
 
 export default router;

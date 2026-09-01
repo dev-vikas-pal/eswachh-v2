@@ -482,8 +482,97 @@ code {
         <p>Changing any of those <strong>reprices the plan before the payment window
         opens</strong>. A customer who switches from one month to six is charged for six.</p>
 
-        <p>A renewal extends from the current end date, not from today, so renewing early
-        never costs a customer the days they have already paid for.</p>
+        <h3>What the new dates are</h3>
+        <p><strong>A renewed term begins the day the last one ended, not the day the money
+        arrived.</strong> A plan that ran to the 10th and is renewed on the 17th runs from
+        the 10th — the chain has no holes in it, and the renewal date stays where it has
+        always been instead of walking a little further into the month every year.</p>
+
+        <p>That is also what the customer was given. A plan a few days past its date is
+        still being cleaned, because the round keeps going through the grace period before
+        anything is put on hold — so starting the new term at the payment date charged for
+        a full month and quietly gave those days away.</p>
+
+        <div class="plain">
+            <span class="eyebrow">The one exception</span>
+            <p>A plan left unpaid so long that continuing the chain would produce a term
+            that is <em>already over</em> starts fresh from today instead. Renewing a plan
+            that lapsed eight months ago cannot issue a month that expired in March, so
+            there is nothing to continue and it begins now.</p>
+        </div>
+
+        <h3>So which one will it do?</h3>
+        <p>The switch happens when the plan is more than <strong>one whole term</strong> past
+        its date. Until then it carries on; after that it starts again.</p>
+
+        <table>
+            <thead><tr><th class="narrow">A one-month plan that ended 10 Aug</th><th>Renewed on</th><th style="width:34%">New term</th></tr></thead>
+            <tbody>
+                <tr><td class="name">Renewed early</td><td>1 Aug</td><td>10 Aug &rarr; 10 Sept — the days left are added on</td></tr>
+                <tr><td class="name">Renewed on the day</td><td>10 Aug</td><td>10 Aug &rarr; 10 Sept — no gap</td></tr>
+                <tr><td class="name">A week late</td><td>17 Aug</td><td>10 Aug &rarr; 10 Sept — carries on from the old date</td></tr>
+                <tr><td class="name">Four weeks late</td><td>7 Sept</td><td>10 Aug &rarr; 10 Sept — still carries on, just</td></tr>
+                <tr><td class="name">Six weeks late</td><td>21 Sept</td><td>21 Sept &rarr; 21 Oct — starts fresh</td></tr>
+            </tbody>
+        </table>
+
+        <p>A three-month plan works the same way with a longer fuse: it carries on until it
+        is more than three months late, then starts fresh. A six-month plan, six months.</p>
+
+        <div class="note">
+            <span class="eyebrow">You do not have to work it out</span>
+            <p>The notice on the renewal screen names the dates before anybody pays &mdash;
+            <em>"Renewing carries on from 10 Aug, not from today &mdash; the new term runs to
+            10 Sept"</em>, or <em>"Too long lapsed to carry on. Renewing starts a fresh term
+            today, running to 21 Oct"</em>. It is the same calculation the payment then
+            writes, not a second opinion, so what it says on screen is what the plan gets.</p>
+        </div>
+
+        <p>Renewing early works the same way, from the other side: the new term is added on
+        to the current end date, so a customer who pays a month ahead loses nothing.</p>
+
+        <p><strong>That is now said out loud, in all four places a renewal can be
+        started</strong> — the public page, the customer's own pages, and the office list
+        for administrators and franchise owners alike. A plan with time still on it says so
+        and explains that the days are not lost; one that has lapsed says how long ago and
+        that it will restart from today. The office sees the same facts worded for somebody
+        taking a payment rather than making one.</p>
+
+        <div class="note">
+            <span class="eyebrow">It is a notice, not a gate</span>
+            <p>Renewing early is never refused. A customer who wants to pay four months
+            ahead is a customer paying you four months early, and the period is extended
+            from its end date either way — blocking it would only mean the money arrives
+            later. The one case in a warning colour is a plan already past its date, because
+            that one is costing the customer service days.</p>
+        </div>
+
+        <p>Paying finishes on a page of its own — what was renewed, the invoice number, what
+        it cost and when the new term runs from — rather than a line of green text under a
+        form the customer has finished with.</p>
+
+        <h3>While a payment is going through</h3>
+        <p>Every screen that takes money — the public signup, the public renewal, the public
+        cloth top-up, the customer's own renew, top-up and add-a-car, and the office taking
+        a payment over the phone — now covers itself while the payment runs, with a spinner
+        and one instruction:</p>
+
+        <div class="note">
+            <span class="eyebrow">What it says</span>
+            <p><em>Please wait. Do not click anywhere or refresh the page. This finishes on
+            its own, and you will see a confirmation when it is done.</em></p>
+        </div>
+
+        <p>It cannot be dismissed, and it does not come down until the payment has finished
+        one way or the other. It also stands aside while the gateway's own window is open,
+        because covering that would block the very thing the customer is being asked to use.
+        Closing the browser at the wrong moment now asks the customer to confirm.</p>
+
+        <p><strong>Confirmations of payment no longer clear themselves.</strong> Assigning a
+        cleaner still says so briefly and then gets out of the way; money changing hands
+        stays on screen until it is closed. Somebody reading an invoice number back down the
+        phone was watching it disappear mid-sentence, which looks exactly like a payment
+        that did not go through.</p>
 
         <h3>Raising a complaint</h3>
         <p>A signed-in customer picks the plan, a category and a priority, and writes
@@ -595,6 +684,22 @@ code {
 <div class="sheet">
     <div class="rail"><div class="num">4.2</div></div>
     <div class="flow">
+        <h3>Every number on the dashboard is a way in</h3>
+        <p>The counts are not just figures to read. Clicking one opens the list it
+        counted, already filtered, so the screen that follows shows the same records the
+        tile was counting &mdash; <em>On hold</em> opens the plans on hold, <em>No
+        cleaner</em> opens the ones nobody has been given, the money figures open the
+        payments for the same dates. Nobody has to rebuild the filter by hand and then
+        wonder why their total came out different.</p>
+
+        <div class="plain">
+            <span class="eyebrow">The one exception</span>
+            <p><strong>New plans</strong> is deliberately not a link. It counts plans
+            started inside the chosen dates, and the Subscriptions screen has no
+            started-between filter, so a link would open a list that did not match its own
+            number. A tile that lies is worse than a tile that does nothing.</p>
+        </div>
+
         <h3>The three lists the day starts with</h3>
         <p>The requirements document names three things the office should land on. All
         three exist as saved filters on the Subscriptions screen, reachable in one click
@@ -607,6 +712,30 @@ code {
             <li><strong>Cloths below five</strong> — customers about to run out.
             <span class="chip hidden">Hidden with the cloth service</span></li>
         </ul>
+
+        <h3>What the Paid column is telling you</h3>
+        <p>The figure is what has been paid against that period. Underneath it is the date of
+        the payment behind it, and a way into the whole history.</p>
+        <ul>
+            <li><strong>A date</strong> — the receipt is on file. Click it for the payment,
+            or <em>History</em> for every payment this car has ever made, across all its
+            renewals.</li>
+            <li><strong>"no receipt on file"</strong> — the amount is recorded on the plan
+            but no payment record sits behind it. Almost every one of these came across from
+            the previous system, which kept the amount on the order and not always the
+            payment. The money was collected; the receipt did not survive the move.</li>
+            <li><strong>"nothing yet"</strong> — genuinely nothing has been paid. A plan the
+            office set up and has not taken money for yet reads like this, and correctly.</li>
+        </ul>
+
+        <div class="note">
+            <span class="eyebrow">What changed</span>
+            <p>The middle case used to say "nothing yet" as well — directly under a figure
+            saying &#8377;779 had been paid. It also hid the History link, so the payments on
+            a renewed plan's earlier periods could not be reached from the row in front of
+            you. Both are fixed, and History now spans every period of the car rather than
+            just the one on screen.</p>
+        </div>
 
         <h3>Editing a plan</h3>
         <p>An administrator can edit the whole plan: the customer, the address and
@@ -813,9 +942,34 @@ code {
                 <tr><td class="num-col">11</td><td class="name">Renewal overdue</td><td>Nightly, once the date has passed</td><td>Customer</td></tr>
                 <tr><td class="num-col">12</td><td class="name">Cloths running low</td><td>The balance falls below the threshold</td><td>Customer</td></tr>
                 <tr><td class="num-col">&mdash;</td><td class="name">Plan paused</td><td>A plan is put on hold for being unpaid</td><td>Customer</td></tr>
-                <tr><td class="num-col">&mdash;</td><td class="name">Payment received</td><td>A payment is confirmed</td><td>Customer</td></tr>
+                <tr><td class="num-col">&mdash;</td><td class="name">Payment received</td><td>Every payment that is confirmed — a signup, a renewal or a top-up</td><td>Customer</td></tr>
             </tbody>
         </table>
+
+        <h3>The receipt</h3>
+        <p><strong>Payment received</strong> goes out on every confirmed payment, alongside
+        the welcome or renewal message rather than instead of it: those say what happens
+        next, and this is the proof of what was paid. It carries the amount taken, the date,
+        the receipt number, and <strong>a link to the bill itself</strong>.</p>
+
+        <div class="note">
+            <span class="eyebrow">The link needs no account</span>
+            <p>It opens the receipt as a page the customer can read on their phone and print
+            or save as a PDF. That matters because most customers never make an account, and
+            a bill they can only reach by signing in is a bill they will never open — it
+            becomes a phone call to the office instead.</p>
+            <p>The link is signed, so changing the id in it does not open somebody else's
+            receipt. It does not expire: the message it arrives in is permanent, and a
+            receipt that stops opening after a few months is a support call at exactly the
+            moment the customer needs it for their own records. Treat it as you would an
+            emailed invoice — anyone the customer forwards it to can read it.</p>
+        </div>
+
+        <p>The wording is editable on the Messages screen like any other. Two placeholders
+        are worth knowing: <code>{paid_amount}</code> is what was actually taken and
+        <code>{invoice_link}</code> is the link to the bill. <code>{amount}</code> is
+        something different — it is what the plan costs today, which is the wrong figure to
+        put on a receipt for a payment made last year.</p>
     </div>
 </div>
 
@@ -935,6 +1089,35 @@ code {
         <p><strong>To turn it on:</strong> Settings &rarr; Service &rarr; <em>Offer the
         cloth ironing service</em>. Everything resumes exactly where it left off.</p>
 
+        <h3><span class="chip hidden">Hidden</span> The advice blog</h3>
+        <p><strong>What exists:</strong> the public Advice section and each article's own
+        page; comments, which appear only once approved; the office's writing screen with
+        drafts and a separate publish step; and blog categories and tags on the Masters
+        screen.</p>
+        <p><strong>What being off does:</strong> takes Advice out of the public menu, closes
+        the article pages and the endpoints behind them, hides the Blog screen in the
+        office, and removes the two blog lists from Masters. An old link or a search result
+        lands on the home page rather than on an article.</p>
+        <p><strong>To turn it on:</strong> Settings &rarr; Service &rarr; <em>Publish the
+        advice blog</em>. Every article, category, tag and comment is exactly where it was.</p>
+
+        <h3><span class="chip hidden">Hidden</span> The team page</h3>
+        <p><strong>What exists:</strong> the public Team page and the Team list on Masters,
+        with a name, title, photograph and short biography for each person.</p>
+        <p><strong>What being off does:</strong> takes Team out of the public menu, closes
+        the page and its endpoint, and removes the Team list from Masters.</p>
+        <p><strong>To turn it on:</strong> Settings &rarr; Service &rarr; <em>Show the team
+        page</em>.</p>
+
+        <div class="note">
+            <span class="eyebrow">Off means off everywhere</span>
+            <p>Each of these switches closes the public menu, the pages, the office screen,
+            the master lists <em>and</em> the addresses behind them at the same moment.
+            Hiding only the menu would leave anybody with an old link - or a search engine
+            that indexed an article last week - reading a section the business has decided
+            not to run.</p>
+        </div>
+
         <h3><span class="chip hidden">Hidden</span> Renew and Subscribe for signed-in customers</h3>
         <p>Not shown in the header to a customer who is already signed in, because they
         do both from their own pages. Staff still see them; the pages still work by
@@ -1011,11 +1194,13 @@ code {
                 <tr><td class="name" rowspan="2">Billing</td><td>Invoice prefix</td><td>ESW</td></tr>
                 <tr><td>Invoice footer note</td><td>&mdash;</td></tr>
 
-                <tr><td class="name" rowspan="5">Service</td><td>Days overdue before pausing</td><td>7</td></tr>
+                <tr><td class="name" rowspan="7">Service</td><td>Days overdue before pausing</td><td>7</td></tr>
                 <tr><td>Warn when cloths fall below</td><td>5</td></tr>
                 <tr><td>Number for new plan alerts</td><td>&mdash;</td></tr>
                 <tr><td>Only administrators may change a plan</td><td>Off</td></tr>
                 <tr><td>Offer the cloth ironing service</td><td>Off</td></tr>
+                <tr><td>Publish the advice blog</td><td>Off</td></tr>
+                <tr><td>Show the team page</td><td>Off</td></tr>
 
                 <tr><td class="name" rowspan="5">Search &amp; sharing</td><td>Page title</td><td>Eswachh · Doorstep car cleaning, every day</td></tr>
                 <tr><td>Description</td><td>Set</td></tr>
@@ -1039,10 +1224,37 @@ code {
         afterwards by the browser, which is the only way a search engine reliably reads
         them.</p>
 
+        <p>Three things happen on top of the words entered here, and none of them need
+        touching:</p>
+        <ul>
+            <li><strong>Each page names itself.</strong> The price list is listed as
+            "Plans and prices", the questions page as "Common questions", and so on,
+            rather than eight pages competing under one name.</li>
+            <li><strong>The business is described in a form search engines read
+            directly</strong> &mdash; name, phone, address, hours and the plans on sale,
+            taken from Settings and the price list. A detail nobody has filled in is left
+            out rather than sent empty.</li>
+            <li><strong>The questions are offered as search results of their own.</strong>
+            Whatever is live on the Questions screen is what is offered, so editing an
+            answer there changes what Google may show. Nothing is written twice.</li>
+        </ul>
+
+        <div class="note">
+            <span class="eyebrow">Worth knowing</span>
+            <p>Switching <strong>Let search engines list this site</strong> off withdraws
+            the questions too, not only the pages. A staging copy cannot have its answers
+            picked up and shown against the real business.</p>
+        </div>
+
         <h3>Elsewhere, not in Settings</h3>
         <ul>
             <li><strong>The home page banner</strong> — images, headings and the button on
-            each, managed as its own list. The image runs the full width of the page.</li>
+            each, managed as its own list. The image runs the full width of the page, and a
+            banner carrying one is drawn as a dark band whichever theme the visitor is in,
+            so the headline stays legible over it. The four that ship were drawn for this
+            business rather than bought in; anything uploaded to replace them wants to be
+            about 2400&#215;1000 and quiet down its left-hand side, which is where the words
+            sit.</li>
             <li><strong>Prices and geography</strong> — the Masters screen.</li>
             <li><strong>Message wording</strong> — the Messages screen.</li>
             <li><strong>Advice articles, the team, and questions</strong> — their own screens.</li>

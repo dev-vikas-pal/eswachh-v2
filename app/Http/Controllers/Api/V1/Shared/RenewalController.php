@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Domain\Billing\StartPayment;
 use App\Domain\Pricing\PriceBook;
-use App\Enums\PaymentPurpose;
+use App\Domain\Pricing\Quote;
 use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ClothBundle;
@@ -108,15 +108,12 @@ class RenewalController extends Controller
          */
         $before = (int) $subscription->amount_paise;
 
-        if ($before !== $quote->totalPaise) {
-            $subscription->forceFill(['amount_paise' => $quote->totalPaise])->save();
-        }
-
-        $result = $this->starter->forSubscription($subscription->fresh());
+        $result = $this->openAtQuotedPrice($subscription, $quote);
 
         return response()->json([
             'data' => $result['checkout'],
             'quote' => $quote->toArray(),
+            'timing' => $subscription->renewalTiming(),
             // Flagged rather than left for somebody to spot by comparing two
             // numbers: a renewal is bought at today's prices, not last year's.
             // Compared against what it cost before this call, not after - the
@@ -125,6 +122,32 @@ class RenewalController extends Controller
             'price_changed' => $before !== $quote->totalPaise,
             'previously_paid' => $before / 100,
         ], 201);
+    }
+
+    /**
+     * Write the quoted price onto the plan, then open a payment for it.
+     *
+     * The one place a renewal turns into a charge, because the office renewal
+     * and the public one have to agree on the figure. They did not: the public
+     * page quoted the price book and then handed StartPayment a subscription
+     * still carrying whatever it cost last time, so a customer was shown ₹225
+     * and Razorpay asked them for ₹1,872. StartPayment charges what the plan
+     * says it costs and is right to - so the plan has to say the quoted price
+     * before it is asked.
+     *
+     * @return array{payment: \App\Models\Payment, checkout: array<string, mixed>}
+     */
+    private function openAtQuotedPrice(Subscription $subscription, Quote $quote): array
+    {
+        if ((int) $subscription->amount_paise !== $quote->totalPaise) {
+            $subscription->forceFill(['amount_paise' => $quote->totalPaise])->save();
+        }
+
+        // Unscoped, because this runs from the public page too, where there is
+        // nobody signed in and a scoped re-read would find nothing.
+        return SectorContext::withoutScope(
+            fn () => $this->starter->forSubscription($subscription->fresh() ?? $subscription)
+        );
     }
 
     /**
@@ -229,11 +252,33 @@ class RenewalController extends Controller
             ], 404);
         }
 
-        $subscription->load('vehicle', 'customer');
-
+        /*
+         * The car and the customer are read outside the scope, and the price is
+         * worked out in there with them.
+         *
+         * Nobody is signed in on this page, so the scope covers no sectors and
+         * both relations came back null. Everything downstream then degraded
+         * quietly rather than failing: the card showed an empty registration
+         * beside an empty name, and - far worse - the price book priced a plan
+         * with no car and no society, dropping the vehicle category and the
+         * society surcharge and quoting ₹225 for a ₹1,872 renewal.
+         */
         try {
-            $quote = $this->book->forRenewal($subscription);
+            $quote = SectorContext::withoutScope(function () use ($subscription) {
+                $subscription->load('vehicle', 'customer');
+
+                return $this->book->forRenewal($subscription);
+            });
         } catch (RuntimeException) {
+            return response()->json([
+                'found' => false,
+                'message' => 'That plan needs to be renewed over the phone. Please call the office.',
+            ], 404);
+        }
+
+        if (! $quote->isComplete()) {
+            // A plan that cannot be priced in full must not be half-quoted on a
+            // page with a Pay button under it.
             return response()->json([
                 'found' => false,
                 'message' => 'That plan needs to be renewed over the phone. Please call the office.',
@@ -252,6 +297,13 @@ class RenewalController extends Controller
                 'status' => $subscription->status->value,
                 'amount' => $quote->total(),
                 'formatted' => $quote->toArray()['formatted'],
+                // What they are buying, itemised. A price with no explanation
+                // is the thing people phone the office about.
+                'lines' => $quote->toArray()['lines'] ?? [],
+                'months' => $quote->months,
+                // Early, due, or overdue - the same answer the office and the
+                // portal give for this plan.
+                'timing' => $subscription->renewalTiming(),
             ],
         ]);
     }
@@ -282,8 +334,32 @@ class RenewalController extends Controller
             404,
         );
 
-        $result = SectorContext::withoutScope(fn () => $this->starter->forSubscription($subscription));
+        /*
+         * Priced again here, at the same rates the lookup quoted.
+         *
+         * This used to open the payment straight from the plan's stored amount,
+         * which is what it cost the last time it was bought - so the page said
+         * one figure and the gateway asked for another. Repricing is also the
+         * only honest way round: a customer who left the tab open overnight is
+         * charged today's price, and it is the price they were just shown.
+         */
+        try {
+            $quote = SectorContext::withoutScope(fn () => $this->book->forRenewal($subscription));
+        } catch (RuntimeException $e) {
+            throw ValidationException::withMessages(['registration' => $e->getMessage()]);
+        }
 
-        return response()->json(['data' => $result['checkout']], 201);
+        if (! $quote->isComplete()) {
+            throw ValidationException::withMessages([
+                'registration' => 'That plan needs to be renewed over the phone. Please call the office.',
+            ]);
+        }
+
+        $result = $this->openAtQuotedPrice($subscription, $quote);
+
+        return response()->json([
+            'data' => $result['checkout'],
+            'quote' => $quote->toArray(),
+        ], 201);
     }
 }

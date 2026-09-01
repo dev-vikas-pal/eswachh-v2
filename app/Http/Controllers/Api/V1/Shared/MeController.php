@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\Sector;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Support\Settings\Features;
 use App\Support\Tenancy\SectorContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +34,17 @@ class MeController extends Controller
             // What a customer currently has, so the public site can decide
             // which of its buttons are worth showing them.
             'standing' => $this->standingOf($user),
+
+            /*
+             * Which features the business is running.
+             *
+             * The office menu hides a screen for two different reasons - you
+             * are not allowed to use it, or the business is not doing it - and
+             * they are not the same thing. Abilities answer the first; this
+             * answers the second, and both arrive in the one call the SPA makes
+             * before it draws anything.
+             */
+            'features' => Features::all(),
         ]);
     }
 

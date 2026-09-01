@@ -185,6 +185,56 @@ class AuthAndDashboardTest extends TestCase
             ->assertJsonPath('data.subscriptions.active', 1);
     }
 
+    public function test_each_dashboard_count_can_be_opened_as_a_list(): void
+    {
+        $this->makeSubscription($this->ourBranch, 'IN-DATE', SubscriptionStatus::Active, Carbon::today()->addMonth());
+        $this->makeSubscription($this->ourBranch, 'OVERDUE', SubscriptionStatus::Active, Carbon::today()->subDays(5));
+        $this->makeSubscription($this->ourBranch, 'PAUSED', SubscriptionStatus::Hold);
+
+        $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
+        $this->actingAs($owner);
+
+        $counts = $this->getJson('/api/v1/dashboard')->assertOk()->json('data.subscriptions');
+
+        /*
+         * A tile that opens a different number from the one it displays is
+         * worse than a tile that does not open at all - so each filter the
+         * dashboard links to has to return exactly what the dashboard counted.
+         */
+        $lists = [
+            'active' => '/api/v1/subscriptions?filter[status]=active',
+            'current' => '/api/v1/subscriptions?filter[current]=1',
+            'expired' => '/api/v1/subscriptions?filter[expired]=1',
+            'hold' => '/api/v1/subscriptions?filter[status]=hold',
+        ];
+
+        foreach ($lists as $key => $url) {
+            $this->assertSame(
+                $counts[$key],
+                $this->getJson($url)->assertOk()->json('meta.total'),
+                "The {$key} tile and the list it opens disagree.",
+            );
+        }
+    }
+
+    public function test_a_finished_period_is_hidden_unless_it_is_asked_for(): void
+    {
+        $plan = $this->makeSubscription($this->ourBranch, 'DONE-01', SubscriptionStatus::Active);
+        $plan->forceFill(['status' => SubscriptionStatus::Ended])->save();
+
+        $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
+
+        // A plan is a chain of periods; listing every one of them showed the
+        // same car several times over and read as duplicate records.
+        $this->actingAs($owner)->getJson('/api/v1/subscriptions')
+            ->assertOk()->assertJsonPath('meta.total', 0);
+
+        // But "show me what has ended" is a real question and must not come
+        // back empty.
+        $this->actingAs($owner)->getJson('/api/v1/subscriptions?filter[status]=ended')
+            ->assertOk()->assertJsonPath('meta.total', 1);
+    }
+
     public function test_expired_is_counted_separately_but_is_still_active(): void
     {
         // The v1 rule, carried over deliberately: an overdue subscription keeps

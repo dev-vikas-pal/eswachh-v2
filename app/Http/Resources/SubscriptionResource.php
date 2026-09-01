@@ -27,6 +27,13 @@ class SubscriptionResource extends JsonResource
                 'end' => $this->period_end?->toDateString(),
             ],
 
+            /*
+             * How this plan stands against its end date - early, due, or
+             * overdue - so every screen that offers a renewal says the same
+             * thing about renewing before it is needed.
+             */
+            'timing' => $this->renewalTiming(),
+
             // Sent as paise and as a formatted string: the client never does
             // currency arithmetic.
             'amount' => [
@@ -80,6 +87,9 @@ class SubscriptionResource extends JsonResource
                 'id' => $this->customer->id,
                 'name' => $this->customer->name,
                 'phone' => $this->customer->phone,
+                // Where they live decides the surcharge, so a renewal form
+                // cannot quote the right price without it.
+                'society_id' => $this->customer->society_id,
             ]),
 
             /*

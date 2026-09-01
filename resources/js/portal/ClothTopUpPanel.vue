@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { useQuery } from '@tanstack/vue-query';
 import { api } from '@/shared/api/client';
-import { payForClothTopUp } from '@/shared/api/checkout';
+import { payForClothTopUp, type PaymentReceipt } from '@/shared/api/checkout';
 import type { PortalPlan } from '@/portal/portal.api';
 
 /**
@@ -14,7 +14,12 @@ import type { PortalPlan } from '@/portal/portal.api';
  * answered by getting here.
  */
 const props = defineProps<{ plan: PortalPlan }>();
-const emit = defineEmits<{ (e: 'close'): void; (e: 'done'): void }>();
+
+const emit = defineEmits<{
+    (e: 'close'): void;
+    /** Paid, with the receipt, so the page behind can acknowledge it. */
+    (e: 'done', receipt: PaymentReceipt | undefined): void;
+}>();
 
 const chosen = ref('');
 const busy = ref(false);
@@ -43,7 +48,7 @@ async function pay() {
     busy.value = false;
 
     if (result.ok) {
-        emit('done');
+        emit('done', result.payment);
         return;
     }
 

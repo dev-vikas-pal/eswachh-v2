@@ -141,13 +141,21 @@ class PaymentDetailTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_the_payment_list_can_be_narrowed_to_one_order(): void
+    public function test_narrowing_to_an_order_shows_every_period_of_that_car(): void
     {
         $this->payment();
         $this->payment();
 
-        // A second plan, whose payment must not appear.
-        $other = Subscription::factory()->create([
+        /*
+         * An earlier period of the same car.
+         *
+         * This is what the screen is for. A plan renewed six times keeps each
+         * payment on the period it bought, so filtering on the id of the period
+         * the car is on now used to show one payment and file the other five
+         * under rows nobody can reach - and "which one was the ₹949 in March" is
+         * the question this list gets asked.
+         */
+        $earlier = Subscription::factory()->create([
             'branch_id' => $this->branch->id,
             'customer_id' => $this->customer->id,
             'vehicle_id' => $this->plan->vehicle_id,
@@ -156,7 +164,7 @@ class PaymentDetailTest extends TestCase
         Payment::factory()->create([
             'branch_id' => $this->branch->id,
             'customer_id' => $this->customer->id,
-            'subscription_id' => $other->id,
+            'subscription_id' => $earlier->id,
             'purpose' => PaymentPurpose::Subscription,
             'status' => PaymentStatus::Captured,
         ]);
@@ -164,7 +172,39 @@ class PaymentDetailTest extends TestCase
         $this->actingAs($this->owner)
             ->getJson('/api/v1/payments?subscription_id='.$this->plan->id)
             ->assertOk()
-            ->assertJsonCount(2, 'data');
+            ->assertJsonCount(3, 'data');
+    }
+
+    public function test_but_not_another_cars_payments(): void
+    {
+        $this->payment();
+
+        // The customer's second car. Same person, same sector, different plan -
+        // and its money has no business on this one's history.
+        $otherCar = Vehicle::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'registration' => 'UP42XX1111',
+        ]);
+
+        $otherPlan = Subscription::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'vehicle_id' => $otherCar->id,
+        ]);
+
+        Payment::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'subscription_id' => $otherPlan->id,
+            'purpose' => PaymentPurpose::Subscription,
+            'status' => PaymentStatus::Captured,
+        ]);
+
+        $this->actingAs($this->owner)
+            ->getJson('/api/v1/payments?subscription_id='.$this->plan->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
     }
 
     // ------------------------------------------------------------- the policies

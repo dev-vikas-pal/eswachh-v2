@@ -25,6 +25,21 @@ class DatabaseSeeder extends Seeder
         $this->call(SiteContentSeeder::class);
         // Safe to run again: only blank pages are filled.
         $this->call(PolicySeeder::class);
+
+        /*
+         * The message wording.
+         *
+         * This was written and never called, so a fresh install had no
+         * templates at all - and the way that fails is silent. Messenger looks
+         * for a template by purpose, does not find one, writes a line to the
+         * log and returns: no welcome, no renewal reminder, no receipt, and
+         * nothing on any screen to say why. Somebody would have found it by
+         * noticing customers had stopped hearing from us.
+         *
+         * Keyed on the template key, so wording the office has since rewritten
+         * is never touched and a newly added template still arrives.
+         */
+        $this->call(MessageTemplateSeeder::class);
     }
 
     private function createAdministrator(): void

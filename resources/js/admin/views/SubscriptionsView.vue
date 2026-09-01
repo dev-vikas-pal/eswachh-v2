@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/vue-query';
 import { listSubscriptions } from '@/admin/shared/subscriptions.api';
+import { refreshAfter } from '@/shared/api/refresh';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/shared/stores/auth';
 import type { Paginated, Subscription } from '@/shared/types';
@@ -20,6 +21,7 @@ const route = useRoute();
 const search = ref('');
 const status = ref('');
 const expiredOnly = ref(false);
+const currentOnly = ref(false);
 const unassignedOnly = ref(false);
 const packageId = ref('');
 const cleanerId = ref('');
@@ -59,16 +61,39 @@ watch(
     { immediate: true },
 );
 
+/**
+ * Filters carried in from somewhere else - a dashboard tile, a bookmark.
+ *
+ * The point of a count on a dashboard is that somebody wants to see the rows
+ * behind it, and "On hold: 4" followed by a list of everything is a dead end.
+ * Read once on arrival rather than kept in sync both ways: the filters are then
+ * ordinary controls the person can change, and the URL is where they came from
+ * rather than a second source of truth fighting them.
+ */
+watch(
+    () => route.query,
+    (query) => {
+        if (typeof query.status === 'string') status.value = query.status;
+        if (query.expired === '1') expiredOnly.value = true;
+        if (query.current === '1') currentOnly.value = true;
+        if (query.unassigned === '1') unassignedOnly.value = true;
+        if (typeof query.cleaner_id === 'string') cleanerId.value = query.cleaner_id;
+        if (typeof query.package_id === 'string') packageId.value = query.package_id;
+        if (typeof query.search === 'string') search.value = query.search;
+    },
+    { immediate: true },
+);
+
 // Any change to the filters starts again at the first page, otherwise you can
 // land on page 4 of a two page result and see nothing.
-watch([search, status, expiredOnly, unassignedOnly, packageId, cleanerId, renewFrom, renewTo, () => auth.selectedSectorId], () => {
+watch([search, status, expiredOnly, currentOnly, unassignedOnly, packageId, cleanerId, renewFrom, renewTo, () => auth.selectedSectorId], () => {
     page.value = 1;
 });
 
 const { data, isPending, isError, isFetching } = useQuery({
     queryKey: computed(() => [
         'subscriptions', auth.selectedSectorId, search.value, status.value, expiredOnly.value,
-        unassignedOnly.value, packageId.value, cleanerId.value,
+        currentOnly.value, unassignedOnly.value, packageId.value, cleanerId.value,
         renewFrom.value, renewTo.value, page.value, sort.value, direction.value,
     ]),
     // Keeps the table on screen while the next page loads, instead of blanking.
@@ -78,6 +103,7 @@ const { data, isPending, isError, isFetching } = useQuery({
             search: search.value,
             status: status.value,
             expired: expiredOnly.value,
+            current: currentOnly.value,
             unassigned: unassignedOnly.value,
             package_id: packageId.value,
             cleaner_id: cleanerId.value,
@@ -143,6 +169,7 @@ function clearFilters() {
     search.value = '';
     status.value = '';
     expiredOnly.value = false;
+    currentOnly.value = false;
     unassignedOnly.value = false;
     packageId.value = '';
     cleanerId.value = '';
@@ -152,7 +179,7 @@ function clearFilters() {
 
 async function afterBulk() {
     selection.clear();
-    await queryClient.invalidateQueries({ queryKey: ['subscriptions'] });
+    await refreshAfter(queryClient, 'subscriptions');
 }
 const meta = computed(() => data.value?.meta);
 
@@ -234,6 +261,17 @@ function statusLabel(row: Subscription): string {
             <label class="flex items-center gap-2 pb-1.5 text-sm text-body">
                 <input v-model="unassignedOnly" type="checkbox" class="rounded border-line-strong" />
                 No cleaner
+            </label>
+
+            <!--
+                Only offered once something has switched it on, which in practice
+                means arriving from the dashboard. It is the opposite of Overdue
+                rather than a filter somebody reaches for, and a permanent third
+                checkbox for it would be clutter.
+            -->
+            <label v-if="currentOnly" class="flex items-center gap-2 pb-1.5 text-sm text-body">
+                <input v-model="currentOnly" type="checkbox" class="rounded border-line-strong" />
+                In date only
             </label>
 
             <button type="button" class="mb-0.5 rounded border border-line-strong px-3 py-1.5 text-sm text-body transition hover:bg-sunk" @click="clearFilters">
@@ -321,8 +359,9 @@ function statusLabel(row: Subscription): string {
                         <td class="px-3 py-2 text-right tabular-nums text-body">
                             {{ row.paid.formatted }}
 
-                            <span v-if="row.last_payment" class="mt-0.5 block text-xs">
+                            <span class="mt-0.5 block text-xs">
                                 <button
+                                    v-if="row.last_payment"
                                     type="button"
                                     class="text-accent underline-offset-2 hover:underline"
                                     :title="'Last payment on ' + (row.last_payment.paid_at ?? 'an unknown date')"
@@ -330,7 +369,33 @@ function statusLabel(row: Subscription): string {
                                 >
                                     {{ row.last_payment.paid_at ?? 'latest' }}
                                 </button>
+
+                                <!--
+                                    Money recorded against the plan with no
+                                    receipt behind it. Almost all of these came
+                                    across from v1, which kept the amount on the
+                                    order and not always the payment.
+
+                                    It used to say "nothing yet" - directly under
+                                    the figure that had just said ₹779 was paid.
+                                    A column that contradicts itself is worse
+                                    than one that admits what it does not know.
+                                -->
+                                <span v-else-if="row.paid.paise > 0" class="text-faint" title="The amount is recorded on the plan, but no payment record is filed against it.">
+                                    no receipt on file
+                                </span>
+
+                                <span v-else class="text-faint">nothing yet</span>
+
+                                <!--
+                                    Offered whenever there is money to look at,
+                                    not only when this particular period holds
+                                    the receipt: a renewed plan keeps its earlier
+                                    payments on the periods they bought, and
+                                    those are exactly the ones being looked for.
+                                -->
                                 <button
+                                    v-if="row.last_payment || row.paid.paise > 0"
                                     type="button"
                                     class="ms-2 text-muted underline-offset-2 hover:text-ink hover:underline"
                                     @click="historyFor = { id: row.id, car: row.vehicle?.registration ?? null }"
@@ -338,8 +403,6 @@ function statusLabel(row: Subscription): string {
                                     History
                                 </button>
                             </span>
-
-                            <span v-else class="mt-0.5 block text-xs text-faint">nothing yet</span>
                         </td>
                         <td class="px-3 py-2">
                             <span class="rounded px-2 py-0.5 text-xs font-medium" :class="statusClass(row)">
@@ -354,6 +417,7 @@ function statusLabel(row: Subscription): string {
                                 :customer-name="row.customer?.name"
                                 :customer-phone="row.customer?.phone ?? undefined"
                                 :amount="row.amount.paise / 100"
+                                :timing="row.timing"
                                 @edit="editingId = row.id"
                             />
                         </td>

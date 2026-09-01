@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Models\Concerns\ScopedToSectors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\URL;
 
 /**
  * A single attempt to take money.
@@ -106,5 +107,22 @@ class Payment extends BaseModel
     public function wasSetByHand(): bool
     {
         return $this->verified_at !== null;
+    }
+
+    /**
+     * A link to this receipt that needs no account.
+     *
+     * Signed with the application key, so the id inside it cannot be edited
+     * into somebody else's - and never expiring, because the message it is sent
+     * in is permanent and a receipt that stops opening after ninety days is a
+     * phone call to the office at exactly the wrong moment.
+     *
+     * That does make the link the credential: whoever holds it can read the
+     * receipt. It is the same bargain as emailing a PDF invoice, and the
+     * alternative - a password on a receipt - is not one customers would use.
+     */
+    public function receiptUrl(): string
+    {
+        return URL::signedRoute('receipt', ['payment' => $this->id]);
     }
 }

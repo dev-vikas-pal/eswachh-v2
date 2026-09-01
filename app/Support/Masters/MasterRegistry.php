@@ -20,6 +20,7 @@ use App\Models\State;
 use App\Models\TeamMember;
 use App\Models\VehicleCategory;
 use App\Models\VehicleModel;
+use App\Support\Settings\Features;
 use InvalidArgumentException;
 
 /**
@@ -220,11 +221,18 @@ class MasterRegistry
                 'columns' => ['headline', 'cta_label', 'starts_at', 'ends_at', 'sort_order'],
             ],
 
+            /*
+             * The blog's own lists and the team, each tied to the switch that
+             * shows the thing they belong to. With the blog off there is no
+             * screen these categories appear on, so offering them for editing
+             * is offering somebody a job with no result.
+             */
             'post-categories' => [
                 'model' => PostCategory::class,
                 'label' => 'Blog categories',
                 'singular' => 'Category',
                 'group' => 'Website',
+                'feature' => Features::BLOG,
                 'fields' => [
                     'name' => ['required', 'string', 'max:120'],
                     'description' => ['nullable', 'string', 'max:500'],
@@ -238,6 +246,7 @@ class MasterRegistry
                 'label' => 'Blog tags',
                 'singular' => 'Tag',
                 'group' => 'Website',
+                'feature' => Features::BLOG,
                 'fields' => ['name' => ['required', 'string', 'max:60']],
             ],
 
@@ -246,6 +255,7 @@ class MasterRegistry
                 'label' => 'Team',
                 'singular' => 'Team member',
                 'group' => 'Website',
+                'feature' => Features::TEAM,
                 'fields' => [
                     'name' => ['required', 'string', 'max:120'],
                     'title' => ['nullable', 'string', 'max:120'],
@@ -292,11 +302,31 @@ class MasterRegistry
     }
 
     /**
+     * The masters that are actually on offer right now.
+     *
+     * `all()` is the catalogue of what exists; this is what the business is
+     * running. A master belonging to a switched-off feature disappears from the
+     * menu and stops answering - both, from this one method, because a screen
+     * that hides the blog categories while the endpoint still edits them has
+     * hidden a door rather than locked it.
+     *
+     * @return array<string, mixed>
+     */
+    public static function available(): array
+    {
+        return array_filter(
+            self::all(),
+            fn (array $definition) => ! isset($definition['feature'])
+                || Features::on($definition['feature']),
+        );
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function get(string $name): array
     {
-        $all = self::all();
+        $all = self::available();
 
         if (! isset($all[$name])) {
             // A route that could name any table would be a way to edit anything
@@ -309,7 +339,7 @@ class MasterRegistry
 
     public static function exists(string $name): bool
     {
-        return isset(self::all()[$name]);
+        return isset(self::available()[$name]);
     }
 
     /**
@@ -321,7 +351,7 @@ class MasterRegistry
     {
         $out = [];
 
-        foreach (self::all() as $key => $definition) {
+        foreach (self::available() as $key => $definition) {
             $out[] = [
                 'key' => $key,
                 'label' => $definition['label'],

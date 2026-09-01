@@ -90,7 +90,7 @@ class SubscriptionEditController extends Controller
             ]);
 
             return response()->json([
-                'data' => new SubscriptionResource($subscription->load('vehicle', 'customer', 'package')),
+                'data' => new SubscriptionResource($subscription->load('vehicle', 'customer', 'package', 'duration')),
                 'quote' => $quote->toArray(),
             ], 201);
         });
@@ -217,7 +217,7 @@ class SubscriptionEditController extends Controller
         $subscription->save();
 
         return response()->json([
-            'data' => new SubscriptionResource($subscription->fresh()->load('vehicle', 'customer', 'package')),
+            'data' => new SubscriptionResource($subscription->fresh()->load('vehicle', 'customer', 'package', 'duration')),
             // Said plainly rather than silently ignored, so nobody walks away
             // believing a plate was changed when it was not.
             'notice' => $this->registrationRefused

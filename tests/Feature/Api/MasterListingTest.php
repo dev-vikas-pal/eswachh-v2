@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Sector;
 use App\Models\User;
 use App\Support\Masters\MasterRegistry;
+use App\Support\Settings\SiteSettings;
 use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,8 +37,47 @@ class MasterListingTest extends TestCase
         parent::setUp();
         SectorContext::reset();
 
+        /*
+         * Every feature on, so the walk below covers every master.
+         *
+         * Three of them - the blog's categories and tags, and the team - belong
+         * to features that ship switched off, and this test exists to prove the
+         * listing code works for all of them rather than for whichever ones the
+         * business happens to be running today. That the gate itself works is
+         * a separate test, below.
+         */
+        SiteSettings::put([
+            'blog_enabled' => '1',
+            'team_enabled' => '1',
+            'cloth_service_enabled' => '1',
+        ]);
+
         $this->branch = Branch::factory()->create();
         $this->admin = User::factory()->superAdmin()->create();
+    }
+
+    public function test_a_master_behind_a_switched_off_feature_is_neither_listed_nor_readable(): void
+    {
+        SiteSettings::put(['blog_enabled' => '0']);
+
+        $offered = array_column(
+            $this->actingAs($this->admin)->getJson('/api/v1/masters')->assertOk()->json('data'),
+            'key',
+        );
+
+        $this->assertNotContains('post-categories', $offered);
+        $this->assertNotContains('post-tags', $offered);
+
+        /*
+         * And the endpoint behind it is shut too.
+         *
+         * Hiding the menu entry alone would leave the master editable by
+         * anybody who kept the address - which is a door left open, not a
+         * feature switched off.
+         */
+        $this->actingAs($this->admin)
+            ->getJson('/api/v1/masters/post-categories')
+            ->assertNotFound();
     }
 
     protected function tearDown(): void
