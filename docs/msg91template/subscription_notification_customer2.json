@@ -1,0 +1,69 @@
+{
+  "category": "UTILITY",
+  "name": "subscription_notification_customer2",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "459483510093753",
+      "name": "subscription_notification_customer2",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Dear Customer,\n\nThank you for subscribing to our {{1}} daily car cleaning plan for {{2}} months.\n\nCar number: {{3}}\n\nCloth ironing plan: {{4}}\n\nWe will update you once the cleaner is assigned to your car.\n\nYou can check your order details using the following credentials:\n\n- Username: {{5}}\n- Password: {{6}}\n- Link: [Login Here](https://eswachh.in/login)\n\nThank you,\nTeam eSwachh",
+          "type": "BODY",
+          "example": {
+            "body_text": [
+              [
+                "Basic",
+                "3",
+                "UP42BJ4003",
+                "Yes (Basic)",
+                "customer@gmail.com",
+                "Test@123"
+              ]
+            ]
+          }
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 17551,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [
+        "body_1",
+        "body_2",
+        "body_3",
+        "body_4",
+        "body_5",
+        "body_6"
+      ],
+      "variable_type": {
+        "body_1": {
+          "type": "text"
+        },
+        "body_2": {
+          "type": "text"
+        },
+        "body_3": {
+          "type": "text"
+        },
+        "body_4": {
+          "type": "text"
+        },
+        "body_5": {
+          "type": "text"
+        },
+        "body_6": {
+          "type": "text"
+        }
+      }
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

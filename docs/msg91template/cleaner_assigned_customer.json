@@ -1,0 +1,54 @@
+{
+  "category": "UTILITY",
+  "name": "cleaner_assigned_customer",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "964724511502858",
+      "name": "cleaner_assigned_customer",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Dear Customer,\n\nA cleaner has been assigned to your car {{1}} for daily car cleaning service. \nCleaner name - {{2}}\nCleaner mb - {{3}}\n\nPlease complain on the same day when there is any gap or issue.\n\nThanks,\nTeam eSwachh",
+          "type": "BODY",
+          "example": {
+            "body_text": [
+              [
+                "UP42BB9003",
+                "Naveen Kumar",
+                "8766966699"
+              ]
+            ]
+          }
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 16794,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [
+        "body_1",
+        "body_2",
+        "body_3"
+      ],
+      "variable_type": {
+        "body_1": {
+          "type": "text"
+        },
+        "body_2": {
+          "type": "text"
+        },
+        "body_3": {
+          "type": "text"
+        }
+      }
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

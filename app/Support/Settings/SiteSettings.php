@@ -45,6 +45,33 @@ class SiteSettings
 
             // How the business behaves, as opposed to how the code is wired.
             'renewal_grace_days' => ['label' => 'Days overdue before pausing', 'group' => 'Service', 'rules' => ['nullable', 'integer', 'min:0', 'max:60'], 'default' => '7'],
+
+            /*
+             * How often a customer hears about it, per state.
+             *
+             * Both daily by default, because that is how the business runs it:
+             * once a plan has run out the customer is asked every day until
+             * they renew, and once it is paused they are asked every day until
+             * they renew or say they are finished. The message changes when the
+             * status does; the rhythm does not.
+             *
+             * Two numbers rather than one so the two halves can be tuned apart
+             * - chasing a plan that is still being cleaned is a different
+             * conversation from chasing one where the cleaning has stopped, and
+             * the office may well decide the first can be gentler.
+             */
+            'reminder_gap_overdue_days' => [
+                'label' => 'Days between renewal reminders',
+                'group' => 'Service',
+                'rules' => ['nullable', 'integer', 'min:1', 'max:60'],
+                'default' => '1',
+            ],
+            'reminder_gap_hold_days' => [
+                'label' => 'Days between reminders once paused',
+                'group' => 'Service',
+                'rules' => ['nullable', 'integer', 'min:1', 'max:60'],
+                'default' => '1',
+            ],
             // The document says five. v1 warned at ten in one place and five in
             // another; this is the one number both now read.
             'cloth_low_threshold' => ['label' => 'Warn when cloths fall below', 'group' => 'Service', 'rules' => ['nullable', 'integer', 'min:0', 'max:500'], 'default' => '5'],

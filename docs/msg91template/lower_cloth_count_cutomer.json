@@ -1,0 +1,31 @@
+{
+  "category": "UTILITY",
+  "name": "lower_cloth_count_cutomer",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "1140979126950874",
+      "name": "lower_cloth_count_cutomer",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Dear Customer,\n\nPlease renew you car, non renewed car can be skipped by cleaners as they will not seen in list.\n\nhttps://www.eswachh.in\nPlease do not reply on this no.\n\nThanks,\nTeam eSwachh",
+          "type": "BODY"
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 16800,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [],
+      "variable_type": {}
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

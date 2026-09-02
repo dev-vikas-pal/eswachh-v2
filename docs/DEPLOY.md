@@ -168,6 +168,87 @@ them when they are not.
 
 ---
 
+## What still needs setting up after the site loads
+
+A working site is not a running one. Seven jobs do the daily work, and none of
+them fire until one cron entry exists.
+
+### The scheduler — one cron entry, and that is all
+
+In hPanel → Advanced → Cron Jobs, add a single job:
+
+```
+* * * * * cd /home/u841499718/domains/eswachh.in/public_html/testv2 && /opt/alt/php83/usr/bin/php artisan schedule:run >> /dev/null 2>&1
+```
+
+That is the whole of it. Laravel's scheduler runs every minute, looks at what is
+due, and runs only that — you never add a cron entry per job, and adding one per
+job would run them twice.
+
+**If Hostinger only offers a five-minute minimum**, that is fine here. Every
+scheduled time below falls on a five-minute boundary, so nothing is missed.
+Keep it in mind before adding a task at, say, `09:32` — with a five-minute cron
+that task would never run at all, and nothing would report it.
+
+### What it runs, and when
+
+| When | Command | What it does |
+|---|---|---|
+| 00:10 | `eswachh:backup --keep=14` | Database backup, fourteen kept. |
+| 00:20 | `eswachh:reconcile-payments --days=7` | Asks Razorpay about the last week's payments and fixes any we recorded wrongly. |
+| 00:40 | `eswachh:prune-service-history` | Drops service records over fifty days old. |
+| 09:30 | `eswachh:send-renewal-reminders` | Chases plans coming up for renewal, and overdue ones. |
+| 10:00 | `eswachh:hold-overdue --grace=7` | Puts plans a week past their date on hold. |
+| Hourly | `eswachh:send-daily-summary` | Runs every hour, acts only in the hour set by `daily_summary_hour` in Settings. |
+| Mon 06:00 | `eswachh:check-cloth-balances` | Weekly consistency check on the cloth ledger. |
+
+### The queue — you do not need a worker
+
+**Nothing in v2 is queued.** No `ShouldQueue`, no `dispatch()`, no `Mail::queue()`
+anywhere in `app/`. The `jobs` table exists because the migration ships with
+Laravel; nothing ever writes to it.
+
+So set this and move on:
+
+```
+QUEUE_CONNECTION=sync
+```
+
+`sync` rather than `database` on purpose. Both work today, but they fail
+differently the day somebody adds a queued job: on `sync` it runs inline — a
+slower request, but it runs. On `database` with no worker it goes into a table
+nobody drains, and nothing anywhere says so. Shared hosting has no supervisor to
+keep `queue:work` alive, so `sync` is the honest setting.
+
+### Checking it actually works
+
+```bash
+# What is due, without waiting for the cron
+php artisan schedule:list
+
+# Run the whole schedule once by hand
+php artisan schedule:run
+
+# Run one job and watch it
+php artisan eswachh:send-renewal-reminders
+```
+
+The day after adding the cron, check `storage/logs/` for that day's entries and
+the Messages screen for what went out. If the log is empty, the cron is not
+firing — check the path and the PHP binary in the cron line first, since both
+differ from what `php artisan` resolves to in your SSH session.
+
+### Two things worth doing on the server
+
+**Messages are held back outside production.** `Messenger::deliveryEnabled()`
+requires `APP_ENV=production` *and* `WHATSAPP_ENABLED=true`. On a staging copy
+keep the flag off: messages are still written to the `messages` table exactly as
+they would have been sent, with the reason they were held, so you can read them
+without anybody's phone ringing.
+
+**Watch the disk.** Backups accumulate in `storage/`, and `--keep=14` is
+fourteen copies of the whole database. Check `storage/app` after a fortnight.
+
 ## Deploying an update later
 
 Same command, and it is safe to run repeatedly.

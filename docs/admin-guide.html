@@ -301,9 +301,81 @@ code {
         <dt>For</dt><dd>Owners, administrators, and anyone explaining the system to a client</dd>
         <dt>Covers</dt><dd>The public site, the office, the customer portal and the cleaner's round</dd>
         <dt>Companion</dt><dd>developer-guide.pdf, for how any of it is changed</dd>
-        <dt>Revised</dt><dd>15 August 2026</dd>
+        <dt>Revised</dt><dd>2 September 2026</dd>
     </dl>
 </div>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Read this first</span>
+    <h2>The whole system in one page</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">&nbsp;</div></div>
+    <div class="flow">
+        <p class="lede">If you read nothing else, read this. Everything after it is detail.</p>
+
+        <h3>Three websites, one system</h3>
+        <table>
+            <thead><tr><th class="narrow">Address</th><th>Who uses it</th></tr></thead>
+            <tbody>
+                <tr><td class="name">/</td><td>The public. Prices, signup, renewal.</td></tr>
+                <tr><td class="name">/app</td><td>The office. You, franchise owners, cleaners.</td></tr>
+                <tr><td class="name">/my</td><td>Customers, after they sign in.</td></tr>
+            </tbody>
+        </table>
+        <p>Signing in sends each person to the right one. Nobody chooses.</p>
+
+        <h3>Who sees which customers</h3>
+        <p>A <strong>sector</strong> is a territory. Staff are given sectors on the
+        <strong>People</strong> screen. A customer belongs to one sector. If the two match,
+        that member of staff can see that customer. If not, the customer does not exist for
+        them.</p>
+        <p>Give a sector to somebody else and it takes effect immediately. Money already
+        collected stays with whoever collected it.</p>
+
+        <h3>Money: two rules that never bend</h3>
+        <ul>
+            <li><strong>The server works out every price.</strong> Nothing the browser sends
+            is trusted. The figure a customer sees is a quote.</li>
+            <li><strong>Nothing counts as paid until the bank confirms it.</strong> Not when
+            the customer clicks pay — when Razorpay confirms.</li>
+        </ul>
+
+        <h3>Messages</h3>
+        <p>Customers are messaged automatically: welcome, receipt, renewal chase, cleaning
+        done, and more. <strong>Nothing is ever sent from a test copy.</strong> It is written
+        down as if it had been sent, with the reason it was held back, so you can check the
+        wording safely.</p>
+        <p>Once a plan runs out, the customer is asked <strong>every day</strong> until they
+        renew. When the plan is paused, the message changes but the daily rhythm does not.
+        Marking a plan <strong>Ended</strong> is what stops it.</p>
+
+        <h3>What runs by itself, every night</h3>
+        <p>Backups, renewal chasing, pausing unpaid plans, tidying old records. You do not
+        start any of it. It needs one cron entry on the server; see the deployment notes.</p>
+
+        <h3>What you can change without a developer</h3>
+        <p><strong>Settings</strong> holds the business name, contact details, invoice
+        wording, the policy pages, how many days before a plan is paused, how often
+        customers are chased, and the switches that hide the blog, the team page and the
+        cloth service. <strong>Masters</strong> holds prices and geography.
+        <strong>Messages</strong> holds the wording of every message.</p>
+
+        <div class="note">
+            <span class="eyebrow">The three questions people ask most</span>
+            <p><strong>"Why can this franchise not see that customer?"</strong> The customer
+            is in a sector that person does not hold. People screen.</p>
+            <p><strong>"Why did the price change?"</strong> Somebody edited a master, or the
+            customer's society carries a surcharge. Both show on the plan.</p>
+            <p><strong>"Why did no message go out?"</strong> Either this is a test copy, or
+            the wording is switched off on the Messages screen.</p>
+        </div>
+    </div>
+</div>
+</section>
 
 <nav class="toc">
     <div class="head">
@@ -946,6 +1018,44 @@ code {
             </tbody>
         </table>
 
+        <h3>Chasing a renewal, and how often</h3>
+        <p>Nobody is messaged before their date. Once a plan has run out the customer is
+        asked <strong>every day until they renew</strong> — which is how the business has
+        always run it. What changes as the plan moves from expired to paused is what the
+        message says, not how often it arrives:</p>
+
+        <table>
+            <thead><tr><th class="narrow">State</th><th>How often</th><th style="width:44%">What it says</th></tr></thead>
+            <tbody>
+                <tr><td class="name">Expired, still running</td><td>Every day</td><td>Renew before the cleaning stops. The service is still going.</td></tr>
+                <tr><td class="name">On hold</td><td>Every day</td><td>The cleaning has stopped. Renew and it starts again on the next round.</td></tr>
+            </tbody>
+        </table>
+
+        <p>Both numbers are on the Settings screen, so the rhythm can be slowed without a
+        release — they are kept separate so the first can be made gentler without touching
+        the second. The gap is measured from the last message actually sent about that plan,
+        so it is self-correcting: one sent by hand today postpones tomorrow's automatic one.</p>
+
+        <div class="danger">
+            <span class="eyebrow">It does not stop on its own</span>
+            <p>A plan on hold that nobody marks <strong>Ended</strong> is chased every day
+            indefinitely. That is the same as the manual process it replaces, with one
+            difference: a person doing it by hand eventually stopped, and this will not.</p>
+            <p>Marking a plan Ended is what stops it — so when a customer says they are
+            finished, change the status rather than only making a note of it.</p>
+        </div>
+
+        <div class="note">
+            <span class="eyebrow">Every overdue plan is chased, not a sample</span>
+            <p>It used to send only to plans that had expired <em>exactly</em> one, three or
+            seven days ago. Anything that missed those days — because the job had not been
+            set up yet, or the plans came across from the old system — was never chased at
+            all. Eleven plans were overdue and six got a message. Now the state is what
+            decides, not the anniversary, so a plan sixty days past its date is chased like
+            any other.</p>
+        </div>
+
         <h3>The receipt</h3>
         <p><strong>Payment received</strong> goes out on every confirmed payment, alongside
         the welcome or renewal message rather than instead of it: those say what happens
@@ -1194,7 +1304,9 @@ code {
                 <tr><td class="name" rowspan="2">Billing</td><td>Invoice prefix</td><td>ESW</td></tr>
                 <tr><td>Invoice footer note</td><td>&mdash;</td></tr>
 
-                <tr><td class="name" rowspan="7">Service</td><td>Days overdue before pausing</td><td>7</td></tr>
+                <tr><td class="name" rowspan="9">Service</td><td>Days overdue before pausing</td><td>7</td></tr>
+                <tr><td>Days between renewal reminders</td><td>1</td></tr>
+                <tr><td>Days between reminders once paused</td><td>1</td></tr>
                 <tr><td>Warn when cloths fall below</td><td>5</td></tr>
                 <tr><td>Number for new plan alerts</td><td>&mdash;</td></tr>
                 <tr><td>Only administrators may change a plan</td><td>Off</td></tr>

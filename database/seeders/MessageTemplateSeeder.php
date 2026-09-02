@@ -230,8 +230,18 @@ class MessageTemplateSeeder extends Seeder
             [
                 'key' => 'renewal_due',
                 'name' => 'Renewal due',
-                'description' => 'Sent a week before, three days before, and on the renewal date.',
-                'provider_template' => 'eswachh_renewal_due',
+                /*
+                 * Kept, but nothing sends it.
+                 *
+                 * The nightly chase only messages plans that have actually
+                 * expired, because the provider has no approved template that
+                 * says a renewal is coming up - and a WhatsApp template that
+                 * does not exist at MSG91 is rejected, not delivered. Left here
+                 * so the wording survives and the day a "renewal due" template
+                 * is approved this needs only its name filling in.
+                 */
+                'description' => 'Not currently sent - there is no approved provider template for a reminder before the date.',
+                'provider_template' => null,
                 'body' => "Dear {name},\n"
                     ."Your car subscription expires on {renew_date}.\n"
                     ."There is a 1 week grace period, after which cleaning will stop, so please renew.\n"
@@ -243,8 +253,11 @@ class MessageTemplateSeeder extends Seeder
             [
                 'key' => 'renewal_overdue',
                 'name' => 'Renewal overdue',
-                'description' => 'Sent after the renewal date has passed.',
-                'provider_template' => 'eswachh_renewal_overdue',
+                'description' => 'Sent one, three and seven days after the plan expired, while it is still running.',
+                // The real name at MSG91, taken from docs/msg91template. Its
+                // approved wording is "your car subscription expired and is due
+                // on {{1}}", where {{1}} is the date the plan ran out.
+                'provider_template' => 'subscription_expire',
                 'body' => "Dear {name},\n"
                     ."Your car subscription expired on {renew_date}.\n"
                     ."As per the system in place there is a 1 week grace period, after which cleaning will stop, so please renew.\n"
@@ -272,8 +285,9 @@ class MessageTemplateSeeder extends Seeder
             [
                 'key' => 'put_on_hold',
                 'name' => 'Plan paused',
-                'description' => 'Sent when a plan is paused for non-renewal.',
-                'provider_template' => 'eswachh_put_on_hold',
+                'description' => 'Sent to a plan already on hold, one, three and seven days after the date it was due.',
+                // "your car subscription on hold and is due on {{1}}".
+                'provider_template' => 'hold_cars',
                 'body' => "Dear {name},\n"
                     ."Cleaning for {car} has been paused because the plan was not renewed.\n"
                     ."Renew any time and we will start again from the next day.\n"

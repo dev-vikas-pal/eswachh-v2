@@ -1,0 +1,35 @@
+{
+  "category": "UTILITY",
+  "name": "toall",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "4266128293709851",
+      "name": "toall",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Notify: \"Dear Customer, Please renew from website as no need to login now for renew.",
+          "type": "BODY"
+        },
+        {
+          "text": "Team eSwachh",
+          "type": "FOOTER"
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 158194,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [],
+      "variable_type": {}
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

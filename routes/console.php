@@ -75,7 +75,9 @@ Schedule::command('eswachh:send-renewal-reminders')
  * Last of the three, so it acts on a picture that reconciliation has already
  * corrected and that the customer has already had four reminders about.
  */
-Schedule::command('eswachh:hold-overdue --grace=7')
+// No --grace here on purpose: the command reads "Days overdue before pausing"
+// from Settings, and passing it explicitly would override the office's choice.
+Schedule::command('eswachh:hold-overdue')
     ->dailyAt('10:00')
     ->withoutOverlapping()
     ->onOneServer()

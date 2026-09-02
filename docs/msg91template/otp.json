@@ -1,0 +1,44 @@
+{
+  "category": "UTILITY",
+  "name": "otp",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "410800678547897",
+      "name": "otp",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Dear Customer,\n\nYour One-Time Password (OTP) is {{1}}. \n\nPlease use this OTP to complete your verification process. \n\nDo not share this OTP with anyone. Thank you!",
+          "type": "BODY",
+          "example": {
+            "body_text": [
+              [
+                "232601"
+              ]
+            ]
+          }
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 515059,
+      "quality_score": "",
+      "backup_templates": [],
+      "variables": [
+        "body_1"
+      ],
+      "variable_type": {
+        "body_1": {
+          "type": "text"
+        }
+      }
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

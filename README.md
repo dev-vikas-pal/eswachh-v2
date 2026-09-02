@@ -13,7 +13,7 @@ carrying its data and its logins across.
 | **Auth** | Sanctum, SPA cookie |
 | **Payments** | Razorpay |
 | **Messaging** | WhatsApp via MSG91 |
-| **Tests** | 429 passing, 1224 assertions, ~67s |
+| **Tests** | 435 passing, 1247 assertions, ~67s |
 
 ## Getting it running
 
@@ -83,6 +83,7 @@ The role decides; nobody chooses.
 | [`docs/developer-guide.pdf`](docs/developer-guide.pdf) | Where every flag lives, what to edit for a given change, the conventions, and the bugs this codebase has already had. Read section 13 before anything else. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | The short version of how the code is filed. |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Standing this up on a server, step by step. The three things that differ from v1 and each fail silently. |
+| [`docs/TESTING.md`](docs/TESTING.md) | How to check any of it works, on your machine or on the server, without messaging a customer or taking real money. |
 
 Both PDFs are generated from the HTML beside them. Edit the HTML and re-render:
 

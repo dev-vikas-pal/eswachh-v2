@@ -7,6 +7,7 @@ use App\Domain\Messaging\Messenger;
 use App\Enums\MessagePurpose;
 use App\Enums\SubscriptionStatus;
 use App\Models\Subscription;
+use App\Support\Settings\SiteSettings;
 use App\Support\Tenancy\SectorContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -28,7 +29,7 @@ use Illuminate\Support\Facades\Log;
 class HoldOverdueSubscriptions extends Command
 {
     protected $signature = 'eswachh:hold-overdue
-                            {--grace=7 : Days past the renewal date before pausing}
+                            {--grace= : Days past the renewal date before pausing. Defaults to the setting.}
                             {--limit=50 : Refuse to pause more than this in one run}
                             {--dry-run : Show who would be paused without pausing them}';
 
@@ -37,7 +38,19 @@ class HoldOverdueSubscriptions extends Command
     public function handle(Messenger $messenger, ClothLedger $cloths): int
     {
         return SectorContext::withoutScope(function () use ($messenger, $cloths) {
-            $grace = max(0, (int) $this->option('grace'));
+            /*
+             * From Settings, which is where it appears to be set.
+             *
+             * "Days overdue before pausing" has been on that screen since the
+             * beginning and was read by nothing at all - the schedule passed
+             * --grace=7 and this defaulted to 7, so the box could be changed to
+             * any number and every plan still paused after a week. A setting
+             * that does nothing is worse than no setting: somebody adjusts it,
+             * watches for the change, and concludes the pausing is broken.
+             */
+            $grace = max(0, (int) ($this->option('grace')
+                ?? SiteSettings::get('renewal_grace_days', '7')
+                ?: 7));
             $limit = max(1, (int) $this->option('limit'));
             $dryRun = (bool) $this->option('dry-run');
 

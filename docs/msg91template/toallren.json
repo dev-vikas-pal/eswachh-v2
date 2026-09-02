@@ -1,0 +1,35 @@
+{
+  "category": "UTILITY",
+  "name": "toallren",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "1584331375920221",
+      "name": "toallren",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Notify: \"Dear Customer, Please renew on time before car put on hold. Cleaners salary depend on timely renewal.",
+          "type": "BODY"
+        },
+        {
+          "text": "Team eSwachh",
+          "type": "FOOTER"
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 192337,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [],
+      "variable_type": {}
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

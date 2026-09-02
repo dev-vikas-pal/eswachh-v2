@@ -1,0 +1,58 @@
+{
+  "category": "UTILITY",
+  "name": "change_status",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "1030549368855321",
+      "name": "change_status",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Dear eSwachh Customer",
+          "type": "HEADER",
+          "format": "TEXT"
+        },
+        {
+          "text": "Status change: \"Car subscription status change to {{1}} and renew date is {{2}}.\"\n\nIf hold then please renew from website to make it active.",
+          "type": "BODY",
+          "example": {
+            "body_text": [
+              [
+                "hold",
+                "22-01-2025"
+              ]
+            ]
+          }
+        },
+        {
+          "text": "Team eSwachh",
+          "type": "FOOTER"
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 142780,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [
+        "body_1",
+        "body_2"
+      ],
+      "variable_type": {
+        "body_1": {
+          "type": "text"
+        },
+        "body_2": {
+          "type": "text"
+        }
+      }
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

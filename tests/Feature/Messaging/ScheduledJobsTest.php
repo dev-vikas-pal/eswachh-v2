@@ -14,6 +14,7 @@ use App\Models\Duration;
 use App\Models\Message;
 use App\Models\Subscription;
 use App\Models\Vehicle;
+use App\Support\Settings\SiteSettings;
 use App\Support\Tenancy\SectorContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -102,23 +103,167 @@ class ScheduledJobsTest extends TestCase
         });
     }
 
-    public function test_reminders_go_out_on_the_offsets_and_no_others(): void
+    public function test_nobody_is_chased_before_their_plan_has_expired(): void
     {
         SectorContext::withoutScope(function () {
-            // Due in 7 days, 5 days, 3 days, today, and 3 days overdue.
-            foreach ([7, 5, 3, 0, -3] as $days) {
+            // Due in a week, in three days, and today.
+            foreach ([7, 3, 0] as $days) {
                 $this->subscription(['period_end' => Carbon::today()->addDays($days)]);
             }
 
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
 
-            // Four of the five: the one due in five days hears nothing, because
-            // a customer messaged every day stops reading the messages.
-            $this->assertSame(4, Message::query()->count());
+            /*
+             * These three owe nothing yet, and there is no approved provider
+             * template that says a renewal is coming up - so a message sent to
+             * them has nothing to travel in and would be rejected.
+             *
+             * This used to send to all three, which was three quarters of every
+             * run.
+             */
+            $this->assertSame(0, Message::query()->count());
         });
     }
 
-    public function test_an_overdue_reminder_says_something_different(): void
+    public function test_every_overdue_plan_is_chased_however_long_it_has_been(): void
+    {
+        SectorContext::withoutScope(function () {
+            // One, two, six, nine and sixty-three days past the date.
+            foreach ([1, 2, 6, 9, 63] as $days) {
+                $this->subscription(['period_end' => Carbon::today()->subDays($days)]);
+            }
+
+            $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
+
+            /*
+             * All five. The rule used to be fixed offsets - one, three and
+             * seven days over - which chased the first of these and abandoned
+             * the rest permanently, because the day they would have qualified
+             * on had already gone. On a freshly imported database that is most
+             * of the book.
+             */
+            $this->assertSame(5, Message::query()->count());
+        });
+    }
+
+    public function test_an_overdue_plan_is_chased_every_day_until_it_is_renewed(): void
+    {
+        SectorContext::withoutScope(function () {
+            $plan = $this->subscription(['period_end' => Carbon::today()->subDays(10)]);
+
+            foreach ([0, 1, 2, 3] as $days) {
+                $this->artisan('eswachh:send-renewal-reminders --date='.Carbon::today()->addDays($days)->toDateString())
+                    ->assertSuccessful();
+            }
+
+            $this->assertSame(4, Message::query()->where('subscription_id', $plan->id)->count());
+        });
+    }
+
+    public function test_the_message_changes_when_the_plan_is_paused_but_the_rhythm_does_not(): void
+    {
+        SectorContext::withoutScope(function () {
+            $plan = $this->subscription(['period_end' => Carbon::today()->subDays(10)]);
+
+            $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
+
+            // The office pauses it, as it would once the grace period is up.
+            $plan->forceFill(['status' => SubscriptionStatus::Hold])->save();
+
+            $this->artisan('eswachh:send-renewal-reminders --date='.Carbon::today()->addDay()->toDateString())
+                ->assertSuccessful();
+
+            /*
+             * Still daily - what changed is what it says. One asks them to
+             * renew before the cleaning stops; the other tells them it already
+             * has.
+             */
+            $purposes = Message::query()
+                ->where('subscription_id', $plan->id)
+                ->orderBy('sent_on')
+                ->pluck('purpose')
+                ->all();
+
+            $this->assertSame(
+                [MessagePurpose::RenewalOverdue, MessagePurpose::PutOnHold],
+                $purposes,
+            );
+        });
+    }
+
+    public function test_a_plan_on_hold_is_chased_every_day(): void
+    {
+        SectorContext::withoutScope(function () {
+            $plan = $this->subscription([
+                'period_end' => Carbon::today()->subDays(40),
+                'status' => SubscriptionStatus::Hold,
+            ]);
+
+            /*
+             * The cleaning has actually stopped and the customer notices every
+             * morning, so the business chases every day until they renew or say
+             * they are finished. That is how it worked before this system, with
+             * the owner sending it by hand.
+             */
+            foreach ([0, 1, 2, 3] as $days) {
+                $this->artisan('eswachh:send-renewal-reminders --date='.Carbon::today()->addDays($days)->toDateString())
+                    ->assertSuccessful();
+            }
+
+            $this->assertSame(4, Message::query()->where('subscription_id', $plan->id)->count());
+        });
+    }
+
+    public function test_the_pause_delay_is_set_in_the_office(): void
+    {
+        SectorContext::withoutScope(function () {
+            // Three days, not the seven the command used to hard-code.
+            SiteSettings::put(['renewal_grace_days' => '3']);
+
+            $this->subscription(['period_end' => Carbon::today()->subDays(4)]);
+
+            $this->artisan('eswachh:hold-overdue')->assertSuccessful();
+
+            /*
+             * The box on the Settings screen was read by nothing: the schedule
+             * passed --grace=7 and the command defaulted to 7, so it could be
+             * set to any number and every plan still paused after a week.
+             */
+            $this->assertSame(
+                SubscriptionStatus::Hold,
+                Subscription::query()->firstOrFail()->status,
+            );
+        });
+    }
+
+    public function test_the_two_rhythms_are_set_in_the_office(): void
+    {
+        SectorContext::withoutScope(function () {
+            // Chase overdue plans weekly and paused ones fortnightly - both
+            // slower than the daily default, to prove the settings decide.
+            SiteSettings::put([
+                'reminder_gap_overdue_days' => '7',
+                'reminder_gap_hold_days' => '14',
+            ]);
+
+            $overdue = $this->subscription(['period_end' => Carbon::today()->subDays(10)]);
+            $held = $this->subscription([
+                'period_end' => Carbon::today()->subDays(40),
+                'status' => SubscriptionStatus::Hold,
+            ]);
+
+            foreach ([0, 1, 2] as $days) {
+                $this->artisan('eswachh:send-renewal-reminders --date='.Carbon::today()->addDays($days)->toDateString())
+                    ->assertSuccessful();
+            }
+
+            // Both would be daily on the defaults; both are slowed by the boxes.
+            $this->assertSame(1, Message::query()->where('subscription_id', $overdue->id)->count());
+            $this->assertSame(1, Message::query()->where('subscription_id', $held->id)->count());
+        });
+    }
+
+    public function test_an_overdue_reminder_says_the_plan_has_expired(): void
     {
         SectorContext::withoutScope(function () {
             $this->subscription(['period_end' => Carbon::today()->subDays(3)]);
@@ -127,30 +272,40 @@ class ScheduledJobsTest extends TestCase
 
             $message = Message::query()->firstOrFail();
             $this->assertSame(MessagePurpose::RenewalOverdue, $message->purpose);
-            $this->assertStringContainsString('overdue', $message->body);
+            $this->assertStringContainsString('expired', $message->body);
         });
     }
 
-    public function test_a_subscription_on_hold_is_not_chased(): void
+    public function test_a_plan_on_hold_is_chased_even_with_no_held_at(): void
     {
         SectorContext::withoutScope(function () {
+            /*
+             * `held_at` is null on every plan that came across from v1 - the
+             * importer never set it - so any rule that counts days from it
+             * reaches none of them. Thirteen plans were on hold here and an
+             * earlier attempt at this matched exactly zero.
+             *
+             * The status is enough. A plan on hold is not being cleaned and is
+             * not paid for, whenever that started.
+             */
             $this->subscription([
-                'period_end' => Carbon::today(),
+                'period_end' => Carbon::today()->subDays(40),
+                'held_at' => null,
                 'status' => SubscriptionStatus::Hold,
             ]);
 
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
 
-            // They already know. Chasing a paused customer for a renewal is how
-            // a reminder system loses its credibility.
-            $this->assertSame(0, Message::query()->count());
+            $message = Message::query()->firstOrFail();
+            $this->assertSame(MessagePurpose::PutOnHold, $message->purpose);
+            $this->assertStringContainsString('on hold', $message->body);
         });
     }
 
     public function test_running_the_reminder_job_twice_messages_once(): void
     {
         SectorContext::withoutScope(function () {
-            $this->subscription(['period_end' => Carbon::today()]);
+            $this->subscription(['period_end' => Carbon::today()->subDays(3)]);
 
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
@@ -258,8 +413,8 @@ class ScheduledJobsTest extends TestCase
         $other = Branch::factory()->create();
 
         SectorContext::withoutScope(function () use ($other) {
-            $this->subscription(['period_end' => Carbon::today()]);
-            $this->subscription(['period_end' => Carbon::today()], $other);
+            $this->subscription(['period_end' => Carbon::today()->subDays(3)]);
+            $this->subscription(['period_end' => Carbon::today()->subDays(3)], $other);
 
             $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
 

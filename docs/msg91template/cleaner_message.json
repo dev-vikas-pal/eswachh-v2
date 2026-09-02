@@ -1,0 +1,35 @@
+{
+  "category": "MARKETING",
+  "name": "cleaner_message",
+  "namespace": "e73e5b95_f483_40b7_b637_5bf1d90ba813",
+  "languages": [
+    {
+      "id": "887592084029685",
+      "name": "cleaner_message",
+      "language": "en",
+      "parameter_format": "POSITIONAL",
+      "status": "approved",
+      "rejection_reason": "NONE",
+      "default_variables": null,
+      "code": [
+        {
+          "text": "Dear Eswachh Customer,\nThis is to inform you that our cleaner Sanjeev has now returned and will continue providing car cleaning services as usual. He had been facing a personal family emergency, which caused a temporary disruption, but he is now back and ready to resume his duties regularly.\nWe kindly request you to renew your subscription so that we can continue ensuring your car is cleaned on time without any interruptions.\nThank you for your understanding and continued support.",
+          "type": "BODY"
+        },
+        {
+          "text": "Thanks, Team Eswachh",
+          "type": "FOOTER"
+        }
+      ],
+      "gtwy_thread_id": null,
+      "msg91_template_id": 302403,
+      "quality_score": "UNKNOWN",
+      "backup_templates": [],
+      "variables": [],
+      "variable_type": {}
+    }
+  ],
+  "is_disabled": 0,
+  "ttl_in_seconds": null,
+  "gtwy_thread_id": null
+}

@@ -284,11 +284,58 @@ td.path { font-family: var(--mono); font-size: 8pt; color: var(--deep); word-bre
 
     <dl>
         <dt>Stack</dt><dd>Laravel 12 · PHP 8.2+ · Vue 3.5 · TypeScript 5.9 · Vite 7 · Pinia · TanStack Query · Tailwind 4 · MySQL</dd>
-        <dt>Suite</dt><dd>429 tests, 1224 assertions, ~67s</dd>
+        <dt>Suite</dt><dd>435 tests, 1247 assertions, ~67s</dd>
         <dt>Companion</dt><dd>admin-guide.pdf, for what the system does and why</dd>
-        <dt>Revised</dt><dd>15 August 2026</dd>
+        <dt>Revised</dt><dd>2 September 2026</dd>
     </dl>
 </div>
+
+<!-- ===================================================================== -->
+<section>
+<div class="head">
+    <span class="eyebrow">Read this first</span>
+    <h2>The ten things that will catch you out</h2>
+</div>
+
+<div class="sheet">
+    <div class="rail"><div class="num">&nbsp;</div></div>
+    <div class="flow">
+        <p class="lede">Every one of these has already cost real time here. Each links to the
+        section that explains it.</p>
+
+        <table>
+            <thead><tr><th style="width:34%">If this happens…</th><th>It is almost certainly</th></tr></thead>
+            <tbody>
+                <tr><td class="name">A front-end change has no effect at all</td><td>The browser is running an old build. <code>npm run dev</code> is stopped, so the page falls back to <code>public/build</code>. Check whether the page references <code>:5173</code> or <code>/build/assets</code>. (08.6)</td></tr>
+                <tr><td class="name">A page returns 404 for no reason</td><td>The sector scope. Nothing is signed in, so it covers nothing and returns nothing. Resolve inside <code>SectorContext::withoutScope()</code>. (13)</td></tr>
+                <tr><td class="name">A price is wrong by a small amount</td><td>The quote was built without <code>society_id</code>, so the society surcharge is missing. (13)</td></tr>
+                <tr><td class="name">A form opens completely blank</td><td><code>watch()</code> with no <code>immediate</code>, on a query whose data was already cached. (13)</td></tr>
+                <tr><td class="name">A screen does not refresh after saving</td><td>Only its own cache was cleared. Use <code>refreshAfter()</code>, never a bare <code>invalidateQueries</code>. (08.8)</td></tr>
+                <tr><td class="name">The test suite behaves strangely</td><td>A cached config is overriding <code>phpunit.xml</code>. Run <code>php artisan config:clear</code>. The suite now refuses to start in that state.</td></tr>
+                <tr><td class="name">No messages are going out</td><td>Delivery needs production <em>and</em> <code>WHATSAPP_ENABLED</code>. Outside that, messages are recorded, not sent — which is deliberate. (07)</td></tr>
+                <tr><td class="name">A message is rejected by the provider</td><td>The template name does not exist at MSG91, or its variables were not sent. (08.7)</td></tr>
+                <tr><td class="name">A setting appears to do nothing</td><td>Check something actually reads it. Two on that screen were decorative until recently.</td></tr>
+                <tr><td class="name">A shell edit corrupts a PHP file</td><td><code>sed</code>, <code>awk</code> and <code>perl</code> strip <code>\</code> from namespaces and mangle UTF-8. Use an editor for PHP and for these guides.</td></tr>
+            </tbody>
+        </table>
+
+        <h3>The four rules that are not negotiable</h3>
+        <ol>
+            <li><strong>No amount ever comes from a request.</strong> Prices are worked out
+            by <code>PriceBook</code>, on the server, at the moment of charging.</li>
+            <li><strong>Nothing is marked paid except a verified callback.</strong></li>
+            <li><strong>Scoping fails closed.</strong> Covering no sectors returns no rows,
+            never every row.</li>
+            <li><strong>Don't commit.</strong> The owner commits by hand.</li>
+        </ol>
+
+        <h3>The three commands you will use most</h3>
+        <pre><code>php artisan test                <span class="c"># 435 tests, about 70 seconds</span>
+npx vue-tsc --noEmit            <span class="c"># the front end; use this, not npm run build</span>
+php artisan eswachh:deploy      <span class="c"># migrate, seed, rebuild caches, on any server</span></code></pre>
+    </div>
+</div>
+</section>
 
 <nav class="toc">
     <div class="head">
@@ -1334,7 +1381,7 @@ Route::view('/{any?}', 'site')
 <div class="sheet">
     <div class="rail"><div class="num">11.1</div></div>
     <div class="flow">
-<pre><code>php artisan test                                  <span class="c"># all 429</span>
+<pre><code>php artisan test                                  <span class="c"># all 435</span>
 php artisan test --filter=AddSecondCarTest        <span class="c"># one file</span>
 npx vue-tsc --noEmit                              <span class="c"># the front end</span></code></pre>
 
