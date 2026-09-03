@@ -57,27 +57,39 @@ Schedule::command('eswachh:send-daily-summary')
     ->runInBackground();
 
 /*
- * Renewal reminders, at a civilised hour.
+ * Pause what nobody has renewed, a week past the date.
  *
- * After reconciliation on purpose: a customer who paid last night and never
- * got redirected back has been settled by then, so they are not chased for
- * money they have already handed over. That was a real complaint in v1.
+ * Before the reminders, deliberately, and this order matters.
+ *
+ * A plan that reaches the end of its grace period today is caught by both
+ * jobs. Chasing first meant the customer was asked to renew at half past nine,
+ * while the plan was still active, and told it had been paused at ten - two
+ * messages about the same car, half an hour apart, contradicting each other on
+ * whether the cleaning was still happening.
+ *
+ * Pausing first settles what state each plan is in before anybody is written
+ * to, so the reminder that follows says one true thing. Neither job will now
+ * message a customer who has already heard today, whichever way round they are
+ * run, but the schedule should still put them in the order that makes sense.
+ *
+ * After reconciliation either way: a customer who paid last night and never
+ * got redirected back has been settled by then, so they are neither chased nor
+ * paused over money they have already handed over. That was a real complaint
+ * in v1.
  */
-Schedule::command('eswachh:send-renewal-reminders')
+// No --grace here on purpose: the command reads "Days overdue before pausing"
+// from Settings, and passing it explicitly would override the office's choice.
+Schedule::command('eswachh:hold-overdue')
     ->dailyAt('09:30')
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
 
 /*
- * Pause what nobody has renewed, a week past the date.
- *
- * Last of the three, so it acts on a picture that reconciliation has already
- * corrected and that the customer has already had four reminders about.
+ * Then chase everyone who is overdue or already paused, in whatever state the
+ * job above has just left them in.
  */
-// No --grace here on purpose: the command reads "Days overdue before pausing"
-// from Settings, and passing it explicitly would override the office's choice.
-Schedule::command('eswachh:hold-overdue')
+Schedule::command('eswachh:send-renewal-reminders')
     ->dailyAt('10:00')
     ->withoutOverlapping()
     ->onOneServer()

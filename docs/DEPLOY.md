@@ -197,8 +197,8 @@ that task would never run at all, and nothing would report it.
 | 00:10 | `eswachh:backup --keep=14` | Database backup, fourteen kept. |
 | 00:20 | `eswachh:reconcile-payments --days=7` | Asks Razorpay about the last week's payments and fixes any we recorded wrongly. |
 | 00:40 | `eswachh:prune-service-history` | Drops service records over fifty days old. |
-| 09:30 | `eswachh:send-renewal-reminders` | Chases plans coming up for renewal, and overdue ones. |
-| 10:00 | `eswachh:hold-overdue --grace=7` | Puts plans a week past their date on hold. |
+| 09:30 | `eswachh:hold-overdue` | Pauses plans past the grace period set in Settings. Runs first so the next job sees the settled state. |
+| 10:00 | `eswachh:send-renewal-reminders` | Chases everything expired or on hold. One message per customer per day. |
 | Hourly | `eswachh:send-daily-summary` | Runs every hour, acts only in the hour set by `daily_summary_hour` in Settings. |
 | Mon 06:00 | `eswachh:check-cloth-balances` | Weekly consistency check on the cloth ledger. |
 

@@ -1037,6 +1037,11 @@ code {
         the second. The gap is measured from the last message actually sent about that plan,
         so it is self-correcting: one sent by hand today postpones tomorrow's automatic one.</p>
 
+        <p><strong>One message a day, whichever it is.</strong> A plan that reaches the end
+        of its grace period gets paused and chased on the same morning, and the customer
+        hears about it once — the message that matches where the plan actually ended up.
+        They are never told "please renew" and "we have paused it" half an hour apart.</p>
+
         <div class="danger">
             <span class="eyebrow">It does not stop on its own</span>
             <p>A plan on hold that nobody marks <strong>Ended</strong> is chased every day
@@ -1146,8 +1151,8 @@ code {
                 </tr>
                 <tr>
                     <td class="num-col">09:30</td>
-                    <td class="name">Renewal reminders</td>
-                    <td>Chases plans running out and plans overdue. After settlement, so a customer who paid last night is not chased for it.</td>
+                    <td class="name">Pause the unpaid</td>
+                    <td>Puts plans past the grace period on hold. First of the two, so the chase that follows sees each plan in its settled state and says one true thing about it. After settlement, so a customer who paid last night is not paused for it.</td>
                 </tr>
                 <tr>
                     <td class="num-col">19:00</td>
@@ -1156,8 +1161,8 @@ code {
                 </tr>
                 <tr>
                     <td class="num-col">10:00</td>
-                    <td class="name">Pause the unpaid</td>
-                    <td>Puts plans a week past their date on hold. Last, so it acts on a picture that settlement has corrected and the customer has already been reminded about.</td>
+                    <td class="name">Renewal reminders</td>
+                    <td>Chases everything expired or on hold, daily until it is renewed. A customer hears once a day at most, even when their plan was paused half an hour earlier.</td>
                 </tr>
                 <tr>
                     <td class="num-col">Mon 06:00</td>

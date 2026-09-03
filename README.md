@@ -13,7 +13,7 @@ carrying its data and its logins across.
 | **Auth** | Sanctum, SPA cookie |
 | **Payments** | Razorpay |
 | **Messaging** | WhatsApp via MSG91 |
-| **Tests** | 435 passing, 1247 assertions, ~67s |
+| **Tests** | 437 passing, 1255 assertions, ~67s |
 
 ## Getting it running
 

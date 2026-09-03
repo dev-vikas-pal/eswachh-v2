@@ -131,7 +131,7 @@ php artisan schedule:run       # run everything that is due right now
 ```
 
 To run one job on its own, take its name from `schedule:list` and run it
-directly. Every one of them accepts `--dry-run`.
+directly. Four of the seven accept `--dry-run` — see the options table above.
 
 ### On Hostinger, checking the cron itself is alive
 
@@ -178,7 +178,7 @@ seems not to have taken, that is the first thing to suspect.
 ## Before calling it tested
 
 ```bash
-php artisan test          # 435 tests, about 70 seconds
+php artisan test          # 437 tests, about 70 seconds
 npx vue-tsc --noEmit      # the front end, about 30 seconds
 ```
 

@@ -214,6 +214,54 @@ class ScheduledJobsTest extends TestCase
         });
     }
 
+    public function test_a_plan_paused_and_chased_on_the_same_day_is_messaged_once(): void
+    {
+        SectorContext::withoutScope(function () {
+            SiteSettings::put(['renewal_grace_days' => '7']);
+
+            /*
+             * Exactly Neeraj Yadav's morning.
+             *
+             * A plan that reaches the end of its grace period today is caught
+             * by both jobs. He was chased at half past nine while the plan was
+             * still active, and told it had been paused at ten - two messages
+             * about the same car, half an hour apart, disagreeing about whether
+             * the cleaning was still happening.
+             */
+            $plan = $this->subscription(['period_end' => Carbon::today()->subDays(8)]);
+
+            $this->artisan('eswachh:hold-overdue')->assertSuccessful();
+            $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
+
+            $this->assertSame(1, Message::query()->where('subscription_id', $plan->id)->count());
+
+            // And it is the one that matches where the plan actually ended up.
+            $this->assertSame(
+                MessagePurpose::PutOnHold,
+                Message::query()->where('subscription_id', $plan->id)->firstOrFail()->purpose,
+            );
+        });
+    }
+
+    public function test_it_is_still_one_message_if_the_jobs_run_the_other_way_round(): void
+    {
+        SectorContext::withoutScope(function () {
+            SiteSettings::put(['renewal_grace_days' => '7']);
+
+            $plan = $this->subscription(['period_end' => Carbon::today()->subDays(8)]);
+
+            // Somebody typing the two commands by hand does not know the
+            // schedule's order, so neither job may rely on it.
+            $this->artisan('eswachh:send-renewal-reminders')->assertSuccessful();
+            $this->artisan('eswachh:hold-overdue')->assertSuccessful();
+
+            $this->assertSame(1, Message::query()->where('subscription_id', $plan->id)->count());
+
+            // Paused either way - only the message was suppressed, not the pause.
+            $this->assertSame(SubscriptionStatus::Hold, $plan->fresh()->status);
+        });
+    }
+
     public function test_the_pause_delay_is_set_in_the_office(): void
     {
         SectorContext::withoutScope(function () {

@@ -6,6 +6,7 @@ use App\Domain\Cloth\ClothLedger;
 use App\Domain\Messaging\Messenger;
 use App\Enums\MessagePurpose;
 use App\Enums\SubscriptionStatus;
+use App\Models\Message;
 use App\Models\Subscription;
 use App\Support\Settings\SiteSettings;
 use App\Support\Tenancy\SectorContext;
@@ -122,6 +123,29 @@ class HoldOverdueSubscriptions extends Command
                     $cloths->expire($subscription);
                 });
 
+                /*
+                 * One message a day about this, whatever it is about.
+                 *
+                 * Two jobs chase the same customer on the same morning: this
+                 * one pauses the plan, and the reminder job asks them to renew.
+                 * A plan that lapses today is caught by both - chased at half
+                 * past nine while it was still active, paused at ten - so
+                 * Neeraj Yadav got "renewal overdue" and then "put on hold"
+                 * within half an hour, about the same car.
+                 *
+                 * The reminder job already skips anybody messaged inside its
+                 * gap; this one sent regardless. Checked here too, rather than
+                 * relying on the order the schedule happens to run them in,
+                 * because the order is not something a person typing the two
+                 * commands by hand would know about.
+                 */
+                if ($this->alreadyToldToday($subscription)) {
+                    $this->line('    (already messaged today - not saying it twice)');
+                    $held++;
+
+                    continue;
+                }
+
                 $messenger->send(
                     $subscription,
                     MessagePurpose::PutOnHold,
@@ -136,6 +160,25 @@ class HoldOverdueSubscriptions extends Command
 
             return self::SUCCESS;
         });
+    }
+
+    /**
+     * Has this customer already heard about this plan today?
+     *
+     * Both purposes count. From the customer's side "please renew" and "we have
+     * paused it" are the same conversation, and hearing both within half an
+     * hour reads as a system talking to itself.
+     */
+    private function alreadyToldToday(Subscription $subscription): bool
+    {
+        return Message::query()
+            ->where('subscription_id', $subscription->id)
+            ->whereIn('purpose', [
+                MessagePurpose::RenewalOverdue->value,
+                MessagePurpose::PutOnHold->value,
+            ])
+            ->whereDate('sent_on', Carbon::today()->toDateString())
+            ->exists();
     }
 
     private function body(Subscription $subscription): string
