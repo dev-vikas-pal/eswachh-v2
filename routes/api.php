@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Admin\CustomerController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController;
 use App\Http\Controllers\Api\V1\Admin\LogController;
 use App\Http\Controllers\Api\V1\Admin\MasterController;
+use App\Http\Controllers\Api\V1\Admin\MessageTemplateExportController;
 use App\Http\Controllers\Api\V1\Admin\PostController;
 use App\Http\Controllers\Api\V1\Admin\ReminderController;
 use App\Http\Controllers\Api\V1\Admin\ReportController;
@@ -318,6 +319,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Business details: one set for the whole business, so administrator only.
     Route::get('site-settings', [SiteSettingsController::class, 'show']);
     Route::patch('site-settings', [SiteSettingsController::class, 'update']);
+
+    /*
+     * The message wording, as files MSG91 will import.
+     *
+     * Above the masters routes on purpose: `masters/{master}` would otherwise
+     * swallow anything starting with that word, and these are not a master
+     * being listed - they are the same wording written out in the provider's
+     * format.
+     */
+    Route::get('message-templates/export', [MessageTemplateExportController::class, 'all']);
+    Route::get('message-templates/{id}/export', [MessageTemplateExportController::class, 'one']);
 
     Route::get('masters', [MasterController::class, 'catalogue']);
     Route::get('masters/{master}', [MasterController::class, 'index']);

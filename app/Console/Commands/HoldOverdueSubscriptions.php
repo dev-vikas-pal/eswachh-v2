@@ -146,11 +146,12 @@ class HoldOverdueSubscriptions extends Command
                     continue;
                 }
 
-                $messenger->send(
-                    $subscription,
-                    MessagePurpose::PutOnHold,
-                    $this->body($subscription),
-                );
+                /*
+                 * Through the template, so this message carries the Renew now
+                 * button and reads exactly as the office wrote it - see the
+                 * same change in SendRenewalReminders.
+                 */
+                $messenger->notify($subscription, MessagePurpose::PutOnHold);
 
                 $held++;
             }
@@ -181,12 +182,4 @@ class HoldOverdueSubscriptions extends Command
             ->exists();
     }
 
-    private function body(Subscription $subscription): string
-    {
-        $car = $subscription->vehicle?->registration ?? 'your car';
-        $name = $subscription->customer?->name ?? 'there';
-
-        return "Hello {$name}, cleaning for {$car} has been paused because the plan was not renewed. "
-            .'Renew any time and we will start again from the next day.';
-    }
 }

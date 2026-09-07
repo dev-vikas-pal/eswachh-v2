@@ -32,10 +32,16 @@ use Illuminate\Support\Carbon;
  * The gap is measured from the last message actually sent about it, so it is
  * self-correcting: one sent by hand today postpones tomorrow's automatic one.
  *
- * Nobody is chased before their date. That is a business rule, and it is also
- * what the provider will carry - the approved WhatsApp templates cover
- * "expired" and "on hold" and nothing else, so a reminder sent early has no
- * template to travel in.
+ * Nobody is chased before their date. That was two rules wearing one coat: a
+ * business rule, and the fact that the only approved templates said "expired"
+ * and "on hold", so a reminder sent early had nothing to travel in.
+ *
+ * The second half has gone - `renewal_due` has a v2 template of its own now,
+ * button and all. The first half stands, and deliberately: messaging every
+ * customer before their date costs money per message and is a decision for the
+ * business, not something to start doing as a side effect of a template being
+ * approved. Sending it means adding an arm to the query below that selects on
+ * how many days remain, and agreeing what that number is.
  *
  * Nothing here stops on its own. A plan on hold that nobody marks Ended is
  * chased every day indefinitely, which is the same as the manual process it
@@ -122,12 +128,22 @@ class SendRenewalReminders extends Command
                     continue;
                 }
 
-                $message = $messenger->send(
-                    $subscription,
-                    $purpose,
-                    $this->body($subscription),
-                    on: $today,
-                );
+                /*
+                 * Through the template, not around it.
+                 *
+                 * This used to hand `send()` a sentence built here, because the
+                 * approved provider templates were v1's - fixed wording, one
+                 * variable each - and there was no point rendering wording that
+                 * could not be carried. Both messages have their own v2
+                 * template now, so the row on the Messages screen, the
+                 * variables the provider is given and the words the customer
+                 * reads all come from the one place the office can edit.
+                 *
+                 * It is also what puts the Renew now button under the message:
+                 * the token only travels when the template says there is a
+                 * button, and only notify() knows which template was used.
+                 */
+                $message = $messenger->notify($subscription, $purpose, on: $today);
 
                 // Null means there is already one today, or no phone number.
                 // Neither is a failure.
@@ -174,30 +190,6 @@ class SendRenewalReminders extends Command
             ])
             ->whereDate('sent_on', '>', $today->copy()->subDays($gap)->toDateString())
             ->select('subscription_id');
-    }
-
-    /**
-     * What the record says, which is not quite what the provider sends.
-     *
-     * The approved templates carry one variable each - the date - and their
-     * wording is fixed by Meta. This is the readable version kept on the
-     * message row, so the Messages screen shows something a person can read
-     * rather than a template name and a date.
-     */
-    private function body(Subscription $subscription): string
-    {
-        $car = $subscription->vehicle?->registration ?? 'your car';
-        $name = $subscription->customer?->name ?? 'there';
-        $amount = number_format($subscription->amount(), 0);
-        $due = $subscription->period_end?->format('j M') ?? '';
-
-        if ($subscription->status === SubscriptionStatus::Hold) {
-            return "Hello {$name}, cleaning for {$car} is on hold - the plan was due on {$due}. "
-                ."Renew for Rs {$amount} and we will start again from the next round.";
-        }
-
-        return "Hello {$name}, the cleaning plan for {$car} expired on {$due}. "
-            ."Please renew for Rs {$amount} - the service will be paused if we do not hear from you.";
     }
 
     private function describe(Subscription $subscription, Carbon $today): string

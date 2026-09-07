@@ -7,6 +7,7 @@ import { describeError } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/stores/auth';
 import RichTextEditor from '@/admin/components/RichTextEditor.vue';
 import ImageField from '@/admin/components/ImageField.vue';
+import { exportAllTemplates, exportOneTemplate } from '@/admin/shared/templateExport';
 
 const auth = useAuthStore();
 
@@ -68,6 +69,43 @@ const groups = computed(() => {
 const isSectors = computed(() => selected.value === 'sectors');
 
 /**
+ * The message wording is the one master that also lives somewhere else.
+ *
+ * Every other list here is the whole of itself. These are edited here and then
+ * have to be approved by MSG91 before a word of the change reaches anybody, so
+ * this screen is also where the files for that are downloaded.
+ */
+const isMessageTemplates = computed(() => selected.value === 'message-templates');
+
+const exporting = ref<string | null>(null);
+const exportProblem = ref<string | null>(null);
+const exportWarning = ref<string | null>(null);
+
+async function runExport(what: string, download: () => Promise<{ ok: boolean; warning?: string; message?: string }>) {
+    exporting.value = what;
+    exportProblem.value = null;
+    exportWarning.value = null;
+
+    const result = await download();
+    exporting.value = null;
+
+    if (result.ok) {
+        // Set when the button in those files points at a machine no customer's
+        // phone can reach. The download still happened; uploading it is the
+        // mistake, so this is a caution rather than an error.
+        exportWarning.value = result.warning ?? null;
+        return;
+    }
+
+    exportProblem.value = result.message ?? 'The export could not be downloaded.';
+}
+
+const exportAll = () => runExport('all', exportAllTemplates);
+
+const exportRow = (row: MasterRow) =>
+    runExport(row.id, () => exportOneTemplate(row.id, (row.provider_template as string) ?? null));
+
+/**
  * "On sale" is right for a package and wrong for a sector, a state or a blog
  * tag - none of which are sold.
  */
@@ -89,6 +127,12 @@ const footnote = computed(() => {
     if (current.value?.group === 'Price list') {
         return 'Prices here feed every quote. Changing one changes what new plans and renewals cost, '
             + 'for every branch — running plans keep the price they were sold at.';
+    }
+
+    if (isMessageTemplates.value) {
+        return 'Editing the words here changes what this system records and shows, but not what WhatsApp '
+            + 'delivers: that wording is approved by MSG91 first. Export the template, upload the file on '
+            + 'MSG91’s Templates screen under Import, and the change goes live once it is approved.';
     }
 
     return null;
@@ -290,14 +334,41 @@ async function restore(row: MasterRow) {
                 <h1 class="text-xl font-semibold tracking-tight text-ink">{{ current?.label ?? 'Masters' }}</h1>
                 <span v-if="isFetching" class="text-xs text-faint">updating…</span>
 
+                <!--
+                    Downloading the wording as files MSG91 will import.
+
+                    Beside the Add button rather than tucked into a menu: after
+                    editing a message this is the step that makes the change
+                    real, and one that is easy to forget is one that leaves the
+                    customer reading last month's wording.
+                -->
+                <button
+                    v-if="isMessageTemplates"
+                    type="button"
+                    class="ms-auto rounded border border-line px-3 py-1.5 text-sm font-medium text-body transition hover:bg-sunk focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-60"
+                    :disabled="exporting !== null"
+                    @click="exportAll"
+                >
+                    {{ exporting === 'all' ? 'Preparing…' : 'Export all for MSG91' }}
+                </button>
+
                 <button
                     type="button"
-                    class="ms-auto rounded bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-accent"
+                    class="rounded bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-accent"
+                    :class="isMessageTemplates ? '' : 'ms-auto'"
                     @click="startNew"
                 >
                     Add {{ current?.singular?.toLowerCase() }}
                 </button>
             </div>
+
+            <p v-if="exportProblem" class="mb-4 rounded border border-crit bg-crit-soft px-3 py-2 text-sm text-crit">
+                {{ exportProblem }}
+            </p>
+
+            <p v-if="exportWarning" class="mb-4 rounded border border-warn bg-warn-soft px-3 py-2 text-sm text-warn">
+                {{ exportWarning }}
+            </p>
 
             <div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3">
                 <label v-if="current?.parent">
@@ -390,6 +461,21 @@ async function restore(row: MasterRow) {
                                 </span>
                             </td>
                             <td class="px-3 py-2 text-right whitespace-nowrap">
+                                <!--
+                                    One template's file. What gets used after
+                                    the first upload: templates are approved one
+                                    at a time, so only the one whose wording
+                                    changed needs submitting again.
+                                -->
+                                <button
+                                    v-if="isMessageTemplates && !row.withdrawn"
+                                    type="button"
+                                    class="rounded px-2 py-1 text-xs font-medium text-body hover:bg-sunk disabled:opacity-60"
+                                    :disabled="exporting !== null"
+                                    @click="exportRow(row)"
+                                >
+                                    {{ exporting === row.id ? 'Preparing…' : 'Export' }}
+                                </button>
                                 <button
                                     v-if="!row.withdrawn"
                                     type="button"

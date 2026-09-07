@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * One paid period against one vehicle.
@@ -29,6 +30,18 @@ class Subscription extends BaseModel
         'cloth_service', 'cloth_bundle_id', 'cloth_balance',
         'held_at', 'ended_at',
     ];
+
+    /**
+     * The renewal token is the credential on a link that pays.
+     *
+     * Nothing serialises a subscription directly today - every response goes
+     * through SubscriptionResource, which lists its fields explicitly - so this
+     * guards against the next thing that does rather than against anything that
+     * exists. Whoever holds this link can renew the plan, which is the point of
+     * it and exactly why it should never fall out of an API response by
+     * accident.
+     */
+    protected $hidden = ['renew_token'];
 
     protected function casts(): array
     {
@@ -228,5 +241,46 @@ class Subscription extends BaseModel
     public function amount(): float
     {
         return $this->amount_paise / 100;
+    }
+
+    /**
+     * What the Renew now button in a WhatsApp message carries.
+     *
+     * Made on first use rather than at creation. Most plans are never chased -
+     * the customer renews before anybody has to ask - and a token that was
+     * never sent anywhere is one fewer thing to have leaked out of a database
+     * copy.
+     *
+     * Long enough that guessing is not a strategy: twenty characters out of
+     * sixty-two is about a hundred and nineteen bits. No retry on collision,
+     * deliberately - at that width the unique index will not fire before the
+     * sun does, and a retry loop for an event that cannot happen is a branch
+     * nothing will ever cover.
+     */
+    public function renewToken(): string
+    {
+        if ($this->renew_token) {
+            return $this->renew_token;
+        }
+
+        $token = Str::random(20);
+
+        // forceFill, because this is not something a request may set: the token
+        // is the credential on the renewal link, and mass assigning one would
+        // let a caller choose somebody else's.
+        $this->forceFill(['renew_token' => $token])->save();
+
+        return $token;
+    }
+
+    /**
+     * The address that opens this plan ready to pay for, with no sign in.
+     *
+     * Asked of the router rather than assembled, so it is the same address the
+     * approved WhatsApp button was built from - see Domain\Messaging\TemplateButton.
+     */
+    public function renewUrl(): string
+    {
+        return route('renew.link', ['token' => $this->renewToken()]);
     }
 }

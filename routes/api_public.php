@@ -101,4 +101,21 @@ Route::middleware('throttle:120,1')->prefix('public')->group(function () {
 
     Route::post('renew/lookup', [RenewalController::class, 'lookup'])->middleware('throttle:10,5');
     Route::post('renew/pay', [RenewalController::class, 'payWithoutSigningIn'])->middleware('throttle:40,5');
+
+    /*
+     * The same two steps, for somebody who arrived from the Renew now button in
+     * a WhatsApp message rather than by typing a car number.
+     *
+     * Their own routes rather than an optional argument on the pair above,
+     * because the two prove entirely different things. A car number is a weak
+     * secret - it is painted on the car - so `renew/lookup` returns a first name
+     * and nothing else and is throttled hard enough that the plates of a city
+     * cannot be walked through. A token is a strong one that we sent to that
+     * customer's own number, so this may show them their own plan properly.
+     *
+     * Throttled all the same. A token is unguessable, but the endpoint is still
+     * an unauthenticated one that runs queries.
+     */
+    Route::post('renew/link', [RenewalController::class, 'byLink'])->middleware('throttle:20,5');
+    Route::post('renew/link/pay', [RenewalController::class, 'payByLink'])->middleware('throttle:40,5');
 });

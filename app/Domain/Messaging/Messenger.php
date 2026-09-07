@@ -123,6 +123,15 @@ class Messenger
         MessagePurpose $purpose,
         array $extra = [],
         ?string $toPhone = null,
+        /**
+         * The day this counts as having been sent on.
+         *
+         * Only the nightly jobs pass it, and only so `--date` can rehearse a
+         * run against a date that is not today. It is also half the key that
+         * stops a customer hearing the same thing twice in one day, so a job
+         * pretending it is Tuesday must dedupe against Tuesday.
+         */
+        ?Carbon $on = null,
     ): ?Message {
         $template = MessageTemplate::query()->where('key', $purpose->value)->first();
 
@@ -146,10 +155,18 @@ class Messenger
 
         // The relations the wording may refer to are loaded by valuesFor, so
         // every caller here is a single line.
+        $values = MessageTemplate::valuesFor($subscription, $extra);
+
         return $this->send(
             $subscription,
             $purpose,
-            $template->render(MessageTemplate::valuesFor($subscription, $extra)),
+            $template->render($values),
+            // The same values the body was rendered from, ordered for the
+            // provider by the template itself. Passing the values rather than a
+            // ready-made list is what stops the two from ever describing
+            // different variables - see ProviderTemplate.
+            variables: $this->variablesFor($template, $subscription, $values),
+            on: $on,
             template: $template,
             toPhone: $toPhone,
         );
@@ -170,7 +187,8 @@ class Messenger
             return null;
         }
 
-        $body = $template->render(MessageTemplate::valuesFor($subscription));
+        $values = MessageTemplate::valuesFor($subscription);
+        $body = $template->render($values);
 
         /*
          * The purpose is what stops the same customer being told the same
@@ -184,10 +202,42 @@ class Messenger
             $subscription,
             $purpose ?? MessagePurpose::RenewalDue,
             $body,
+            variables: $this->variablesFor($template, $subscription, $values),
             on: $on,
             template: $template,
             dedupeKey: $purpose ? null : $template->key,
         );
+    }
+
+    /**
+     * What the provider is told to fill the template in with.
+     *
+     * Built from the same values the readable body was rendered from, and
+     * ordered by the template itself, so the two cannot disagree about how many
+     * variables there are or what order they come in. Getting that wrong is
+     * invisible from our side: the `messages` row still reads perfectly, and the
+     * only sign of trouble is a rejection from the provider or - worse - a
+     * delivered message with the car number where the name should be.
+     *
+     * @param  array<string, string|int|float|null>  $values
+     * @return array<int, array<string, mixed>>
+     */
+    private function variablesFor(
+        MessageTemplate $template,
+        Subscription $subscription,
+        array $values,
+    ): array {
+        $provider = ProviderTemplate::for($template);
+
+        /*
+         * A renewal message carries a button that opens this plan ready to pay
+         * for, and the token is made the first time one is sent. Asked for only
+         * where the template actually has a button, so no plan is given a
+         * permanent link because somebody sent it a receipt.
+         */
+        $buttonValue = $provider->button ? $subscription->renewToken() : null;
+
+        return $provider->components($values, $buttonValue);
     }
 
     public function send(
@@ -252,13 +302,25 @@ class Messenger
         if ($reason) {
             // Logged in full so development can see exactly what a customer
             // would have received.
-            Log::info('Message suppressed: '.$reason, [
+            Log::info('Message suppressed: '.$reason, array_filter([
                 // As it would have been addressed, country code and all, so the
                 // log shows what would really have gone out.
                 'to' => self::dialable($recipient),
                 'purpose' => $purpose->value,
                 'body' => $body,
-            ]);
+                'template' => $message->template,
+                /*
+                 * The variables as the provider would have received them, and
+                 * the address behind any button.
+                 *
+                 * Delivery is off everywhere except production, so without this
+                 * there is no way to see that the ordered list matches the
+                 * approved template, or to open a renewal link and check the
+                 * page it lands on, short of messaging a real customer.
+                 */
+                'components' => $variables ?: null,
+                'button_url' => $this->buttonUrlFor($subscription, $template),
+            ], fn ($value) => $value !== null));
 
             return $message;
         }
@@ -269,7 +331,22 @@ class Messenger
     }
 
     /**
-     * @param  array<string, string>  $variables
+     * The address a message's button would open, for the suppressed log.
+     *
+     * Null for the great majority of messages, which carry no button. Reading
+     * it costs a token being made, so it is asked only where there is one.
+     */
+    private function buttonUrlFor(Subscription $subscription, ?MessageTemplate $template): ?string
+    {
+        if (! $template || ! TemplateButton::forKey($template->key)) {
+            return null;
+        }
+
+        return $subscription->renewUrl();
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $variables  Provider components
      */
     private function deliver(Message $message, array $variables): void
     {

@@ -330,3 +330,15 @@ export async function payForFoundPlan(
         registration,
     }));
 }
+
+/**
+ * Pay for the plan behind the Renew now button in a WhatsApp message.
+ *
+ * The token goes up on its own and no subscription id travels with it, for the
+ * same reason the registration does on the path above: an id alone would be
+ * enough to open a payment against any plan. The token is the whole of what
+ * proves which plan this is, and it only ever went to one phone.
+ */
+export async function payForLinkedPlan(token: string): Promise<PaymentResult> {
+    return openThenPay(() => api.post('/public/renew/link/pay', { token }));
+}

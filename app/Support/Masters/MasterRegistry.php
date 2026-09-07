@@ -276,7 +276,18 @@ class MasterRegistry
                     // The body a person edits. The key is not here on purpose:
                     // renaming it silently stops the job that sends it.
                     'body' => ['required', 'string', 'max:2000'],
-                    'provider_template' => ['nullable', 'string', 'max:80'],
+                    /*
+                     * The name this template goes by at MSG91.
+                     *
+                     * Two rules in one expression. Lower case, digits and
+                     * underscores is Meta's own rule for a template name -
+                     * anything else is rejected at upload, which is a long way
+                     * from where the typo was made. And `v2_` is ours: v1 is
+                     * still live and sending from the same MSG91 account, so a
+                     * shared name means editing a template here and silently
+                     * changing what v1 sends the same afternoon.
+                     */
+                    'provider_template' => ['nullable', 'string', 'max:80', 'regex:/^v2_[a-z0-9_]+$/'],
                     'bulk_sendable' => ['sometimes', 'boolean'],
                 ],
                 'long' => ['body', 'description'],

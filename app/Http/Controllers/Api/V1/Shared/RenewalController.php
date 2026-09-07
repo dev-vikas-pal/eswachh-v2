@@ -252,31 +252,9 @@ class RenewalController extends Controller
             ], 404);
         }
 
-        /*
-         * The car and the customer are read outside the scope, and the price is
-         * worked out in there with them.
-         *
-         * Nobody is signed in on this page, so the scope covers no sectors and
-         * both relations came back null. Everything downstream then degraded
-         * quietly rather than failing: the card showed an empty registration
-         * beside an empty name, and - far worse - the price book priced a plan
-         * with no car and no society, dropping the vehicle category and the
-         * society surcharge and quoting ₹225 for a ₹1,872 renewal.
-         */
-        try {
-            $quote = SectorContext::withoutScope(function () use ($subscription) {
-                $subscription->load('vehicle', 'customer');
+        $quote = $this->quoteOrNull($subscription);
 
-                return $this->book->forRenewal($subscription);
-            });
-        } catch (RuntimeException) {
-            return response()->json([
-                'found' => false,
-                'message' => 'That plan needs to be renewed over the phone. Please call the office.',
-            ], 404);
-        }
-
-        if (! $quote->isComplete()) {
+        if (! $quote) {
             // A plan that cannot be priced in full must not be half-quoted on a
             // page with a Pay button under it.
             return response()->json([
@@ -287,25 +265,190 @@ class RenewalController extends Controller
 
         return response()->json([
             'found' => true,
-            'data' => [
-                'subscription_id' => $subscription->id,
-                'registration' => $subscription->vehicle?->registration,
-                // First name only. Enough to show the right car was found,
-                // without handing over a customer list to anyone with a plate.
-                'name' => str($subscription->customer?->name ?? '')->before(' ')->toString(),
-                'renews_on' => $subscription->period_end?->toDateString(),
-                'status' => $subscription->status->value,
-                'amount' => $quote->total(),
-                'formatted' => $quote->toArray()['formatted'],
-                // What they are buying, itemised. A price with no explanation
-                // is the thing people phone the office about.
-                'lines' => $quote->toArray()['lines'] ?? [],
-                'months' => $quote->months,
-                // Early, due, or overdue - the same answer the office and the
-                // portal give for this plan.
-                'timing' => $subscription->renewalTiming(),
-            ],
+            // First name only. Enough to show the right car was found, without
+            // handing over a customer list to anyone with a plate.
+            'data' => $this->describe($subscription, $quote, fullName: false),
         ]);
+    }
+
+    /**
+     * The plan behind the Renew now button in a WhatsApp message.
+     *
+     * Everything the car-number lookup does, minus the guessing. The token was
+     * sent to this customer's own number and is twenty random characters, so
+     * arriving with one is far better proof of who they are than reading a
+     * registration off a boot - which is why this shows the whole name where
+     * the lookup shows a first name, and why it is not throttled as hard.
+     */
+    public function byLink(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'max:32'],
+        ]);
+
+        $subscription = $this->findByToken($data['token']);
+
+        if (! $subscription) {
+            /*
+             * A link that has been superseded reads exactly like a wrong one.
+             *
+             * Deliberate: the two cannot be told apart without saying whether a
+             * token ever existed. The wording sends them to the page that can
+             * still help, so the answer to a stale link is never a dead end.
+             */
+            return response()->json([
+                'found' => false,
+                'message' => 'This renewal link is no longer valid. You can renew with your car number instead.',
+            ], 404);
+        }
+
+        $quote = $this->quoteOrNull($subscription);
+
+        if (! $quote) {
+            return response()->json([
+                'found' => false,
+                'message' => 'That plan needs to be renewed over the phone. Please call the office.',
+            ], 404);
+        }
+
+        return response()->json([
+            'found' => true,
+            'data' => $this->describe($subscription, $quote, fullName: true),
+        ]);
+    }
+
+    /**
+     * Open a payment for the plan behind a renewal link.
+     *
+     * The token is sent again rather than the id the previous call returned,
+     * for the same reason the car number is on the other path: an id alone
+     * would be enough to open a payment against any plan, and ids leak far more
+     * easily than a token that only ever went to one phone.
+     */
+    public function payByLink(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'token' => ['required', 'string', 'max:32'],
+        ]);
+
+        $subscription = $this->findByToken($data['token']);
+
+        abort_unless($subscription !== null, 404);
+
+        /*
+         * Priced again here, at the rates the page just quoted.
+         *
+         * A renewal link is permanent and lives in a WhatsApp thread, so the
+         * gap between it being sent and being tapped is measured in weeks. The
+         * price it is paid at has to be today's, worked out now - never the
+         * figure that was current on the morning the message went out.
+         */
+        $quote = $this->quoteOrNull($subscription);
+
+        if (! $quote) {
+            throw ValidationException::withMessages([
+                'token' => 'That plan needs to be renewed over the phone. Please call the office.',
+            ]);
+        }
+
+        $result = $this->openAtQuotedPrice($subscription, $quote);
+
+        return response()->json([
+            'data' => $result['checkout'],
+            'quote' => $quote->toArray(),
+        ], 201);
+    }
+
+    /**
+     * The plan a renewal token belongs to, if it still has one worth renewing.
+     *
+     * Unscoped: nobody is signed in on a page reached from a WhatsApp message,
+     * so a scoped read covers no sectors and finds nothing - the same mistake
+     * that once made every receipt link answer "not found".
+     */
+    private function findByToken(string $token): ?Subscription
+    {
+        return SectorContext::withoutScope(function () use ($token) {
+            $subscription = Subscription::query()
+                ->with('vehicle', 'customer')
+                ->where('renew_token', $token)
+                ->first();
+
+            /*
+             * An ended plan is not renewed, it is replaced - and a link that
+             * quietly took money against one would leave the customer paying
+             * into something nobody is servicing.
+             */
+            return $subscription && in_array(
+                $subscription->status,
+                [SubscriptionStatus::Active, SubscriptionStatus::Hold],
+                true,
+            ) ? $subscription : null;
+        });
+    }
+
+    /**
+     * Today's renewal price, or null where the plan cannot be priced in full.
+     *
+     * Both public paths ask this rather than pricing for themselves. A plan
+     * that can only be half priced - a package withdrawn from sale, a society
+     * that no longer exists - must never reach a page with a Pay button under
+     * it, and that judgement should not be written twice.
+     *
+     * The car and the customer are loaded inside the scope-free block, with the
+     * pricing, and that is the whole reason this is one method rather than a
+     * line in each caller. Nobody is signed in on either page, so the scope
+     * covers no sectors and both relations come back null - and everything
+     * downstream then degrades quietly rather than failing: the card shows an
+     * empty registration beside an empty name and, far worse, the price book
+     * prices a plan with no car and no society, drops the vehicle category and
+     * the society surcharge, and quotes ₹225 for a ₹1,872 renewal.
+     */
+    private function quoteOrNull(Subscription $subscription): ?Quote
+    {
+        try {
+            $quote = SectorContext::withoutScope(function () use ($subscription) {
+                $subscription->load('vehicle', 'customer');
+
+                return $this->book->forRenewal($subscription);
+            });
+        } catch (RuntimeException) {
+            return null;
+        }
+
+        return $quote->isComplete() ? $quote : null;
+    }
+
+    /**
+     * One plan, as a public page shows it.
+     *
+     * Shared by both ways in so the two pages cannot describe the same plan
+     * differently. The only thing that varies is how much of the customer's
+     * name is given away, which is a question about how well the caller proved
+     * who they are - see byLink().
+     *
+     * @return array<string, mixed>
+     */
+    private function describe(Subscription $subscription, Quote $quote, bool $fullName): array
+    {
+        $name = $subscription->customer?->name ?? '';
+
+        return [
+            'subscription_id' => $subscription->id,
+            'registration' => $subscription->vehicle?->registration,
+            'name' => $fullName ? $name : str($name)->before(' ')->toString(),
+            'renews_on' => $subscription->period_end?->toDateString(),
+            'status' => $subscription->status->value,
+            'amount' => $quote->total(),
+            'formatted' => $quote->toArray()['formatted'],
+            // What they are buying, itemised. A price with no explanation is
+            // the thing people phone the office about.
+            'lines' => $quote->toArray()['lines'] ?? [],
+            'months' => $quote->months,
+            // Early, due, or overdue - the same answer the office and the
+            // portal give for this plan.
+            'timing' => $subscription->renewalTiming(),
+        ];
     }
 
     /**

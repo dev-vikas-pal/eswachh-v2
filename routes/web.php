@@ -40,6 +40,24 @@ Route::get('/receipt/{payment}', ReceiptController::class)
     ->middleware('signed')
     ->name('receipt');
 
+/*
+ * The Renew now button in a WhatsApp message lands here.
+ *
+ * Short on purpose, and a path rather than a query string, because that is all
+ * a WhatsApp button can be: Meta approves a fixed address ending in `{{1}}` and
+ * appends what is sent to the end of it. A signed link like the receipt above
+ * puts its signature in the query string and could not be used.
+ *
+ * Named, because the address is generated in three places that must agree - the
+ * button on the approved template, the link sent with each message, and this
+ * page - and all three ask the router for it rather than writing it out.
+ *
+ * It serves the public bundle, which the catch-all below would do anyway; what
+ * this adds is the name. The Vue router has a matching `/r/:token` route, and
+ * without that its own catch-all would send every one of these to the home page.
+ */
+Route::view('/r/{token}', 'site')->name('renew.link');
+
 Route::view('/login', 'app')->name('login.page');
 Route::view('/app/{any?}', 'app')->where('any', '.*')->name('app');
 Route::view('/my/{any?}', 'app')->where('any', '.*')->name('portal');

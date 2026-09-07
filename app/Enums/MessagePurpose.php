@@ -91,10 +91,24 @@ enum MessagePurpose: string
         };
     }
 
-    /** The provider template this maps to. */
+    /**
+     * The provider template this maps to.
+     *
+     * Every template this system owns is named `v2_`, and the prefix is the
+     * point rather than decoration: v1 is still live, still sending, and its
+     * templates sit in the same MSG91 account under names like `hold_cars` and
+     * `subscription_expire`. Sharing a name would mean editing a template to
+     * suit v2 and silently changing what v1 sends that same afternoon - and
+     * during the cutover both systems are messaging real customers.
+     *
+     * A fallback rather than the usual answer: what is actually sent is the
+     * `provider_template` on the row, which the office can point at whatever
+     * MSG91 approved. This is what a purpose falls back to when no template
+     * row names one.
+     */
     public function template(): string
     {
-        return 'eswachh_'.$this->value;
+        return 'v2_'.$this->value;
     }
 
     /**

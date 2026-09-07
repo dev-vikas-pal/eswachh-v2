@@ -16,6 +16,7 @@ use App\Models\Subscription;
 use App\Models\Vehicle;
 use App\Support\Settings\SiteSettings;
 use App\Support\Tenancy\SectorContext;
+use Database\Seeders\MessageTemplateSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -34,6 +35,18 @@ class ScheduledJobsTest extends TestCase
     {
         parent::setUp();
         SectorContext::reset();
+
+        /*
+         * The wording the two chasing jobs send.
+         *
+         * They used to build a sentence for themselves, because the only
+         * approved provider templates were v1's and had wording fixed by Meta.
+         * Both have their own v2 template now and go through it, so a database
+         * with no message wording in it sends nothing at all - deliberately, on
+         * the same rule as everywhere else here: falling back to words nobody
+         * has approved is worse than staying quiet.
+         */
+        $this->seed(MessageTemplateSeeder::class);
 
         $this->branch = Branch::factory()->create();
 
@@ -346,7 +359,9 @@ class ScheduledJobsTest extends TestCase
 
             $message = Message::query()->firstOrFail();
             $this->assertSame(MessagePurpose::PutOnHold, $message->purpose);
-            $this->assertStringContainsString('on hold', $message->body);
+            // The paused wording, not the one that asks them to renew before
+            // the cleaning stops - it already has.
+            $this->assertStringContainsString('paused', $message->body);
         });
     }
 

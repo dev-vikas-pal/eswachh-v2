@@ -49,7 +49,7 @@ class DailySummaryTest extends TestCase
         MessageTemplate::create([
             'key' => 'daily_summary',
             'name' => "The day's update",
-            'provider_template' => 'eswachh_daily_summary',
+            'provider_template' => 'v2_daily_summary',
             'body' => "Dear {name},\n{round}",
             'status' => true,
         ]);

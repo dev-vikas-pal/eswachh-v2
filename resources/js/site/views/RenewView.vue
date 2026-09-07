@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { api, describeError } from '@/shared/api/client';
 import { payForFoundPlan, type PaymentReceipt } from '@/shared/api/checkout';
-import RenewalNotice, { type RenewalTiming } from '@/shared/RenewalNotice.vue';
+import RenewPlanCard, { type RenewablePlan } from '@/site/RenewPlanCard.vue';
 
 /**
  * Renewing without an account.
@@ -12,25 +12,12 @@ import RenewalNotice, { type RenewalTiming } from '@/shared/RenewalNotice.vue';
  * before they can pay you is a good way not to be paid. A car number is
  * something they can read off the boot.
  */
-interface QuoteLine {
-    source: string;
-    label: string;
-    amount: number;
-    recurring: boolean;
-}
-
-interface Found {
-    subscription_id: string;
-    registration: string;
-    name: string;
-    renews_on: string | null;
-    status: string;
-    amount: number;
-    formatted: string;
-    lines: QuoteLine[];
-    months: number;
-    timing: RenewalTiming;
-}
+/**
+ * The same plan the card renders, and the same one the WhatsApp link page
+ * shows. One type, so the two pages cannot come to describe a renewal
+ * differently.
+ */
+type Found = RenewablePlan;
 
 const registration = ref('');
 const looking = ref(false);
@@ -214,60 +201,7 @@ const day = (iso: string | null) =>
             {{ notFound }}
         </p>
 
-        <div v-if="found" class="mt-6 rounded-lg border border-line-strong bg-surface p-5">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">Your plan</p>
-
-            <p class="mt-1 text-lg font-semibold uppercase text-ink">
-                {{ found.registration }}
-                <span v-if="found.name" class="text-base font-normal normal-case text-muted">· {{ found.name }}</span>
-            </p>
-
-            <!-- Where the plan stands. Never a reason not to renew. -->
-            <RenewalNotice :timing="found.timing" class="mt-4" />
-
-            <!--
-                What the price is made of.
-
-                A total on its own is what people phone the office about, and
-                the surcharge line in particular - it is the one figure a
-                customer does not expect and would otherwise read as a mistake.
-            -->
-            <dl class="mt-4 flex flex-col gap-1.5 text-sm">
-                <div v-for="(line, i) in found.lines" :key="i" class="flex items-baseline justify-between gap-4">
-                    <dt class="text-muted">
-                        {{ line.label }}
-                        <span v-if="line.recurring && found.months > 1" class="text-xs text-faint">× {{ found.months }}</span>
-                    </dt>
-                    <dd class="shrink-0 tabular-nums" :class="line.amount < 0 ? 'text-ok' : 'text-body'">
-                        {{ line.amount < 0 ? '−' : '' }}{{ money(Math.abs(line.amount)) }}
-                    </dd>
-                </div>
-
-                <div class="mt-1 flex justify-between border-t border-line pt-2">
-                    <dt class="text-muted">Status</dt>
-                    <dd class="text-ink">{{ found.status }}</dd>
-                </div>
-
-                <div class="flex items-baseline justify-between">
-                    <dt class="font-semibold text-ink">To pay</dt>
-                    <dd class="text-xl font-bold tabular-nums text-ink">{{ found.formatted }}</dd>
-                </div>
-            </dl>
-
-            <button
-                type="button"
-                :disabled="paying"
-                class="mt-4 w-full rounded bg-accent px-4 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-60"
-                @click="pay"
-            >
-                {{ paying ? 'Opening payment…' : 'Pay ' + found.formatted }}
-            </button>
-
-            <p class="mt-2 text-xs text-faint">
-                This price is worked out by us at today's rates, not by your browser, and it is the figure
-                the payment window will ask for.
-            </p>
-        </div>
+        <RenewPlanCard v-if="found" :plan="found" :paying="paying" class="mt-6" @pay="pay" />
 
         <p v-if="problem" class="mt-4 rounded border border-crit bg-crit-soft px-4 py-3 text-sm text-crit">
             {{ problem }}

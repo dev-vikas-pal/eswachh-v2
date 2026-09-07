@@ -27,6 +27,20 @@ const router = createRouter({
         { path: '/team', name: 'team', component: () => import('@/site/views/TeamView.vue'), meta: { feature: 'team' } },
         { path: '/contact', name: 'contact', component: () => import('@/site/views/ContactView.vue') },
         { path: '/renew', name: 'renew', component: () => import('@/site/views/RenewView.vue') },
+        /*
+         * Where the Renew now button in a WhatsApp message lands.
+         *
+         * Short because a WhatsApp button's address is fixed at approval and
+         * the token is appended to the end of it - see the matching named route
+         * in routes/web.php, which is what both this page and the approved
+         * button are generated from.
+         *
+         * It has to be here as well as there. Laravel serves this bundle for
+         * the path either way, but without a route on this side the catch-all
+         * below would send every renewal link straight to the home page - which
+         * is exactly what happened to the customer portal once.
+         */
+        { path: '/r/:token', name: 'renew-link', component: () => import('@/site/views/RenewLinkView.vue') },
         // One of the four things the requirements document puts on the home page.
         { path: '/cloths', name: 'cloth-top-up', component: () => import('@/site/views/ClothTopUpView.vue'), meta: { feature: 'cloth_service' } },
 

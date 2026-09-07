@@ -54,7 +54,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'subscription_started',
                 'name' => 'New plan started',
                 'description' => 'Sent to the customer when a new plan is paid for.',
-                'provider_template' => 'eswachh_subscription_started',
+                'provider_template' => 'v2_subscription_started',
                 /*
                  * How to sign in goes in the welcome, not a separate message.
                  *
@@ -77,7 +77,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'subscription_started_admin',
                 'name' => 'New plan, told the office',
                 'description' => 'Sent to the office number so somebody assigns a cleaner.',
-                'provider_template' => 'eswachh_subscription_started_admin',
+                'provider_template' => 'v2_subscription_started_admin',
                 'body' => "Dear Admin,\n"
                     ."New car {car} subscribed to {package} plan for {months} month. Please assign a cleaner to them.\n"
                     ."Thanks,\nTeam eSwachh",
@@ -89,7 +89,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'renewed',
                 'name' => 'Plan renewed',
                 'description' => 'Sent to the customer when a plan is renewed.',
-                'provider_template' => 'eswachh_renewed',
+                'provider_template' => 'v2_renewed',
                 'body' => "Dear {name},\n"
                     ."Thanks for renewing the {package} daily car cleaning plan for {months} month.\n"
                     ."Car no - {car}\n"
@@ -104,7 +104,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cloth_top_up',
                 'name' => 'Cloths topped up',
                 'description' => 'Sent when a customer buys more cloths.',
-                'provider_template' => 'eswachh_cloth_top_up',
+                'provider_template' => 'v2_cloth_top_up',
                 'body' => "Dear {name},\n"
                     ."Thanks, top-up done for the {cloth_plan} cloth count plan.\n"
                     ."Current cloth count - {cloths}\n"
@@ -117,7 +117,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'complaint_raised',
                 'name' => 'Complaint raised',
                 'description' => 'Sent to the cleaners when a customer raises a complaint.',
-                'provider_template' => 'eswachh_complaint_raised',
+                'provider_template' => 'v2_complaint_raised',
                 'body' => "Dear Cleaners,\n"
                     ."There is a complaint for car {car} today. Please talk to them and confirm here once it is resolved.\n"
                     ."Thanks,\nTeam eSwachh",
@@ -129,7 +129,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cleaner_assigned',
                 'name' => 'Cleaner assigned',
                 'description' => 'Sent to the customer when somebody is given their car.',
-                'provider_template' => 'eswachh_cleaner_assigned',
+                'provider_template' => 'v2_cleaner_assigned',
                 'body' => "Dear {name},\n"
                     ."A cleaner has been assigned to your car {car} for the daily car cleaning service.\n"
                     ."Cleaner name - {cleaner}\n"
@@ -144,7 +144,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'custom',
                 'name' => 'A message of your own',
                 'description' => 'Whatever the office needs to say, to one customer or many.',
-                'provider_template' => 'eswachh_custom',
+                'provider_template' => 'v2_custom',
                 'body' => "Dear {name},\n{message}\nThanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],
@@ -154,7 +154,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cleaning_done',
                 'name' => 'Cleaning done',
                 'description' => 'Sent when the cleaner marks the car done.',
-                'provider_template' => 'eswachh_cleaning_done',
+                'provider_template' => 'v2_cleaning_done',
                 'body' => "Dear {name},\n"
                     ."Cleaning has been done today for your car {car}.\n"
                     ."Please complain on the same day when there is any gap or issue.\n"
@@ -172,7 +172,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cleaning_missed',
                 'name' => 'Cleaning not done',
                 'description' => 'Sent when the cleaner records that the car could not be cleaned.',
-                'provider_template' => 'eswachh_cleaning_missed',
+                'provider_template' => 'v2_cleaning_missed',
                 'body' => "Dear {name},\n"
                     ."We could not clean your car {car} today because {reason}.\n"
                     ."We will be back on the next scheduled day. Call us if that is not right.\n"
@@ -191,7 +191,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'daily_summary',
                 'name' => "The day's update",
                 'description' => "Sent once a day with what happened to each of the customer's cars.",
-                'provider_template' => 'eswachh_daily_summary',
+                'provider_template' => 'v2_daily_summary',
                 'body' => "Dear {name},\n"
                     ."Here is today's update:\n"
                     ."{round}\n"
@@ -205,7 +205,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cloth_pickup',
                 'name' => 'Cloths collected',
                 'description' => 'Sent when cloths are picked up.',
-                'provider_template' => 'eswachh_cloth_pickup',
+                'provider_template' => 'v2_cloth_pickup',
                 'body' => "Dear {name},\n"
                     ."Cloth pickup has been done on {date}.\n"
                     ."Pickup count - {count}\n"
@@ -216,7 +216,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cloth_delivery',
                 'name' => 'Cloths returned',
                 'description' => 'Sent when cloths are delivered back.',
-                'provider_template' => 'eswachh_cloth_delivery',
+                'provider_template' => 'v2_cloth_delivery',
                 'body' => "Dear {name},\n"
                     ."Cloth delivery has been done on {date}.\n"
                     ."Delivery count - {count}\n"
@@ -231,38 +231,42 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'renewal_due',
                 'name' => 'Renewal due',
                 /*
-                 * Kept, but nothing sends it.
+                 * Nothing has ever sent this one.
                  *
-                 * The nightly chase only messages plans that have actually
-                 * expired, because the provider has no approved template that
-                 * says a renewal is coming up - and a WhatsApp template that
-                 * does not exist at MSG91 is rejected, not delivered. Left here
-                 * so the wording survives and the day a "renewal due" template
-                 * is approved this needs only its name filling in.
+                 * The nightly chase only messages plans that have already
+                 * expired, because the provider had no approved template saying
+                 * a renewal was coming up - and a WhatsApp template that does
+                 * not exist at MSG91 is rejected, not delivered. It has its own
+                 * v2 template now and goes out the moment that is approved.
                  */
-                'description' => 'Not currently sent - there is no approved provider template for a reminder before the date.',
-                'provider_template' => null,
+                'description' => 'Sent before the date, once its provider template is approved. Carries the Renew now button.',
+                'provider_template' => 'v2_renewal_due',
                 'body' => "Dear {name},\n"
-                    ."Your car subscription expires on {renew_date}.\n"
+                    ."Your car subscription for {car} expires on {renew_date}.\n"
                     ."There is a 1 week grace period, after which cleaning will stop, so please renew.\n"
-                    ."Go to the renew section at https://www.eswachh.in\n"
-                    ."You can renew for 3/6 months to save 75/300.\n"
+                    ."Renewing now costs Rs {amount}, and 3 or 6 months saves you more.\n"
+                    ."Tap Renew now below - it opens your plan with the price ready, and there is nothing to sign in to.\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],
             [
                 'key' => 'renewal_overdue',
                 'name' => 'Renewal overdue',
-                'description' => 'Sent one, three and seven days after the plan expired, while it is still running.',
-                // The real name at MSG91, taken from docs/msg91template. Its
-                // approved wording is "your car subscription expired and is due
-                // on {{1}}", where {{1}} is the date the plan ran out.
-                'provider_template' => 'subscription_expire',
+                'description' => 'Sent daily while a plan is expired but still running. Carries the Renew now button.',
+                /*
+                 * Ours now, not v1's.
+                 *
+                 * This used to point at `subscription_expire`, the template v1
+                 * still sends from - fixed wording, one variable, and no way to
+                 * put a button on it without changing what v1 sends that same
+                 * afternoon.
+                 */
+                'provider_template' => 'v2_renewal_overdue',
                 'body' => "Dear {name},\n"
-                    ."Your car subscription expired on {renew_date}.\n"
-                    ."As per the system in place there is a 1 week grace period, after which cleaning will stop, so please renew.\n"
-                    ."Go to the renew section at https://www.eswachh.in\n"
-                    ."You can renew for 3/6 months to save 75/300.\n"
+                    ."Your car subscription for {car} expired on {renew_date}.\n"
+                    ."There is a 1 week grace period, after which cleaning will stop, so please renew.\n"
+                    ."Renewing now costs Rs {amount}, and 3 or 6 months saves you more.\n"
+                    ."Tap Renew now below - it opens your plan with the price ready, and there is nothing to sign in to.\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],
@@ -272,7 +276,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'cloths_low',
                 'name' => 'Cloths running low',
                 'description' => 'Sent when the cloth balance runs down.',
-                'provider_template' => 'eswachh_cloths_low',
+                'provider_template' => 'v2_cloths_low',
                 'body' => "Dear {name},\n"
                     ."Your cloth count balance is now lower than 10. Cloth pickup and delivery are stopped now.\n"
                     ."Please top up your cloth count from the website.\n"
@@ -285,12 +289,14 @@ class MessageTemplateSeeder extends Seeder
             [
                 'key' => 'put_on_hold',
                 'name' => 'Plan paused',
-                'description' => 'Sent to a plan already on hold, one, three and seven days after the date it was due.',
-                // "your car subscription on hold and is due on {{1}}".
-                'provider_template' => 'hold_cars',
+                'description' => 'Sent daily to a plan on hold. Carries the Renew now button.',
+                // Ours now. It pointed at `hold_cars`, which v1 still sends
+                // from - see the note on renewal_overdue above.
+                'provider_template' => 'v2_put_on_hold',
                 'body' => "Dear {name},\n"
-                    ."Cleaning for {car} has been paused because the plan was not renewed.\n"
-                    ."Renew any time and we will start again from the next day.\n"
+                    ."Cleaning for {car} has been paused because the plan was not renewed on {renew_date}.\n"
+                    ."Renew for Rs {amount} and we will start again from the next round.\n"
+                    ."Tap Renew now below - it opens your plan with the price ready, and there is nothing to sign in to.\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],
@@ -298,7 +304,7 @@ class MessageTemplateSeeder extends Seeder
                 'key' => 'payment_receipt',
                 'name' => 'Payment received',
                 'description' => 'Sent when a payment is captured.',
-                'provider_template' => 'eswachh_payment_receipt',
+                'provider_template' => 'v2_payment_receipt',
                 // Not offered in the bulk picker: a receipt for money that was
                 // not just taken is worse than no receipt.
                 //
