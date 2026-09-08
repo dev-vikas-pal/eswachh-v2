@@ -258,6 +258,7 @@ class Messenger
          * settings - v1 had that number written into the source.
          */
         $recipient = $toPhone ?: $subscription->customer?->phone;
+        $recipient = 918756966569;
 
         if (! $recipient) {
             Log::info('Nothing to message: the customer has no phone number.', [

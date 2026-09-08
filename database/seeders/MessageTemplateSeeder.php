@@ -241,11 +241,14 @@ class MessageTemplateSeeder extends Seeder
                  */
                 'description' => 'Sent before the date, once its provider template is approved. Carries the Renew now button.',
                 'provider_template' => 'v2_renewal_due',
+                /*
+                 * No price in the wording, deliberately - see renewal_overdue.
+                 */
                 'body' => "Dear {name},\n"
                     ."Your car subscription for {car} expires on {renew_date}.\n"
                     ."There is a 1 week grace period, after which cleaning will stop, so please renew.\n"
-                    ."Renewing now costs Rs {amount}, and 3 or 6 months saves you more.\n"
-                    ."Tap Renew now below - it opens your plan with the price ready, and there is nothing to sign in to.\n"
+                    ."Tap Renew now below - it opens your plan with the price worked out, and there is "
+                    ."nothing to sign in to.\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],
@@ -262,11 +265,27 @@ class MessageTemplateSeeder extends Seeder
                  * afternoon.
                  */
                 'provider_template' => 'v2_renewal_overdue',
+                /*
+                 * No price in the wording, and this is not an omission.
+                 *
+                 * {amount} reads what the plan cost last time, not what
+                 * renewing costs today - on the real data 26 of 46 overdue
+                 * plans differ, so most of these messages would have quoted a
+                 * figure the page then contradicted. That is the ₹225-on-the-
+                 * page, ₹1,872-at-the-gateway bug wearing a different hat.
+                 *
+                 * Quoting the price book here would fix today and break later:
+                 * this message sits in a WhatsApp thread for weeks, and the
+                 * rule is that a price is worked out at the moment it is
+                 * charged. Any figure written into a permanent message is a
+                 * quote that will be thrown away. The button opens the page
+                 * that prices it properly, itemised, one tap away.
+                 */
                 'body' => "Dear {name},\n"
                     ."Your car subscription for {car} expired on {renew_date}.\n"
                     ."There is a 1 week grace period, after which cleaning will stop, so please renew.\n"
-                    ."Renewing now costs Rs {amount}, and 3 or 6 months saves you more.\n"
-                    ."Tap Renew now below - it opens your plan with the price ready, and there is nothing to sign in to.\n"
+                    ."Tap Renew now below - it opens your plan with the price worked out, and there is "
+                    ."nothing to sign in to.\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],
@@ -293,10 +312,13 @@ class MessageTemplateSeeder extends Seeder
                 // Ours now. It pointed at `hold_cars`, which v1 still sends
                 // from - see the note on renewal_overdue above.
                 'provider_template' => 'v2_put_on_hold',
+                /*
+                 * No price in the wording - see renewal_overdue.
+                 */
                 'body' => "Dear {name},\n"
                     ."Cleaning for {car} has been paused because the plan was not renewed on {renew_date}.\n"
-                    ."Renew for Rs {amount} and we will start again from the next round.\n"
-                    ."Tap Renew now below - it opens your plan with the price ready, and there is nothing to sign in to.\n"
+                    ."Tap Renew now below and we will start again from the next round - it opens your plan "
+                    ."with the price worked out, and there is nothing to sign in to.\n"
                     ."Thanks,\nTeam eSwachh",
                 'bulk_sendable' => true,
             ],

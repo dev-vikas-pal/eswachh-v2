@@ -178,12 +178,81 @@ seems not to have taken, that is the first thing to suspect.
 ## Before calling it tested
 
 ```bash
-php artisan test          # 437 tests, about 70 seconds
+php artisan test          # 458 tests, about 65 seconds
 npx vue-tsc --noEmit      # the front end, about 30 seconds
 ```
 
 Both should print nothing but success. Run them on your own machine, not on
 Hostinger — the suite drops and rebuilds tables, and shared hosting is slow.
+
+---
+
+## If the suite feels slow
+
+It is almost certainly the machine, not the tests. The suite is 458 tests and
+the ten slowest account for only a fifth of the run — the cost is flat, spread
+across every test, which is the signature of a slow database rather than a slow
+test.
+
+Two things were measured on the development machine, and both are worth fixing
+once:
+
+**1. Two antivirus products are scanning the MySQL data directory.**
+
+Windows Defender and Norton are both live, and every table InnoDB creates is a
+new file in `D:\xampp\mysql\data\` for them to scan:
+
+| | measured | healthy |
+|---|---|---|
+| `CREATE TABLE` | 339 ms | 5–20 ms |
+| `DROP TABLE` | 198 ms | 5–20 ms |
+
+That is what makes `migrate:fresh` take minutes, which is the whole reason
+`MigratesOnlyWhenStale` exists. Excluding the data directory from real-time
+scanning in **both** products is the single biggest win — it needs an
+administrator, and a database data directory is a normal thing to exclude.
+
+**2. Every commit waits for the disk.**
+
+`innodb_flush_log_at_trx_commit` is `1`, so each commit is a real fsync:
+**42.7 ms**, against 0.2 ms with it relaxed. Measured across the whole suite
+that is 65.8s → 44.8s.
+
+The test database is disposable, so its durability is worth nothing — but this
+is a server-wide setting and the working database shares it. On a development
+machine that is a fair trade; on a server it is not. In `D:\xampp\mysql\bin\my.ini`,
+under `[mysqld]`:
+
+```ini
+innodb_flush_log_at_trx_commit = 0
+innodb_log_file_size           = 64M   # currently 5M, which forces constant checkpoints
+```
+
+Restart MySQL from the XAMPP control panel afterwards. **Never on a server.**
+
+### Running it in parallel
+
+`brianium/paratest` is installed, so the suite can use all eight cores:
+
+```bash
+composer test:parallel        # or: php artisan test --parallel
+```
+
+| | fsync 1 | fsync 0 |
+|---|---|---|
+| `php artisan test` | 65.8s | 44.8s |
+| `--parallel` | 32.7s | **17.8s** |
+
+**It is not the default, for one reason.** Parallel runs need one database per
+process, and adding a migration means all eight are rebuilt on the next run —
+which on this machine takes about ten minutes, against about one for the single
+database a serial run uses. So:
+
+- just added a migration → `php artisan test` once, then parallel afterwards;
+- otherwise → `composer test:parallel`.
+
+Fix the antivirus exclusions and that rebuild penalty largely goes away, because
+it is the same slow `CREATE TABLE` underneath.
 
 ---
 
@@ -208,6 +277,7 @@ php artisan eswachh:send-renewal-reminders --dry-run
 php artisan eswachh:hold-overdue --dry-run
 php artisan schedule:list
 php artisan test
+composer test:parallel                           # ~4x faster; rebuilds 8 DBs after a migration
 npx vue-tsc --noEmit
 php artisan config:clear                         # after any .env change
 ```

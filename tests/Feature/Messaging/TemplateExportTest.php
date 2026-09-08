@@ -182,6 +182,42 @@ class TemplateExportTest extends TestCase
     }
 
     /**
+     * No renewal message names a price.
+     *
+     * `{amount}` resolves from what the plan cost the last time it was bought,
+     * while the page the button opens prices it through the price book at
+     * today's rates. On the real data those disagreed on 26 of 46 overdue plans,
+     * so the message named a figure the page contradicted a tap later.
+     *
+     * Quoting the price book at send time would not fix it either: this message
+     * sits in a WhatsApp thread for weeks, and a price is worked out at the
+     * moment it is charged. Any figure in a permanent message is a quote that
+     * will be thrown away.
+     *
+     * Pinned as a test because the wording is editable in the office and "Renew
+     * for Rs {amount}" is an obvious, tempting thing to type back in.
+     */
+    public function test_no_renewal_message_quotes_a_price(): void
+    {
+        $this->seed(MessageTemplateSeeder::class);
+
+        $renewalMessages = MessageTemplate::query()
+            ->whereIn('key', ['renewal_due', 'renewal_overdue', 'put_on_hold'])
+            ->get();
+
+        $this->assertCount(3, $renewalMessages);
+
+        foreach ($renewalMessages as $template) {
+            $this->assertStringNotContainsString(
+                '{amount}',
+                $template->body,
+                "{$template->key} names a price. It cannot be right for long - the page the button "
+                    .'opens is what prices a renewal.',
+            );
+        }
+    }
+
+    /**
      * The button's address is a fixed half plus `{{1}}`, and the variable is
      * only ever the tail. Meta appends what is sent to the end of the approved
      * URL, so a token has to sit on the end of a path with no query string.

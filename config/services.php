@@ -59,6 +59,17 @@ return [
         'key' => env('MSG91_AUTH_KEY'),
         'number' => env('MSG91_WHATSAPP_NUMBER'),
         'url' => env('MSG91_WHATSAPP_URL', 'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/'),
+
+        /*
+         * The WhatsApp Business account a template belongs to.
+         *
+         * Only the template export uses it. Defaulted to the namespace every
+         * file in docs/msg91template carries, so exporting works on a fresh
+         * checkout with nothing added to .env - it is an account identifier
+         * rather than a credential, and it appears in every one of those files
+         * already. A second WABA is the reason to set it.
+         */
+        'namespace' => env('MSG91_TEMPLATE_NAMESPACE', 'e73e5b95_f483_40b7_b637_5bf1d90ba813'),
     ],
 
     'razorpay' => [
