@@ -70,6 +70,16 @@ return [
          * already. A second WABA is the reason to set it.
          */
         'namespace' => env('MSG91_TEMPLATE_NAMESPACE', 'e73e5b95_f483_40b7_b637_5bf1d90ba813'),
+
+        /*
+         * Send every message here instead of to the customer.
+         *
+         * For testing on the live site, where the delivery gate means a real
+         * message is the only kind there is. Empty means off, which is what it
+         * must be the moment testing stops - while it is set, not one customer
+         * is being messaged.
+         */
+        'test_recipient' => env('MSG91_TEST_RECIPIENT'),
     ],
 
     'razorpay' => [

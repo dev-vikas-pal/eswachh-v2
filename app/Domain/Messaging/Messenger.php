@@ -258,7 +258,37 @@ class Messenger
          * settings - v1 had that number written into the source.
          */
         $recipient = $toPhone ?: $subscription->customer?->phone;
-        $recipient = 918756966569;
+
+        /*
+         * Everything to one number instead, while somebody is testing.
+         *
+         * There is a real need behind this: the delivery gate is production-only
+         * by design, so the only way to see a message actually arrive is to send
+         * a real one - and on the live site that means a real customer's phone.
+         *
+         * It was briefly done by assigning a number over this line in the
+         * source. That is the version of this that ends up deployed: it cannot
+         * be switched off without a release, it is invisible to anyone reading
+         * the configuration, and every customer silently stops being messaged
+         * while one phone gets everybody's mail. The test suite caught it, which
+         * is the only reason it did not ship.
+         *
+         * As a setting it is off unless somebody sets it, it is visible in .env,
+         * check-integrations reports it, and every redirected message says so in
+         * the log.
+         */
+        $testRecipient = (string) config('services.whatsapp.test_recipient');
+
+        if ($testRecipient !== '' && $recipient) {
+            Log::warning('Message redirected to the test number.', [
+                'intended_for' => $recipient,
+                'sent_to' => $testRecipient,
+                'subscription_id' => $subscription->id,
+                'why' => 'MSG91_TEST_RECIPIENT is set. Unset it and no customer is messaged from here.',
+            ]);
+
+            $recipient = $testRecipient;
+        }
 
         if (! $recipient) {
             Log::info('Nothing to message: the customer has no phone number.', [
@@ -381,9 +411,24 @@ class Messenger
                     'error' => 'HTTP '.$response->status().': '.$response->body(),
                 ])->save();
 
+                /*
+                 * The provider's own words, not just the status.
+                 *
+                 * This used to log the number alone, so a 401 in the log said
+                 * only that something was refused - and the reason sat in
+                 * `messages.error`, which means knowing to go and look. A 401
+                 * here is nearly always the credentials: MSG91_AUTH_KEY holding
+                 * the integrated number rather than the account key is the one
+                 * that has actually happened.
+                 */
                 Log::warning('A message could not be delivered.', [
                     'message_id' => $message->id,
                     'status' => $response->status(),
+                    'template' => $message->template,
+                    'response' => \Illuminate\Support\Str::limit($response->body(), 500),
+                    'hint' => $response->status() === 401
+                        ? 'MSG91 refused the authkey. Run eswachh:check-integrations.'
+                        : null,
                 ]);
 
                 return;

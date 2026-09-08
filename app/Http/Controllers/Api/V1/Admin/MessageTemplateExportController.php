@@ -60,11 +60,26 @@ class MessageTemplateExportController extends Controller implements HasMiddlewar
         $looksLocal = preg_match('#^https?://(localhost|127\.|0\.0\.0\.0|\[::1\])#i', $url) === 1
             || str_ends_with(parse_url($url, PHP_URL_HOST) ?: '', '.test');
 
-        return $looksLocal
-            ? "The Renew now button in these files points at {$url}, which is this machine. "
+        if ($looksLocal) {
+            return "The Renew now button in these files points at {$url}, which is this machine. "
                 .'Do not upload them to MSG91 - a template is approved with its address built in, '
-                .'and the button would fail on every customer phone. Export again from the server.'
-            : null;
+                .'and the button would fail on every customer phone. Export again from the server.';
+        }
+
+        /*
+         * Meta will not approve a URL button on plain http.
+         *
+         * Worth its own check because APP_URL is where the scheme comes from,
+         * and a server serving https perfectly well can still have http written
+         * there - nothing else in the application would ever notice.
+         */
+        if (! str_starts_with(strtolower($url), 'https://')) {
+            return "APP_URL is {$url}, so the Renew now button is not https. Meta refuses a URL "
+                .'button that is not, and the rejection names the template rather than the setting. '
+                .'Fix APP_URL on the server and export again.';
+        }
+
+        return null;
     }
 
     /**
