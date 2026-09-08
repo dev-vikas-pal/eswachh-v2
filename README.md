@@ -13,7 +13,7 @@ carrying its data and its logins across.
 | **Auth** | Sanctum, SPA cookie |
 | **Payments** | Razorpay |
 | **Messaging** | WhatsApp via MSG91 |
-| **Tests** | 437 passing, 1255 assertions, ~67s |
+| **Tests** | 458 passing, 1356 assertions, ~65s (`--parallel`: ~33s) |
 
 ## Getting it running
 
@@ -135,6 +135,7 @@ message a real customer.
 
 ```bash
 php artisan test                            # all of them
+composer test:parallel                      # the same, on all eight cores
 php artisan test --filter=AddSecondCarTest  # one file
 npx vue-tsc --noEmit                        # the front end
 ```
@@ -142,6 +143,16 @@ npx vue-tsc --noEmit                        # the front end
 `tests/Concerns/MigratesOnlyWhenStale` skips `migrate:fresh` when the test
 database already matches every migration on disk — 217s down to about 47.
 Adding a migration rebuilds it automatically.
+
+Parallel is not the default because it keeps one database per process, so a new
+migration rebuilds all eight — about ten minutes here, against one for the
+serial run's single database. Run serially once after adding a migration, in
+parallel the rest of the time.
+
+If the suite feels slow, it is the machine rather than the tests: two antivirus
+products are scanning `D:\xampp\mysql\data\`, which puts `CREATE TABLE` at 339ms
+against a healthy 5–20ms, and every commit is a 42.7ms fsync. Both are measured,
+and both are fixed once — [`docs/TESTING.md`](docs/TESTING.md#if-the-suite-feels-slow).
 
 Use `vue-tsc` rather than `npm run build` while working; `npm run dev` is
 normally already running and a build fights it.
