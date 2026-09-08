@@ -22,7 +22,7 @@ class MessageTemplateSeeder extends Seeder
     {
         $added = 0;
 
-        foreach ($this->templates() as $template) {
+        foreach (self::templates() as $template) {
             // Keyed on `key`, so a template somebody has since rewritten is
             // never touched and a newly added one still arrives.
             if (MessageTemplate::query()->where('key', $template['key'])->exists()) {
@@ -44,9 +44,16 @@ class MessageTemplateSeeder extends Seeder
     }
 
     /**
+     * The wording this release ships with.
+     *
+     * Public and static because it is the single source of two things: what a
+     * fresh database is seeded with, and what `eswachh:reset-message-wording`
+     * puts back. A second copy of these words is a second thing to keep in
+     * step, and the one that drifts is always the one nobody is looking at.
+     *
      * @return array<int, array<string, mixed>>
      */
-    private function templates(): array
+    public static function templates(): array
     {
         return [
             // ------------------------------------------------------- [1] & [2]

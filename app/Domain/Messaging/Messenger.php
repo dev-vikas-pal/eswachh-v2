@@ -324,6 +324,25 @@ class Messenger
         } catch (QueryException $e) {
             // The unique key fired: already told them today. Not an error.
             if ((int) ($e->errorInfo[1] ?? 0) === 1062) {
+                /*
+                 * Said out loud, because this is the one path that leaves no
+                 * trace anywhere.
+                 *
+                 * It is correct behaviour - the customer has already heard this
+                 * today and must not hear it twice - but it is indistinguishable
+                 * from a broken send to whoever is testing: no message arrives,
+                 * no row appears on the Messages screen, and nothing is logged.
+                 * Somebody testing the same plan twice in one afternoon reads
+                 * that as the whole feature being dead.
+                 */
+                Log::info('Not sending: this customer already heard this today.', [
+                    'subscription_id' => $subscription->id,
+                    'purpose' => $purpose->value,
+                    'sent_on' => $on->toDateString(),
+                    'why' => 'One message per plan per purpose per day. Delete that row, '
+                        .'use a different plan, or pass a later --date to send again.',
+                ]);
+
                 return null;
             }
 
