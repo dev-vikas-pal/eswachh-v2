@@ -34,8 +34,12 @@ class StartPayment
      *
      * The one place a null stamp is still correct is a customer with no sector
      * at all, which is a different problem and shows up on the customer record.
+     *
+     * Public and static because money taken by hand needs the same stamp: a
+     * cash payment written without one was invisible to the franchise owner
+     * who had just recorded it.
      */
-    private function sectorFor(Subscription $subscription): ?string
+    public static function sectorFor(Subscription $subscription): ?string
     {
         return SectorContext::withoutScope(
             fn () => Customer::withTrashed()->whereKey($subscription->customer_id)->value('sector_id')
@@ -157,6 +161,7 @@ class StartPayment
             'customer_id' => $subscription->customer_id,
             'subscription_id' => $subscription->id,
             'purpose' => PaymentPurpose::ClothTopUp,
+            'cloth_bundle_id' => $bundle->id,
             'status' => PaymentStatus::Initiated,
             'amount_paise' => $amountPaise,
             'currency' => 'INR',

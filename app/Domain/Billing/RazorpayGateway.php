@@ -137,9 +137,15 @@ class RazorpayGateway
      * This is what reconciliation runs on: the customer who paid and closed the
      * tab is invisible to us until we ask the gateway directly.
      *
-     * @return array<int, array<string, mixed>>
+     * Null when the gateway could not be asked, which is not the same as an
+     * empty list: "no charges" means the customer never paid, while "no
+     * answer" means nothing is known. Treating the two alike marked paid
+     * orders failed whenever Razorpay was briefly down at midnight, and the
+     * callback that arrived later had nothing left to match.
+     *
+     * @return array<int, array<string, mixed>>|null
      */
-    public function paymentsForOrder(string $gatewayOrderId): array
+    public function paymentsForOrder(string $gatewayOrderId): ?array
     {
         if (! $this->isLive()) {
             // Nothing to find when the gateway is off - a simulated order was
@@ -148,7 +154,16 @@ class RazorpayGateway
             return [];
         }
 
-        $response = $this->client()->get("/orders/{$gatewayOrderId}/payments");
+        try {
+            $response = $this->client()->get("/orders/{$gatewayOrderId}/payments");
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('Could not reach Razorpay to list charges for an order.', [
+                'gateway_order_id' => $gatewayOrderId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
 
         if ($response->failed()) {
             Log::warning('Could not list charges for an order.', [
@@ -156,7 +171,7 @@ class RazorpayGateway
                 'status' => $response->status(),
             ]);
 
-            return [];
+            return null;
         }
 
         return collect($response->json('items', []))

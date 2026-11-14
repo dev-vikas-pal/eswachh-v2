@@ -21,6 +21,9 @@ use Illuminate\Console\Command;
  *
  * So this is the deliberate, named way to overwrite. It says exactly what it
  * changed, and it asks first unless told not to.
+ *
+ * Wording only. The name a template goes by at MSG91 is left alone - see the
+ * update below for why.
  */
 class ResetMessageWording extends Command
 {
@@ -70,12 +73,22 @@ class ResetMessageWording extends Command
             }
 
             foreach ($changes as $change) {
+                /*
+                 * The wording, and only the wording.
+                 *
+                 * `provider_template` is deliberately left alone. It reads like
+                 * something this command should restore, and restoring it is
+                 * exactly wrong: the name a template goes by at MSG91 is a fact
+                 * about that account, not about this release. Meta blocks reuse
+                 * of a deleted template's name for about a month, so a template
+                 * that has been through one round of corrections is legitimately
+                 * called v2_put_on_hold_subs there while the seeder still says
+                 * v2_put_on_hold - and resetting the wording must not quietly
+                 * point the sender at a name that no longer exists.
+                 */
                 MessageTemplate::query()
                     ->where('key', $change['key'])
-                    ->update([
-                        'body' => $change['shipped']['body'],
-                        'provider_template' => $change['shipped']['provider_template'],
-                    ]);
+                    ->update(['body' => $change['shipped']['body']]);
             }
 
             $this->components->info($changes->count().' template(s) reset.');
@@ -99,8 +112,10 @@ class ResetMessageWording extends Command
                 'current' => $t,
                 'shipped' => $shipped[$t->key],
             ])
-            ->filter(fn (array $c) => $c['current']->body !== $c['shipped']['body']
-                || $c['current']->provider_template !== $c['shipped']['provider_template'])
+            // The body alone, matching what is actually written back. Including
+            // the provider name here would report a template as needing a reset
+            // and then leave it exactly as it was.
+            ->filter(fn (array $c) => $c['current']->body !== $c['shipped']['body'])
             ->values();
     }
 

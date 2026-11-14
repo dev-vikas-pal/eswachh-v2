@@ -57,9 +57,32 @@ class ReconcilePayments extends Command
 
             $settled = 0;
             $abandoned = 0;
+            $unknown = 0;
 
             foreach ($open as $payment) {
-                $found = $this->findGatewayPayment($gateway, $payment);
+                $charges = $gateway->paymentsForOrder((string) $payment->gateway_order_id);
+
+                // The gateway did not answer. Nothing is known, so nothing is
+                // changed: tomorrow's run asks again.
+                if ($charges === null) {
+                    $unknown++;
+                    $this->line("  unknown    {$payment->id}  the gateway did not answer; left open");
+
+                    continue;
+                }
+
+                $found = $this->findGatewayPayment($payment, $charges);
+
+                // Money is there but not something we can bank - a charge still
+                // only authorised, or one for a different amount. Marking it
+                // failed would hide a customer who paid; it is left open and
+                // logged for a person to look at.
+                if ($found === null && $this->hasLiveCharge($charges)) {
+                    $unknown++;
+                    $this->line("  CHECK      {$payment->id}  a charge exists but does not settle this order; left open");
+
+                    continue;
+                }
 
                 if (! $found) {
                     // No charge at the gateway means the customer never paid.
@@ -79,10 +102,11 @@ class ReconcilePayments extends Command
                     continue;
                 }
 
-                $settled++;
                 $this->line("  PAID       {$payment->id}  ₹".number_format($payment->amount(), 2)."  {$found['id']}");
 
                 if ($dryRun) {
+                    $settled++;
+
                     continue;
                 }
 
@@ -90,44 +114,47 @@ class ReconcilePayments extends Command
                  * Reconstructed rather than replayed: there is no signature to
                  * check because there was no callback. The gateway's own API
                  * answering over an authenticated connection is the proof
-                 * here, so the payment is captured directly.
+                 * here.
+                 *
+                 * Through the same lock as the callback, so a browser that
+                 * returns while this runs cannot renew the plan a second time.
                  */
-                $payment->forceFill([
-                    'gateway_payment_id' => $found['id'],
-                    'status' => PaymentStatus::Captured,
-                    'method' => $found['method'] ?? null,
-                    'reference' => $found['reference'] ?? null,
-                    'paid_at' => now(),
-                    'notes' => 'Settled by reconciliation; the customer never returned from the gateway.',
-                    'invoice_number' => $payment->invoice_number
-                        ?? \App\Domain\Billing\InvoiceNumber::next($payment->branch_id),
-                ])->save();
+                $claimed = $recorder->settleFromReconciliation(
+                    $payment,
+                    $found,
+                    'Settled by reconciliation; the customer never returned from the gateway.',
+                );
+
+                if (! $claimed) {
+                    $this->line('             already settled by its callback; nothing done');
+
+                    continue;
+                }
+
+                $settled++;
 
                 Log::info('Reconciliation settled a payment the callback never delivered.', [
                     'payment_id' => $payment->id,
                     'gateway_payment_id' => $found['id'],
                     'amount_paise' => $payment->amount_paise,
                 ]);
-
-                $recorder->extendAfterReconciliation($payment->fresh());
             }
 
             $this->newLine();
-            $this->info(($dryRun ? '[dry run] ' : '')."Settled {$settled}, marked {$abandoned} abandoned.");
+            $this->info(($dryRun ? '[dry run] ' : '')."Settled {$settled}, marked {$abandoned} abandoned, left {$unknown} open.");
 
             return self::SUCCESS;
         });
     }
 
     /**
-     * Ask the gateway what became of this order.
+     * The charge that settles this order, from what the gateway holds for it.
      *
+     * @param  array<int, array<string, mixed>>  $payments
      * @return array<string, mixed>|null
      */
-    private function findGatewayPayment(RazorpayGateway $gateway, Payment $payment): ?array
+    private function findGatewayPayment(Payment $payment, array $payments): ?array
     {
-        $payments = $gateway->paymentsForOrder((string) $payment->gateway_order_id);
-
         foreach ($payments as $candidate) {
             if (($candidate['status'] ?? null) !== 'captured') {
                 continue;
@@ -149,5 +176,25 @@ class ReconcilePayments extends Command
         }
 
         return null;
+    }
+
+    /**
+     * Has the customer handed over money on this order in any form?
+     *
+     * A failed attempt is not money. Anything else - authorised, captured at a
+     * different amount, refunded - is something a person should see before
+     * the order is called abandoned.
+     *
+     * @param  array<int, array<string, mixed>>  $payments
+     */
+    private function hasLiveCharge(array $payments): bool
+    {
+        foreach ($payments as $candidate) {
+            if (($candidate['status'] ?? null) !== 'failed') {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

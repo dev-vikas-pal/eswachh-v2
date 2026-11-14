@@ -140,12 +140,29 @@ class SubscriptionBulkController extends Controller
             $message ? $sent++ : $alreadyToday++;
         }
 
-        Log::info('Bulk message sent.', [
-            'template' => $template->key,
-            'requested' => count($data['ids']),
-            'sent' => $sent,
-            'by' => $request->user()->id,
-        ]);
+        /*
+         * "Recorded", not "sent", unless it actually left the building.
+         *
+         * The reply to the browser has always said this properly. The log line
+         * did not: it read "Bulk message sent" with a count beside it, on a
+         * machine where delivery is switched off and nothing can leave. Anybody
+         * reading the Logs screen concludes the message went and starts looking
+         * for it on their phone - which is exactly what happened.
+         */
+        Log::info(
+            $messenger->deliveryEnabled()
+                ? 'Bulk message sent.'
+                : 'Bulk message recorded, not delivered.',
+            array_filter([
+                'template' => $template->key,
+                'provider_template' => $template->provider_template,
+                'requested' => count($data['ids']),
+                'recorded' => $sent,
+                'delivered' => $messenger->deliveryEnabled(),
+                'held_back' => $messenger->suppressionReason(),
+                'by' => $request->user()->id,
+            ], fn ($value) => $value !== null),
+        );
 
         $parts = ["{$sent} message(s) recorded"];
 

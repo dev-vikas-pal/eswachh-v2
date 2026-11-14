@@ -366,11 +366,12 @@ const roleFilters = [
         </div>
 
         <!-- Add / edit -->
-        <div v-if="editing" class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-4 pt-16">
-            <div class="w-full max-w-md rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
-                <h2 class="mb-3 text-lg font-semibold text-ink">{{ editing.id ? 'Edit person' : 'Add someone' }}</h2>
+        <div v-if="editing" class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-16">
+            <div class="mx-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-md flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl">
+                <h2 class="shrink-0 px-4 pt-4 text-lg font-semibold text-ink">{{ editing.id ? 'Edit person' : 'Add someone' }}</h2>
 
-                <form class="flex flex-col gap-3" @submit.prevent="save">
+                <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="save">
+                    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
                     <label>
                         <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Name</span>
                         <input v-model.trim="form.name" type="text" required class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
@@ -466,8 +467,9 @@ const roleFilters = [
                     </label>
 
                     <p v-if="formError" class="rounded bg-crit-soft px-3 py-2 text-sm text-crit">{{ formError }}</p>
+                    </div>
 
-                    <div class="mt-1 flex gap-2">
+                    <div class="flex shrink-0 gap-2 border-t border-line px-4 py-3">
                         <button type="submit" :disabled="saving" class="rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:opacity-60">
                             {{ saving ? 'Saving…' : 'Save' }}
                         </button>

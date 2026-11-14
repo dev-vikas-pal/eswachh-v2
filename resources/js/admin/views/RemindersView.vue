@@ -183,8 +183,8 @@ const statusClass: Record<string, string> = {
         </div>
 
         <!-- Exactly what the customer received, word for word. -->
-        <div v-if="openBody" class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-4 pt-24" @click.self="openBody = null">
-            <div class="w-full max-w-md rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
+        <div v-if="openBody" class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-24" @click.self="openBody = null">
+            <div class="mx-auto mb-8 w-full max-w-md rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
                 <div class="mb-2 flex items-start gap-3">
                     <h2 class="text-sm font-semibold uppercase tracking-wide text-muted">What was sent</h2>
                     <button type="button" class="ms-auto text-sm text-muted hover:text-ink" @click="openBody = null">Close</button>

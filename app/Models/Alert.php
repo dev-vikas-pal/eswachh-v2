@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -56,11 +57,22 @@ class Alert extends Model
      * A super admin sees business-wide ones and every branch's; everyone else
      * sees their own branch, and the business-wide ones are not theirs to act
      * on.
+     *
+     * The branch has to be a real one. `where('branch_id', null)` is turned
+     * into `whereNull` by the query builder, so anybody with no branch - every
+     * customer, and every member of staff created since territory moved to
+     * sectors - matched exactly the business-wide alerts this was keeping from
+     * them, and could resolve a failed backup for the administrator who had to
+     * act on it. Customers see none: the bell is the office's.
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         if ($user->seesAllSectors()) {
             return $query;
+        }
+
+        if ($user->role === UserRole::Customer || $user->branch_id === null) {
+            return $query->whereRaw('1 = 0');
         }
 
         return $query->where('branch_id', $user->branch_id);

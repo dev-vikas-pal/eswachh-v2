@@ -234,6 +234,43 @@ class PaymentApiTest extends TestCase
         $this->assertSame($owner->id, $payment->verified_by);
     }
 
+    public function test_cash_recorded_by_the_office_shows_on_its_own_list(): void
+    {
+        $subscription = $this->subscription($this->ourBranch);
+        $owner = User::factory()->franchiseOwner($this->ourBranch)->create();
+
+        $this->actingAs($owner)->postJson('/api/v1/payments/manual', [
+            'subscription_id' => $subscription->id,
+            'amount_paise' => 85000,
+            'method' => 'cash',
+            'paid_at' => now()->toDateTimeString(),
+        ])->assertCreated();
+
+        // Written with no sector it was invisible to the very person who had
+        // just recorded it, because payments are scoped by that stamp alone.
+        $customerSector = SectorContext::withoutScope(
+            fn () => Customer::query()->whereKey($subscription->customer_id)->value('sector_id')
+        );
+        $this->assertSame(
+            $customerSector,
+            SectorContext::withoutScope(fn () => Payment::query()->sole()->sector_id),
+        );
+
+        $this->actingAs($owner)->getJson('/api/v1/payments')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_a_cleaner_cannot_open_a_checkout_on_a_plan(): void
+    {
+        $subscription = $this->subscription($this->ourBranch);
+        $cleaner = User::factory()->cleaner($this->ourBranch)->create();
+
+        $this->actingAs($cleaner)
+            ->postJson("/api/v1/subscriptions/{$subscription->id}/pay")
+            ->assertForbidden();
+    }
+
     public function test_recording_a_cash_payment_moves_the_plan_on(): void
     {
         $subscription = $this->subscription($this->ourBranch, [

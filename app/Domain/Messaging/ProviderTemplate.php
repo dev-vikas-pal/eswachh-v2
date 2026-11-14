@@ -145,12 +145,13 @@ final class ProviderTemplate
     }
 
     /**
-     * What Messenger posts to MSG91 as `components`.
+     * The Meta-shaped component list for one send.
      *
-     * Meta's shape, which MSG91 passes through: one entry per component that
-     * carries variables. A template with no variables and no button sends an
-     * empty list, which is correct and is what the provider expects - not an
-     * omission.
+     * One entry per component that carries variables. Msg91WhatsAppTransport
+     * rewrites this into `body_1` / `button_1` before posting; the other
+     * transports read this shape directly. A template with no variables and no
+     * button sends an empty list, which is an empty object on the wire - not
+     * an omission.
      *
      * @param  array<string, string|int|float|null>  $values
      * @param  string|null  $buttonValue  The dynamic part of a URL button

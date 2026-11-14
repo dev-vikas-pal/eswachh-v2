@@ -3,9 +3,10 @@
 namespace App\Domain\Auth;
 
 use App\Domain\Messaging\Messenger;
+use App\Domain\Messaging\Transport\OutboundMessage;
+use App\Domain\Messaging\Transport\TransportChain;
 use App\Models\LoginCode;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -22,6 +23,8 @@ use Illuminate\Support\Facades\Log;
  */
 class PhoneCodes
 {
+    public function __construct(private readonly TransportChain $transports) {}
+
     public const LOGIN = 'login';
 
     public const SIGNUP = 'signup';
@@ -173,25 +176,41 @@ class PhoneCodes
          * is itself an answer to "is this person a customer of yours".
          */
         try {
-            Http::withHeaders(['authkey' => (string) config('services.whatsapp.key')])
-                ->acceptJson()
-                ->timeout(15)
-                ->post(config('services.whatsapp.url'), [
-                    'integrated_number' => config('services.whatsapp.number'),
-                    'content_type' => 'template',
-                    'payload' => [
-                        // With the country code. A bare ten digit number is
-                        // accepted and dropped, which looks like a code that
-                        // was sent and never arrives.
-                        'to' => Messenger::dialable($phone),
-                        'type' => 'template',
-                        'template' => [
-                            'name' => 'otp',
-                            'language' => ['code' => 'en', 'policy' => 'deterministic'],
-                            'components' => [['type' => 'body', 'parameters' => [['type' => 'text', 'text' => $code]]]],
-                        ],
+            /*
+             * Its own chain, separate from everything else.
+             *
+             * Every other message tells a customer something; this one is the
+             * only way into their account, so the channel that carries it is a
+             * different decision from the channel that carries a renewal
+             * reminder. It stays on WhatsApp today because that is where it has
+             * always gone and the template is approved - but SMS is the more
+             * reliable channel for a code, needing no app, no data and no
+             * smartphone, and moving it is one line of configuration once DLT
+             * registration is in place.
+             *
+             * Empty configuration means "whatever everything else uses".
+             */
+            $result = $this->transports->send(
+                new OutboundMessage(
+                    to: $phone,
+                    // What an SMS would send, and what is logged outside
+                    // production. WhatsApp ignores it in favour of the approved
+                    // template named below.
+                    body: "{$code} is your Eswachh sign-in code. It expires shortly. Do not share it.",
+                    template: 'otp',
+                    components: [
+                        ['type' => 'body', 'parameters' => [['type' => 'text', 'text' => $code]]],
                     ],
+                ),
+                only: config('messaging.login_code_chain') ?: null,
+            );
+
+            if (! $result->ok) {
+                Log::error('A phone code could not be sent.', [
+                    'transport' => $result->transport,
+                    'error' => $result->error,
                 ]);
+            }
         } catch (\Throwable $e) {
             Log::error('A phone code could not be sent.', ['error' => $e->getMessage()]);
         }

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Admin\DashboardController;
 use App\Http\Controllers\Api\V1\Admin\LogController;
 use App\Http\Controllers\Api\V1\Admin\MasterController;
 use App\Http\Controllers\Api\V1\Admin\MessageTemplateExportController;
+use App\Http\Controllers\Api\V1\Admin\MessageTemplateSmsController;
 use App\Http\Controllers\Api\V1\Admin\PostController;
 use App\Http\Controllers\Api\V1\Admin\ReminderController;
 use App\Http\Controllers\Api\V1\Admin\ReportController;
@@ -330,6 +331,7 @@ Route::middleware('auth:sanctum')->group(function () {
      */
     Route::get('message-templates/export', [MessageTemplateExportController::class, 'all']);
     Route::get('message-templates/{id}/export', [MessageTemplateExportController::class, 'one']);
+    Route::post('message-templates/{id}/sms', [MessageTemplateSmsController::class, 'store']);
 
     Route::get('masters', [MasterController::class, 'catalogue']);
     Route::get('masters/{master}', [MasterController::class, 'index']);

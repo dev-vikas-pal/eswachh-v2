@@ -80,6 +80,9 @@ const isMessageTemplates = computed(() => selected.value === 'message-templates'
 const exporting = ref<string | null>(null);
 const exportProblem = ref<string | null>(null);
 const exportWarning = ref<string | null>(null);
+const smsFor = ref<string | null>(null);
+const smsProblem = ref<string | null>(null);
+const smsNotice = ref<string | null>(null);
 
 async function runExport(what: string, download: () => Promise<{ ok: boolean; warning?: string; message?: string }>) {
     exporting.value = what;
@@ -104,6 +107,35 @@ const exportAll = () => runExport('all', exportAllTemplates);
 
 const exportRow = (row: MasterRow) =>
     runExport(row.id, () => exportOneTemplate(row.id, (row.provider_template as string) ?? null));
+
+/**
+ * Send this wording to Twilio as an SMS template.
+ *
+ * Does not touch the WhatsApp name or the MSG91 file. A second click replaces
+ * the stored id with a new template, because Twilio will not edit one.
+ */
+async function createSmsTemplate(row: MasterRow) {
+    const replacing = Boolean(row.sms_content_sid);
+    const question = replacing
+        ? `Replace the SMS template for “${row.name}”? The words on this screen stay as they are.`
+        : `Create an SMS template on Twilio for “${row.name}”? WhatsApp and the MSG91 export are not changed.`;
+
+    if (!window.confirm(question)) return;
+
+    smsFor.value = row.id;
+    smsProblem.value = null;
+    smsNotice.value = null;
+
+    try {
+        const response = await api.post(`/message-templates/${row.id}/sms`);
+        smsNotice.value = `SMS template ${response.data.data.sms_content_sid} is saved for ${row.name}.`;
+        await refreshAfter(queryClient, 'masters');
+    } catch (error) {
+        smsProblem.value = describeError(error).message;
+    } finally {
+        smsFor.value = null;
+    }
+}
 
 /**
  * "On sale" is right for a package and wrong for a sector, a state or a blog
@@ -132,7 +164,9 @@ const footnote = computed(() => {
     if (isMessageTemplates.value) {
         return 'Editing the words here changes what this system records and shows, but not what WhatsApp '
             + 'delivers: that wording is approved by MSG91 first. Export the template, upload the file on '
-            + 'MSG91’s Templates screen under Import, and the change goes live once it is approved.';
+            + 'MSG91’s Templates screen under Import, and the change goes live once it is approved. '
+            + 'Create SMS template sends the same words to Twilio as a text template. It does not register '
+            + 'them on India’s DLT portal, which is still required before an Indian number can receive the SMS.';
     }
 
     return null;
@@ -370,6 +404,14 @@ async function restore(row: MasterRow) {
                 {{ exportWarning }}
             </p>
 
+            <p v-if="smsProblem" class="mb-4 rounded border border-crit bg-crit-soft px-3 py-2 text-sm text-crit">
+                {{ smsProblem }}
+            </p>
+
+            <p v-if="smsNotice" class="mb-4 rounded border border-ok bg-ok-soft px-3 py-2 text-sm text-ok">
+                {{ smsNotice }}
+            </p>
+
             <div class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-3">
                 <label v-if="current?.parent">
                     <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
@@ -477,6 +519,16 @@ async function restore(row: MasterRow) {
                                     {{ exporting === row.id ? 'Preparing…' : 'Export' }}
                                 </button>
                                 <button
+                                    v-if="isMessageTemplates && !row.withdrawn"
+                                    type="button"
+                                    class="rounded px-2 py-1 text-xs font-medium text-body hover:bg-sunk disabled:opacity-60"
+                                    :title="row.sms_content_sid ? String(row.sms_content_sid) : 'Create this wording as a Twilio SMS template'"
+                                    :disabled="smsFor !== null"
+                                    @click="createSmsTemplate(row)"
+                                >
+                                    {{ smsFor === row.id ? 'Creating…' : row.sms_content_sid ? 'Update SMS' : 'Create SMS' }}
+                                </button>
+                                <button
                                     v-if="!row.withdrawn"
                                     type="button"
                                     class="rounded px-2 py-1 text-xs font-medium text-accent-ink hover:bg-accent-soft"
@@ -510,13 +562,14 @@ async function restore(row: MasterRow) {
         </div>
 
         <!-- Edit panel -->
-        <div v-if="editing" class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-4 pt-16">
-            <div class="w-full max-w-md rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
-                <h2 class="mb-3 text-lg font-semibold text-ink">
+        <div v-if="editing" class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-16">
+            <div class="mx-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-md flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl">
+                <h2 class="shrink-0 px-4 pt-4 text-lg font-semibold text-ink">
                     {{ editing.id ? 'Edit' : 'Add' }} {{ current?.singular?.toLowerCase() }}
                 </h2>
 
-                <form class="flex flex-col gap-3" @submit.prevent="save">
+                <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="save">
+                    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
                     <label v-if="current?.parent">
                         <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
                             {{ current.parent.label }}
@@ -564,7 +617,9 @@ async function restore(row: MasterRow) {
 
                     <label v-for="f in formFields" :key="f">
                         <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">
-                            {{ current?.money.includes(f) ? rupeeField(f).replace('_', ' ') + ' (₹)' : f.replace('_', ' ') }}
+                            {{ f === 'sms_content_sid'
+                                ? 'Twilio SMS SID'
+                                : current?.money.includes(f) ? rupeeField(f).replace('_', ' ') + ' (₹)' : f.replace('_', ' ') }}
                         </span>
                         <ImageField v-if="current?.images?.includes(f)" v-model="form[f]" :folder="selected" />
                         <RichTextEditor v-else-if="current?.rich.includes(f)" v-model="form[f]" />
@@ -588,6 +643,10 @@ async function restore(row: MasterRow) {
                             min="0"
                             class="w-full rounded border border-line-strong px-3 py-2 text-sm tabular-nums focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                         />
+                        <span v-if="f === 'sms_content_sid'" class="mt-1 block text-xs text-muted">
+                            Paste an existing HX id. An SMS is sent with this SID, not with the provider template name.
+                            Leave it empty to send the words as plain text. WhatsApp still uses the name above.
+                        </span>
                     </label>
 
                     <label class="flex items-center gap-2 text-sm text-body">
@@ -596,8 +655,9 @@ async function restore(row: MasterRow) {
                     </label>
 
                     <p v-if="formError" class="rounded bg-crit-soft px-3 py-2 text-sm text-crit">{{ formError }}</p>
+                    </div>
 
-                    <div class="mt-1 flex gap-2">
+                    <div class="flex shrink-0 gap-2 border-t border-line px-4 py-3">
                         <button
                             type="submit"
                             :disabled="saving"

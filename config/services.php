@@ -82,6 +82,38 @@ return [
         'test_recipient' => env('MSG91_TEST_RECIPIENT'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Twilio
+    |--------------------------------------------------------------------------
+    |
+    | One account, two senders: a WhatsApp number and an SMS sender. Which of
+    | them a message uses is decided by config/messaging.php, not here.
+    |
+    | The DLT pair is India only and is not optional there. Every sender and
+    | template must be registered with the telecom regulator through an
+    | operator, and the registered ids travel with each SMS. Without them the
+    | carrier drops the message after Twilio has accepted it - which reads
+    | exactly like a message that was sent.
+    |
+    */
+    'twilio' => [
+        'sid' => env('TWILIO_ACCOUNT_SID'),
+        'token' => env('TWILIO_AUTH_TOKEN'),
+        // The WhatsApp-enabled Twilio number, digits only: 17372508034.
+        // The sandbox number 14155238886 cannot send this account's templates.
+        'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
+        // Sample Content SID for `php artisan eswachh:send-whatsapp` only.
+        // Customer messages use the per-template SIDs in config/messaging.php.
+        'test_content' => env('TWILIO_CONTENT_TEST'),
+        // The SMS sender: a Twilio number in E.164, or a registered sender id.
+        'sms_from' => env('TWILIO_SMS_FROM'),
+        'dlt' => [
+            'entity_id' => env('TWILIO_DLT_ENTITY_ID'),
+            'template_id' => env('TWILIO_DLT_TEMPLATE_ID'),
+        ],
+    ],
+
     'razorpay' => [
         'key' => env('RAZORPAY_KEY'),
         'secret' => env('RAZORPAY_SECRET'),

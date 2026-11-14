@@ -90,8 +90,11 @@ class ReconcilePaymentsTest extends TestCase
 
         $this->artisan('eswachh:reconcile-payments')->assertSuccessful();
 
+        // Not banked - and not called abandoned either. The customer handed
+        // over money, and marking the order failed would hide that from the
+        // person who has to sort it out.
         $payment->refresh();
-        $this->assertSame(PaymentStatus::Failed, $payment->status);
+        $this->assertSame(PaymentStatus::Initiated, $payment->status);
         $this->assertNull($payment->gateway_payment_id);
     }
 
@@ -103,8 +106,26 @@ class ReconcilePaymentsTest extends TestCase
 
         $this->artisan('eswachh:reconcile-payments')->assertSuccessful();
 
-        // Authorised is not captured. The money has not actually moved.
-        $this->assertSame(PaymentStatus::Failed, $payment->fresh()->status);
+        // Authorised is not captured: the money has not moved yet. Left open,
+        // so the next run settles it once Razorpay captures it.
+        $payment->refresh();
+        $this->assertSame(PaymentStatus::Initiated, $payment->status);
+        $this->assertNull($payment->paid_at);
+    }
+
+    public function test_a_gateway_that_does_not_answer_changes_nothing(): void
+    {
+        $payment = $this->staleAttempt();
+
+        Http::fake([
+            "*/orders/{$payment->gateway_order_id}/payments" => Http::response(['error' => 'down'], 503),
+        ]);
+
+        $this->artisan('eswachh:reconcile-payments')->assertSuccessful();
+
+        // This used to read as "no charges" and mark a paid order failed, so
+        // the callback arriving later had nothing to match.
+        $this->assertSame(PaymentStatus::Initiated, $payment->fresh()->status);
     }
 
     public function test_a_checkout_still_in_progress_is_left_alone(): void

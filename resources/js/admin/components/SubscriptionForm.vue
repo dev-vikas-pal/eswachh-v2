@@ -236,8 +236,8 @@ async function save() {
 </script>
 
 <template>
-    <div class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-10">
-        <div class="w-full max-w-3xl rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
+    <div class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-10">
+        <div class="mx-auto mb-8 max-h-[calc(100dvh-4rem)] w-full max-w-3xl overflow-y-auto rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
             <h2 class="mb-3 text-lg font-semibold text-ink">
                 {{ subscriptionId ? 'Edit plan' : 'New plan' }}
             </h2>
@@ -494,7 +494,7 @@ async function save() {
                     <button
                         type="submit"
                         :disabled="saving || (!subscriptionId && !form.customer_id)"
-                        class="mt-3 w-full rounded bg-accent px-4 py-2 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50"
+                        class="sticky bottom-0 mt-3 w-full rounded bg-accent px-4 py-2 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50"
                     >
                         {{ saving ? 'Saving…' : subscriptionId ? 'Save changes' : 'Create plan' }}
                     </button>

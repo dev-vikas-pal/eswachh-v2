@@ -99,8 +99,32 @@ class RecordPayment
             );
         }
 
+        /*
+         * The signature proves Razorpay issued this payment id for this order.
+         * It does not say what the payment holds, so when the gateway has told
+         * us, that has to agree with what we asked for before anything moves.
+         *
+         * Left initiated rather than failed: reconciliation looks again with
+         * the same rule, and a payment that really is wrong stays unsettled
+         * where somebody will see it.
+         */
+        if ($problem = $this->disagreesWithGateway($payment, $details)) {
+            Log::critical('A payment callback did not match what the gateway holds.', [
+                'payment_id' => $payment->id,
+                'gateway_payment_id' => $gatewayPaymentId,
+                'problem' => $problem,
+                'expected_paise' => $payment->amount_paise,
+                'gateway_paise' => $details['amount'] ?? null,
+                'gateway_status' => $details['status'] ?? null,
+            ]);
+
+            return PaymentOutcome::rejected(
+                'We could not confirm this payment with the bank. Our team will check it and contact you.'
+            );
+        }
+
         try {
-            $this->capture($payment, $gatewayPaymentId, $details);
+            $claimed = $this->claim($payment, $gatewayPaymentId, $details);
         } catch (QueryException $e) {
             // The unique key on gateway_payment_id fired, meaning a concurrent
             // callback captured it first. That is a success, not an error.
@@ -109,6 +133,21 @@ class RecordPayment
             }
 
             throw $e;
+        }
+
+        /*
+         * Somebody else moved it between the read above and the lock: the
+         * browser and a gateway retry arriving together, or reconciliation.
+         * Both used to see "initiated", both captured the same row - which the
+         * unique key cannot catch, because it is one row - and both renewed.
+         */
+        if (! $claimed) {
+            Log::info('Ignoring a payment callback that lost the race to another.', [
+                'payment_id' => $payment->id,
+                'gateway_payment_id' => $gatewayPaymentId,
+            ]);
+
+            return PaymentOutcome::alreadyHandled($payment->fresh());
         }
 
         // The subscription is extended only after the money is on the books.
@@ -188,23 +227,89 @@ class RecordPayment
     }
 
     /**
-     * Write the money down.
+     * Settle a payment the gateway's own API says was captured.
+     *
+     * For reconciliation, which has no callback to verify. Goes through the
+     * same lock as a callback, so a customer whose browser finally returns
+     * while the nightly run is settling them is renewed once, not twice.
+     *
+     * @param  array<string, mixed>  $found  one entry from paymentsForOrder()
+     * @return bool  false when somebody else settled it first
+     */
+    public function settleFromReconciliation(Payment $payment, array $found, string $note): bool
+    {
+        $claimed = SectorContext::withoutScope(fn () => $this->claim(
+            $payment,
+            (string) $found['id'],
+            $found,
+            $note,
+        ));
+
+        if ($claimed) {
+            $this->extendAfterReconciliation($payment->fresh());
+        }
+
+        return $claimed;
+    }
+
+    /**
+     * Write the money down, if nobody else has.
+     *
+     * The row is re-read under a lock and only moved while it is still
+     * initiated, which is what makes a payment capturable exactly once.
      *
      * @param  array<string, mixed>  $details
      */
-    private function capture(Payment $payment, string $gatewayPaymentId, array $details): void
+    private function claim(Payment $payment, string $gatewayPaymentId, array $details, ?string $notes = null): bool
     {
-        DB::transaction(function () use ($payment, $gatewayPaymentId, $details) {
-            $payment->forceFill([
+        return DB::transaction(function () use ($payment, $gatewayPaymentId, $details, $notes) {
+            $locked = Payment::query()->whereKey($payment->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== PaymentStatus::Initiated) {
+                return false;
+            }
+
+            $locked->forceFill(array_filter([
                 'gateway_payment_id' => $gatewayPaymentId,
                 'status' => PaymentStatus::Captured,
                 'method' => $details['method'] ?? null,
                 'reference' => $details['reference'] ?? null,
                 // The moment the money moved, recorded once and never rewritten.
                 'paid_at' => now(),
-                'invoice_number' => $payment->invoice_number ?? InvoiceNumber::next(),
-            ])->save();
+                'invoice_number' => $locked->invoice_number ?? InvoiceNumber::next(),
+                'notes' => $notes,
+            ], fn ($value) => $value !== null))->save();
+
+            // The caller carries on with the object it holds, so it must see
+            // what was just written rather than what it read before the lock.
+            $payment->setRawAttributes($locked->getAttributes(), true);
+
+            return true;
         });
+    }
+
+    /**
+     * Why the gateway's account of a payment does not fit ours, if it does not.
+     *
+     * Only what the gateway actually said is compared. An empty answer - the
+     * gateway is switched off, or did not respond - leaves the signature as
+     * the evidence, as it was; reconciliation checks again later.
+     *
+     * @param  array<string, mixed>  $details
+     */
+    private function disagreesWithGateway(Payment $payment, array $details): ?string
+    {
+        if (isset($details['amount']) && (int) $details['amount'] !== (int) $payment->amount_paise) {
+            return 'amount';
+        }
+
+        // "authorized" is fine: the order asks for automatic capture, and the
+        // callback can arrive a moment before it happens.
+        if (isset($details['status']) && in_array($details['status'], ['failed', 'refunded'], true)) {
+            return 'status';
+        }
+
+        return null;
     }
 
     /**
@@ -221,10 +326,20 @@ class RecordPayment
             return;
         }
 
-        $bundle = ClothBundle::query()
-            ->where('price_paise', $payment->amount_paise)
-            ->where('status', true)
-            ->first();
+        /*
+         * The bundle chosen when the payment was opened, withdrawn or not: it
+         * is what the customer paid for, and taking it off sale since does not
+         * change that.
+         *
+         * Only a payment from before that was recorded falls back to finding a
+         * bundle at the price paid.
+         */
+        $bundle = $payment->cloth_bundle_id
+            ? ClothBundle::withTrashed()->find($payment->cloth_bundle_id)
+            : ClothBundle::query()
+                ->where('price_paise', $payment->amount_paise)
+                ->where('status', true)
+                ->first();
 
         if (! $bundle) {
             // Rather than guess at a quantity, leave it for a person and say
@@ -468,7 +583,15 @@ class RecordPayment
                 return;
             }
 
-            $next = $subscription->replicate(['held_at', 'ended_at']);
+            /*
+             * The renewal token stays with the row it was sent for.
+             *
+             * It is unique, so copying it made the new period's insert fail -
+             * and every customer who had ever been sent a Renew now button paid
+             * and stayed unrenewed. The new period is given its own the first
+             * time a message asks for one.
+             */
+            $next = $subscription->replicate(['held_at', 'ended_at', 'renew_token']);
             $next->forceFill([
                 /*
                  * Counted from the highest this car has reached, not from the

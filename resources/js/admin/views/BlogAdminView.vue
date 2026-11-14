@@ -313,11 +313,12 @@ function when(iso: string | null): string {
         </template>
 
         <!-- Write / edit -->
-        <div v-if="creating || editingId" class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-4 pt-10 overflow-y-auto">
-            <div class="w-full max-w-2xl rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
-                <h2 class="mb-3 text-lg font-semibold text-ink">{{ editingId ? 'Edit article' : 'Write an article' }}</h2>
+        <div v-if="creating || editingId" class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-10">
+            <div class="mx-auto flex max-h-[calc(100dvh-4rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl">
+                <h2 class="shrink-0 px-4 pt-4 text-lg font-semibold text-ink">{{ editingId ? 'Edit article' : 'Write an article' }}</h2>
 
-                <form class="flex flex-col gap-3" @submit.prevent="save">
+                <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="save">
+                    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
                     <label>
                         <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Title</span>
                         <input v-model.trim="form.title" type="text" required class="w-full rounded border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent" />
@@ -347,8 +348,9 @@ function when(iso: string | null): string {
                     </label>
 
                     <p v-if="formError" class="rounded bg-crit-soft px-3 py-2 text-sm text-crit">{{ formError }}</p>
+                    </div>
 
-                    <div class="mt-1 flex gap-2">
+                    <div class="flex shrink-0 flex-wrap gap-2 border-t border-line px-4 py-3">
                         <button type="submit" :disabled="saving" class="rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:opacity-60">
                             {{ saving ? 'Saving…' : 'Save as draft' }}
                         </button>

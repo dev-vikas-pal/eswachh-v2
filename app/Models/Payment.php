@@ -53,7 +53,7 @@ class Payment extends BaseModel
     ];
 
     protected $fillable = [
-        'branch_id', 'sector_id', 'customer_id', 'subscription_id',
+        'branch_id', 'sector_id', 'customer_id', 'subscription_id', 'cloth_bundle_id',
         'purpose', 'status', 'amount_paise', 'currency',
         'gateway', 'gateway_order_id', 'gateway_payment_id',
         'method', 'reference', 'paid_at', 'invoice_number',

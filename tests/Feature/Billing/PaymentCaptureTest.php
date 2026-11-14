@@ -408,6 +408,106 @@ class PaymentCaptureTest extends TestCase
         });
     }
 
+    public function test_a_plan_that_was_sent_a_renewal_link_still_renews(): void
+    {
+        // Active, and already given a token - which every customer who has
+        // been sent a Renew now button has been.
+        $subscription = $this->subscription();
+        $token = SectorContext::withoutScope(fn () => $subscription->renewToken());
+        $payment = $this->initiatedPayment($subscription);
+
+        $outcome = app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_tokened'), []);
+
+        // The token used to be copied onto the new period and break its
+        // unique key: captured, but never renewed.
+        $this->assertSame('captured', $outcome->result);
+
+        SectorContext::withoutScope(function () use ($subscription, $token) {
+            $next = Subscription::query()->where('vehicle_id', $subscription->vehicle_id)
+                ->where('status', SubscriptionStatus::Active)->sole();
+
+            $this->assertNotSame($subscription->id, $next->id);
+            $this->assertNull($next->renew_token);
+            $this->assertSame($token, $subscription->fresh()->renew_token);
+            $this->assertSame(SubscriptionStatus::Ended, $subscription->fresh()->status);
+        });
+    }
+
+    public function test_a_callback_the_gateway_disagrees_with_on_the_amount_is_refused(): void
+    {
+        $subscription = $this->subscription(['status' => SubscriptionStatus::Pending, 'paid_amount_paise' => 0]);
+        $payment = $this->initiatedPayment($subscription);
+
+        // Signed correctly, but Razorpay says it holds ₹1 against this order.
+        $outcome = app(RecordPayment::class)->complete(
+            $this->callbackFor($payment, 'pay_short'),
+            ['status' => 'captured', 'amount' => 100, 'method' => 'upi'],
+        );
+
+        $this->assertSame('rejected', $outcome->result);
+        $this->assertSame(PaymentStatus::Initiated, $payment->fresh()->status);
+        $this->assertSame(SubscriptionStatus::Pending, $subscription->fresh()->status);
+    }
+
+    public function test_a_callback_for_a_failed_charge_is_refused(): void
+    {
+        $payment = $this->initiatedPayment();
+
+        $outcome = app(RecordPayment::class)->complete(
+            $this->callbackFor($payment, 'pay_failed'),
+            ['status' => 'failed', 'amount' => (int) $payment->amount_paise],
+        );
+
+        $this->assertSame('rejected', $outcome->result);
+        $this->assertSame(PaymentStatus::Initiated, $payment->fresh()->status);
+    }
+
+    public function test_a_payment_settled_by_its_callback_is_not_settled_again_by_reconciliation(): void
+    {
+        $subscription = $this->subscription();
+        $payment = $this->initiatedPayment($subscription);
+
+        app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_once'), []);
+
+        // Reconciliation still holding the copy it read before the callback.
+        $claimed = app(RecordPayment::class)->settleFromReconciliation(
+            $payment,
+            ['id' => 'pay_once', 'status' => 'captured', 'amount' => (int) $payment->amount_paise],
+            'Settled by reconciliation.',
+        );
+
+        $this->assertFalse($claimed);
+
+        // One renewal, not two.
+        $periods = SectorContext::withoutScope(
+            fn () => Subscription::query()->where('vehicle_id', $subscription->vehicle_id)->count()
+        );
+        $this->assertSame(2, $periods);
+    }
+
+    public function test_a_cloth_top_up_credits_the_bundle_that_was_bought(): void
+    {
+        $subscription = $this->subscription(['cloth_service' => true, 'cloth_balance' => 0]);
+
+        // Two bundles at one price. Matching by price credited whichever came
+        // first - ten cloths for somebody who had bought thirty.
+        SectorContext::withoutScope(fn () => \App\Models\ClothBundle::create([
+            'name' => 'Ten', 'cloth_count' => 10, 'price_paise' => 50000, 'status' => true,
+        ]));
+        $bought = SectorContext::withoutScope(fn () => \App\Models\ClothBundle::create([
+            'name' => 'Thirty, on offer', 'cloth_count' => 30, 'price_paise' => 50000, 'status' => true,
+        ]));
+
+        $payment = SectorContext::withoutScope(
+            fn () => app(StartPayment::class)->forClothTopUp($subscription, $bought)['payment']
+        );
+
+        $outcome = app(RecordPayment::class)->complete($this->callbackFor($payment, 'pay_cloth'), []);
+
+        $this->assertSame('captured', $outcome->result);
+        $this->assertSame(30, SectorContext::withoutScope(fn () => $subscription->fresh()->cloth_balance));
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private function subscription(array $attributes = [], ?Branch $branch = null, ?string $sectorId = null): Subscription

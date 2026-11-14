@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Billing\RazorpayGateway;
 use App\Domain\Messaging\Messenger;
+use App\Domain\Messaging\Transport\TransportChain;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -31,6 +32,7 @@ class CheckIntegrations extends Command
         $problems = 0;
 
         $problems += $this->razorpay($gateway);
+        $problems += $this->transports();
         $problems += $this->whatsapp($messenger);
 
         $this->line('');
@@ -105,6 +107,101 @@ class CheckIntegrations extends Command
         );
     }
 
+    /**
+     * Which way out a message takes, and whether each leg is set up.
+     *
+     * Listed before the credentials below, because the chain decides which of
+     * those credentials matter. An account perfectly configured for a provider
+     * that is not in the chain is not a problem, and a chain naming a provider
+     * with no credentials is one that nothing has reported until now.
+     */
+    private function transports(): int
+    {
+        $this->line('');
+        $this->line('<options=bold>How messages go out</>');
+
+        $chain = app(TransportChain::class);
+        $names = $chain->configured();
+
+        if ($names === []) {
+            $this->components->error('  No transport is configured. Set MESSAGING_CHAIN.');
+
+            return 1;
+        }
+
+        $problems = 0;
+
+        foreach ($names as $index => $name) {
+            $transport = $chain->make($name);
+            $ready = $transport->isConfigured();
+
+            $this->row(
+                ($index === 0 ? 'first' : 'then').'  '.$name,
+                $ready ? $transport->channel() : 'not set up',
+                $ready,
+            );
+
+            if (! $ready) {
+                $problems++;
+            }
+
+            if ($name === 'twilio.whatsapp' && $ready) {
+                $problems += $this->twilioContent();
+            }
+        }
+
+        if ($login = (array) config('messaging.login_code_chain')) {
+            $this->line('  <fg=gray>sign-in code goes by: '.implode(', ', $login).'</>');
+        }
+
+        /*
+         * An SMS leg changes what a customer receives, not just how it gets
+         * there: no button, and a bill per 160 characters. Said once here so it
+         * is a decision somebody made rather than something they discover.
+         */
+        if (in_array('twilio.sms', $names, true)) {
+            $dlt = (string) config('services.twilio.dlt.entity_id');
+
+            if ($dlt === '') {
+                $this->components->warn('  SMS is in the chain but no DLT entity id is set.');
+                $this->line('    India requires every sender and template to be registered with the');
+                $this->line('    regulator. Twilio will accept the message and the carrier will drop it.');
+                $problems++;
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * Each customer template needs its own Content SID before Twilio can send it.
+     *
+     * Reported only when Twilio WhatsApp is actually in the chain. An account
+     * that still sends through MSG91 has nothing to fill in here.
+     */
+    private function twilioContent(): int
+    {
+        $from = (string) config('services.twilio.whatsapp_from');
+        $this->row('TWILIO_WHATSAPP_FROM', $from !== '' ? $from : 'not set', $from !== '');
+
+        $problems = 0;
+
+        foreach ([
+            'TWILIO_CONTENT_RENEWAL_DUE' => 'v2_renewal_due',
+            'TWILIO_CONTENT_RENEWAL_OVERDUE' => 'v2_renewal_overdue',
+            'TWILIO_CONTENT_PUT_ON_HOLD' => 'v2_put_on_hold',
+        ] as $env => $template) {
+            $sid = (string) config('messaging.twilio.content.'.$template);
+            $this->row($env, $sid !== '' ? $sid : 'not set', $sid !== '');
+
+            if ($sid === '') {
+                $problems++;
+            }
+        }
+
+        return $problems;
+    }
+
     private function whatsapp(Messenger $messenger): int
     {
         $this->line('');
@@ -137,6 +234,27 @@ class CheckIntegrations extends Command
             $this->line('    Messages are still recorded, so you can see what would have gone out.');
 
             return $problems + 1;
+        }
+
+        /*
+         * Delivering for real, from a machine whose address nobody else can
+         * reach.
+         *
+         * This is what setting APP_ENV=production on a development machine
+         * gets you, and the message it produces looks perfect: it arrives, it
+         * is worded correctly, and the Renew now button under it opens
+         * 127.0.0.1 - which on the phone that received it is that phone, not
+         * this computer. Nothing anywhere reports a problem, because from the
+         * provider's side there wasn't one.
+         */
+        $url = (string) config('app.url');
+
+        if (preg_match('#^https?://(localhost|127\.|0\.0\.0\.0|\[::1\])#i', $url) === 1) {
+            $this->components->warn('  Delivering for real, but APP_URL is '.$url);
+            $this->line('    Messages will arrive. Any link in them - the Renew now button, a');
+            $this->line('    receipt - points at this machine and is dead on the customer\'s phone.');
+            $this->line('    Send from the server to test anything with a link in it.');
+            $problems++;
         }
 
         if ($problems === 0) {

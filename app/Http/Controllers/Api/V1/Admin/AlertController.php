@@ -54,7 +54,12 @@ class AlertController extends Controller
     /** Seen it. Only for me. */
     public function markRead(Request $request, string $id): JsonResponse
     {
-        $request->user()->alertReads()->syncWithoutDetaching([$id => ['read_at' => now()]]);
+        // Only one this person can see: an unknown id was a foreign key error,
+        // and somebody else's was a way to learn that it exists.
+        $alert = SectorContext::withoutScope(fn () => Alert::query()
+            ->visibleTo($request->user())->findOrFail($id));
+
+        $request->user()->alertReads()->syncWithoutDetaching([$alert->id => ['read_at' => now()]]);
 
         return response()->json(['message' => 'Marked as read.']);
     }

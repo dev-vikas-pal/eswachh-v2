@@ -156,6 +156,16 @@ class PaymentController extends Controller
         // their plans have to be excluded here as well.
         abort_unless($this->ownsRecord($request, $subscription->customer_id), 404);
 
+        // Seeing a plan is not the same as taking money for it. A cleaner sees
+        // every plan on their round and could open a checkout on any of them.
+        $user = $request->user();
+        abort_unless(
+            $user->hasAbility('create.subscription')
+                || $user->hasAbility('update.subscription')
+                || $user->hasAbility('renew.subscription'),
+            403,
+        );
+
         $result = $starter->forSubscription($subscription);
 
         return response()->json([
@@ -276,6 +286,9 @@ class PaymentController extends Controller
 
         $payment = Payment::create([
             'branch_id' => $subscription->branch_id,
+            // Payments are scoped by this stamp alone. Without it the office
+            // that took the cash could not see it, on the list or in reports.
+            'sector_id' => StartPayment::sectorFor($subscription),
             'customer_id' => $subscription->customer_id,
             'subscription_id' => $subscription->id,
             'status' => PaymentStatus::Captured,

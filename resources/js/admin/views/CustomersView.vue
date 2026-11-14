@@ -390,8 +390,8 @@ async function save() {
         </div>
 
         <!-- One customer, with their cars -->
-        <div v-if="detail" class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-4 pt-16" @click.self="detail = null">
-            <div class="w-full max-w-lg rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
+        <div v-if="detail" class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-16" @click.self="detail = null">
+            <div class="mx-auto mb-8 max-h-[calc(100dvh-5rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
                 <div class="mb-3 flex items-start gap-3">
                     <h2 class="text-lg font-semibold text-ink">{{ detailData?.name ?? 'Loading…' }}</h2>
                     <button type="button" class="ms-auto text-sm text-muted hover:text-ink" @click="detail = null">Close</button>
@@ -486,11 +486,12 @@ async function save() {
         </div>
 
         <!-- Add / edit -->
-        <div v-if="editing" class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-4 pt-16">
-            <div class="w-full max-w-lg rounded-lg border border-line-strong bg-surface p-4 shadow-xl">
-                <h2 class="mb-3 text-lg font-semibold text-ink">{{ editing.id ? 'Edit customer' : 'Add customer' }}</h2>
+        <div v-if="editing" class="fixed inset-0 z-40 overflow-y-auto bg-black/30 p-4 pt-16">
+            <div class="mx-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl">
+                <h2 class="shrink-0 px-4 pt-4 text-lg font-semibold text-ink">{{ editing.id ? 'Edit customer' : 'Add customer' }}</h2>
 
-                <form class="flex flex-col gap-3" @submit.prevent="save">
+                <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="save">
+                    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
                     <div class="grid gap-3 sm:grid-cols-2">
                         <label>
                             <span class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Name</span>
@@ -567,8 +568,9 @@ async function save() {
                     </div>
 
                     <p v-if="formError" class="rounded bg-crit-soft px-3 py-2 text-sm text-crit">{{ formError }}</p>
+                    </div>
 
-                    <div class="mt-1 flex gap-2">
+                    <div class="flex shrink-0 gap-2 border-t border-line px-4 py-3">
                         <button type="submit" :disabled="saving" class="rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:opacity-60">
                             {{ saving ? 'Saving…' : 'Save' }}
                         </button>

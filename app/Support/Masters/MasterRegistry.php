@@ -288,6 +288,12 @@ class MasterRegistry
                      * changing what v1 sends the same afternoon.
                      */
                     'provider_template' => ['nullable', 'string', 'max:80', 'regex:/^v2_[a-z0-9_]+$/'],
+                    /*
+                     * Twilio's send API addresses a template by this id, not
+                     * by the name above. Paste one that already exists, or
+                     * leave it blank and use Create SMS to make one.
+                     */
+                    'sms_content_sid' => ['nullable', 'string', 'regex:/^(HX[0-9a-fA-F]{32})?$/'],
                     'bulk_sendable' => ['sometimes', 'boolean'],
                 ],
                 'long' => ['body', 'description'],

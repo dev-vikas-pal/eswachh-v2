@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Subscription;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
 /**
  * The wording of one message.
@@ -21,8 +22,19 @@ class MessageTemplate extends BaseModel
 
     protected $fillable = [
         'key', 'name', 'description', 'channel',
-        'provider_template', 'body', 'placeholders', 'bulk_sendable', 'status',
+        'provider_template', 'sms_content_sid', 'body', 'placeholders', 'bulk_sendable', 'status',
     ];
+
+    /**
+     * A blank box means "this wording has no Twilio SMS template".
+     * An empty string would still count as set and be sent as a Content SID.
+     */
+    protected function smsContentSid(): Attribute
+    {
+        return Attribute::make(
+            set: fn ($value) => ($value === null || $value === '') ? null : $value,
+        );
+    }
 
     protected function casts(): array
     {

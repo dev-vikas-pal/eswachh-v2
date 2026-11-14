@@ -207,9 +207,10 @@ async function remove(role: CustomRole) {
         </div>
 
         <!-- The builder -->
-        <div v-if="editing || creating" class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-10" @click.self="close">
-            <form class="w-full max-w-2xl rounded-lg border border-line-strong bg-surface p-5 shadow-xl" @submit.prevent="save">
-                <h2 class="mb-4 text-lg font-semibold text-ink">{{ creating ? 'New role' : `Edit ${editing!.name}` }}</h2>
+        <div v-if="editing || creating" class="fixed inset-0 z-40 overflow-y-auto bg-black/40 p-4 pt-10" @click.self="close">
+            <form class="mx-auto flex max-h-[calc(100dvh-4rem)] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-xl" @submit.prevent="save">
+                <h2 class="shrink-0 px-5 pt-5 text-lg font-semibold text-ink">{{ creating ? 'New role' : `Edit ${editing!.name}` }}</h2>
+                <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
 
                 <div class="grid gap-3 sm:grid-cols-2">
                     <label class="block">
@@ -286,8 +287,9 @@ async function remove(role: CustomRole) {
                 </div>
 
                 <p v-if="problem" class="mt-3 rounded bg-crit-soft px-3 py-2 text-sm text-crit">{{ problem }}</p>
+                </div>
 
-                <div class="mt-4 flex gap-2">
+                <div class="flex shrink-0 gap-2 border-t border-line px-5 py-3">
                     <button type="submit" :disabled="busy" class="rounded bg-accent px-4 py-2 text-sm font-medium text-on-accent transition hover:brightness-110 disabled:opacity-60">
                         {{ busy ? 'Saving…' : 'Save role' }}
                     </button>

@@ -45,6 +45,16 @@
         -->
         <env name="DB_DATABASE" value="u841499718_eswachh_testing_v2_phpunit"/>
         <env name="DB_URL" value=""/>
+        <!--
+            The test-number redirect is off for the suite, whatever .env says.
+
+            It is a production-testing tool: set it, and every message goes to
+            one phone instead of to the customer. A developer who has it set on
+            their machine would otherwise watch NotificationMatrixTest fail on
+            recipients, for a reason nothing on screen mentions - the suite would
+            be reporting their .env rather than their code.
+        -->
+        <env name="MSG91_TEST_RECIPIENT" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

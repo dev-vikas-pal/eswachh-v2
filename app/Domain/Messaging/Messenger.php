@@ -2,6 +2,8 @@
 
 namespace App\Domain\Messaging;
 
+use App\Domain\Messaging\Transport\OutboundMessage;
+use App\Domain\Messaging\Transport\TransportChain;
 use App\Enums\MessagePurpose;
 use App\Enums\MessageStatus;
 use App\Models\Message;
@@ -9,8 +11,8 @@ use App\Models\MessageTemplate;
 use App\Models\Subscription;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Sends a customer a message, once.
@@ -29,6 +31,15 @@ use Illuminate\Support\Facades\Log;
  */
 class Messenger
 {
+    /**
+     * How a message actually reaches a phone.
+     *
+     * Injected rather than reached for, so a test can hand this a transport
+     * that records instead of sends - and so nothing in here needs to know
+     * whether that is MSG91, Twilio, WhatsApp or SMS.
+     */
+    public function __construct(private readonly TransportChain $transports) {}
+
     /**
      * A number the provider will actually route to.
      *
@@ -349,6 +360,15 @@ class Messenger
             throw $e;
         }
 
+        /*
+         * The address behind the button, worked out once.
+         *
+         * Read by two things that must agree: the suppressed log, which is the
+         * only way to see a renewal link outside production, and the SMS
+         * transport, which has no buttons and puts it in the text instead.
+         */
+        $link = $this->buttonUrlFor($subscription, $template);
+
         if ($reason) {
             // Logged in full so development can see exactly what a customer
             // would have received.
@@ -369,13 +389,13 @@ class Messenger
                  * page it lands on, short of messaging a real customer.
                  */
                 'components' => $variables ?: null,
-                'button_url' => $this->buttonUrlFor($subscription, $template),
+                'button_url' => $link,
             ], fn ($value) => $value !== null));
 
             return $message;
         }
 
-        $this->deliver($message, $variables);
+        $this->deliver($message, $variables, $link);
 
         return $message;
     }
@@ -396,68 +416,31 @@ class Messenger
     }
 
     /**
+     * Hand the message to whichever transport will take it.
+     *
+     * This used to post to MSG91 from here. It no longer knows who carries a
+     * message or how: the chain in config/messaging.php decides, and the same
+     * code sends by WhatsApp, by SMS, or by WhatsApp-and-then-SMS depending on
+     * one line of configuration.
+     *
+     * What stays here is everything about the record. Which transport won, and
+     * therefore what the customer actually received, is written onto the row -
+     * an SMS has no button under it, and "why did this one look different" has
+     * to be answerable from the Messages screen rather than from a log nobody
+     * kept.
+     *
      * @param  array<int, array<string, mixed>>  $variables  Provider components
      */
-    private function deliver(Message $message, array $variables): void
+    private function deliver(Message $message, array $variables, ?string $link): void
     {
         try {
-            $response = Http::withHeaders([
-                'authkey' => (string) config('services.whatsapp.key'),
-            ])
-                ->acceptJson()
-                ->timeout(15)
-                ->connectTimeout(5)
-                ->post(config('services.whatsapp.url'), [
-                    'integrated_number' => config('services.whatsapp.number'),
-                    'content_type' => 'template',
-                    'payload' => [
-                        // With the country code, as v1 sent it. A bare ten
-                        // digit number is not routable and the provider
-                        // silently drops it.
-                        'to' => self::dialable($message->recipient),
-                        'type' => 'template',
-                        'template' => [
-                            'name' => $message->template,
-                            'language' => ['code' => 'en', 'policy' => 'deterministic'],
-                            'components' => $variables,
-                        ],
-                    ],
-                ]);
-
-            if ($response->failed()) {
-                $message->forceFill([
-                    'status' => MessageStatus::Failed,
-                    'error' => 'HTTP '.$response->status().': '.$response->body(),
-                ])->save();
-
-                /*
-                 * The provider's own words, not just the status.
-                 *
-                 * This used to log the number alone, so a 401 in the log said
-                 * only that something was refused - and the reason sat in
-                 * `messages.error`, which means knowing to go and look. A 401
-                 * here is nearly always the credentials: MSG91_AUTH_KEY holding
-                 * the integrated number rather than the account key is the one
-                 * that has actually happened.
-                 */
-                Log::warning('A message could not be delivered.', [
-                    'message_id' => $message->id,
-                    'status' => $response->status(),
-                    'template' => $message->template,
-                    'response' => \Illuminate\Support\Str::limit($response->body(), 500),
-                    'hint' => $response->status() === 401
-                        ? 'MSG91 refused the authkey. Run eswachh:check-integrations.'
-                        : null,
-                ]);
-
-                return;
-            }
-
-            $message->forceFill([
-                'status' => MessageStatus::Sent,
-                'provider_id' => $response->json('request_id'),
-                'sent_at' => now(),
-            ])->save();
+            $result = $this->transports->send(new OutboundMessage(
+                to: $message->recipient,
+                body: (string) $message->body,
+                template: $message->template,
+                components: $variables,
+                link: $link,
+            ));
         } catch (\Throwable $e) {
             /*
              * A messaging failure must never take down the job that triggered
@@ -474,6 +457,45 @@ class Messenger
                 'message_id' => $message->id,
                 'error' => $e->getMessage(),
             ]);
+
+            return;
         }
+
+        if (! $result->ok) {
+            $message->forceFill([
+                'status' => MessageStatus::Failed,
+                'error' => $result->error,
+            ])->save();
+
+            /*
+             * The provider's own words, not just a status.
+             *
+             * This used to log the number alone, so a 401 said only that
+             * something was refused - and the reason sat in `messages.error`,
+             * which means knowing to go and look. A 401 is nearly always the
+             * credentials: MSG91_AUTH_KEY holding the integrated number rather
+             * than the account key is the one that has actually happened.
+             */
+            Log::warning('A message could not be delivered.', [
+                'message_id' => $message->id,
+                'transport' => $result->transport,
+                'template' => $message->template,
+                'error' => Str::limit((string) $result->error, 500),
+                'hint' => str_contains((string) $result->error, '401')
+                    ? 'The provider refused the credentials. Run eswachh:check-integrations.'
+                    : null,
+            ]);
+
+            return;
+        }
+
+        $message->forceFill([
+            'status' => MessageStatus::Sent,
+            // What it actually went out as, which is not always what was asked
+            // for: a fallback turns a WhatsApp message into an SMS.
+            'channel' => $result->channel,
+            'provider_id' => $result->providerId,
+            'sent_at' => now(),
+        ])->save();
     }
 }
