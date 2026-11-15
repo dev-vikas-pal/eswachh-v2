@@ -86,6 +86,18 @@ class ScheduledJobsTest extends TestCase
         });
     }
 
+    public function test_a_job_may_not_message_anybody_unless_the_server_says_so(): void
+    {
+        // A test runs from the console, exactly as the scheduler does.
+        config()->set('messaging.scheduled', false);
+        $this->assertFalse(Messenger::scheduledMessagesAllowed());
+
+        // The live site turns it on. Staging and development never do, so the
+        // morning reminders cannot reach anybody from a copy of the data.
+        config()->set('messaging.scheduled', true);
+        $this->assertTrue(Messenger::scheduledMessagesAllowed());
+    }
+
     public function test_a_customer_is_not_told_the_same_thing_twice_in_a_day(): void
     {
         SectorContext::withoutScope(function () {

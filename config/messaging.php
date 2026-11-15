@@ -4,6 +4,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | May a job send messages?
+    |--------------------------------------------------------------------------
+    |
+    | The renewal reminders, the daily summary and the "put on hold" notice are
+    | sent by scheduled jobs, with nobody watching. On a staging or development
+    | copy that is real customer data being messaged about - or, with the test
+    | number set, one phone receiving every customer's reminder in the same
+    | minute, which WhatsApp treats as spam and then blocks.
+    |
+    | Off unless a server turns it on. The live site sets
+    |
+    |   SCHEDULED_MESSAGES=true
+    |
+    | and nothing else should. It holds only what a job sends: a message the
+    | office sends from a screen, a receipt after a payment and a sign-in code
+    | are web requests and still go. The jobs still run - an overdue plan is
+    | still paused - and each held message is recorded with the reason.
+    |
+    */
+    'scheduled' => (bool) env('SCHEDULED_MESSAGES', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Which way a message goes out, and in what order
     |--------------------------------------------------------------------------
     |

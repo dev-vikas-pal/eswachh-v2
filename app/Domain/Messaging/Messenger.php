@@ -129,7 +129,35 @@ class Messenger
             return 'Delivery is switched off.';
         }
 
+        if (! self::scheduledMessagesAllowed()) {
+            return 'Scheduled messages are switched off on this server (SCHEDULED_MESSAGES).';
+        }
+
         return null;
+    }
+
+    /**
+     * May a job, rather than a person, send this?
+     *
+     * Anything running from the console - the scheduler, or a command typed
+     * by hand - is a job. On a test or staging copy those run against real
+     * data with nobody watching: the morning reminders went out seventy-five
+     * at a time to the one test number, WhatsApp read it as spam, and then
+     * refused to deliver the messages somebody was actually trying to test.
+     *
+     * Off unless a server says otherwise, because the dangerous mistake is the
+     * quiet one: a copy that messages people because nobody thought to stop
+     * it. The live site sets SCHEDULED_MESSAGES=true; check-integrations says
+     * which way it is.
+     *
+     * What a person does from a screen - a reminder sent from the plans list,
+     * a receipt after a payment - is a web request and is never held by this.
+     * The jobs themselves still run: a plan past its grace period is still
+     * paused, and the message is recorded with this as the reason it stayed.
+     */
+    public static function scheduledMessagesAllowed(): bool
+    {
+        return ! app()->runningInConsole() || (bool) config('messaging.scheduled');
     }
 
     /**

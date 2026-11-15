@@ -155,6 +155,22 @@ class CheckIntegrations extends Command
         }
 
         /*
+         * Whether the jobs may message anybody. Not counted as a problem either
+         * way - off is correct on staging and on is correct on the live site -
+         * but said out loud, because "the reminders never went" and "the test
+         * phone got seventy-five of them" are both this one line.
+         */
+        $scheduled = (bool) config('messaging.scheduled');
+
+        $this->row('SCHEDULED_MESSAGES', $scheduled ? 'true' : 'false', $scheduled);
+        $this->line($scheduled
+            ? '    Reminders, the daily summary and hold notices are sent by the scheduler.'
+            : '    Jobs send nothing: reminders, the daily summary and hold notices are recorded but held.');
+        $this->line($scheduled
+            ? '    Right for the live site. Set it to false on staging and development.'
+            : '    Right for staging and development. The live site needs SCHEDULED_MESSAGES=true.');
+
+        /*
          * An SMS leg changes what a customer receives, not just how it gets
          * there: no button, and a bill per 160 characters. Said once here so it
          * is a decision somebody made rather than something they discover.
