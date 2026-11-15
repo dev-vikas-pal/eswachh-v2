@@ -1,4 +1,4 @@
-import { computed, ref, type Ref } from 'vue';
+import { computed, ref, watch, type Ref } from 'vue';
 import { api, describeError, type ValidationErrors } from '@/shared/api/client';
 import { completeCheckout, type Checkout, type PaymentReceipt } from '@/shared/api/checkout';
 import { setPaymentPhase } from '@/shared/paymentProgress';
@@ -49,6 +49,34 @@ export function useSignup(form: Ref<SignupForm>) {
 
     /** How long before "send it again" is allowed. */
     const cooldown = useCodeCooldown();
+
+    /**
+     * The order already placed on the server, while its payment is unfinished.
+     *
+     * Placing the order creates the account, the car and the plan, and uses up
+     * the code - all before the payment window opens. Closing that window and
+     * pressing Pay again used to place the order a second time, with a code
+     * that was now spent, and the customer was told their code was wrong and
+     * then that their own car was already registered.
+     *
+     * While this is held, Pay reopens the same payment and asks the server for
+     * nothing. It is dropped the moment anything on the form changes, because
+     * what was placed is then no longer what they are looking at - they get a
+     * new code, and the server brings the order up to date.
+     */
+    const placed = ref<Checkout | null>(null);
+    const awaitingPayment = computed(() => placed.value !== null);
+
+    watch(form, () => {
+        if (placed.value === null || busy.value) return;
+
+        placed.value = null;
+        stage.value = 'details';
+        code.value = '';
+        cooldown.stop();
+        error.value = null;
+        notice.value = 'You changed your details, so we will send a fresh code before you pay.';
+    }, { deep: true });
 
     function fail(e: unknown) {
         const described = describeError(e);
@@ -139,6 +167,10 @@ export function useSignup(form: Ref<SignupForm>) {
         notice.value = null;
         fieldErrors.value = {};
 
+        // A new code means a new order request; the server picks the unpaid
+        // one up and brings it up to date.
+        placed.value = null;
+
         try {
             /*
              * The car number and the sector go with the request.
@@ -183,29 +215,36 @@ export function useSignup(form: Ref<SignupForm>) {
         // pressing the button again while it is.
         setPaymentPhase('opening');
 
-        try {
-            const { data } = await api.post('/public/signup', {
-                ...form.value,
-                email: form.value.email || null,
-                society_id: form.value.society_id || null,
-                cloth_bundle_id: form.value.cloth_bundle_id || null,
-                preferred_time: form.value.preferred_time || null,
-                code: code.value,
-            });
+        if (placed.value) {
+            // Trying again after closing the payment window: the order is
+            // already there, so only the payment is reopened.
+            checkout = placed.value;
+        } else {
+            try {
+                const { data } = await api.post('/public/signup', {
+                    ...form.value,
+                    email: form.value.email || null,
+                    society_id: form.value.society_id || null,
+                    cloth_bundle_id: form.value.cloth_bundle_id || null,
+                    preferred_time: form.value.preferred_time || null,
+                    code: code.value,
+                });
 
-            checkout = data.data;
-        } catch (e) {
-            setPaymentPhase('idle');
-            fail(e);
-            busy.value = false;
+                checkout = data.data;
+                placed.value = checkout;
+            } catch (e) {
+                setPaymentPhase('idle');
+                fail(e);
+                busy.value = false;
 
-            // A rejected code sends them back a step rather than leaving them
-            // staring at a form they cannot submit.
-            if (describeError(e).errors.code) {
-                code.value = '';
+                // A rejected code sends them back a step rather than leaving them
+                // staring at a form they cannot submit.
+                if (describeError(e).errors.code) {
+                    code.value = '';
+                }
+
+                return;
             }
-
-            return;
         }
 
         const result = await completeCheckout(checkout, {
@@ -217,6 +256,7 @@ export function useSignup(form: Ref<SignupForm>) {
         busy.value = false;
 
         if (result.ok) {
+            placed.value = null;
             stage.value = 'done';
             notice.value = result.message;
             receipt.value = result.payment ?? null;
@@ -225,18 +265,17 @@ export function useSignup(form: Ref<SignupForm>) {
         }
 
         /*
-         * The plan exists either way. Said plainly, because the alternative is
-         * somebody filling the whole form in again and ending up with a second
-         * plan on the same car - which the server would then refuse, leaving
-         * them stuck.
+         * The plan exists either way, and the payment can simply be tried
+         * again: the button below now reopens it. Said plainly, because the
+         * alternative is somebody filling the whole form in again.
          */
         error.value = result.cancelled
-            ? 'Payment cancelled. Your details are saved — call the office to pay, or try again.'
-            : result.message + ' Your details are saved, so please do not fill the form in again.';
+            ? 'Payment cancelled. Nothing was charged and your details are saved — press the button to try again.'
+            : result.message + ' Your details are saved — press the button to try the payment again.';
     }
 
     return {
         stage, code, busy, error, notice, fieldErrors, receipt, cooldown, sendCode, placeOrder,
-        touch, errorFor, ready, problems, touchEverything,
+        touch, errorFor, ready, problems, touchEverything, awaitingPayment,
     };
 }

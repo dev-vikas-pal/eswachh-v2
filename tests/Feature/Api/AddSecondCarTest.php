@@ -162,6 +162,52 @@ class AddSecondCarTest extends TestCase
             ->assertJsonValidationErrors('registration');
     }
 
+    public function test_closing_the_payment_window_does_not_lock_the_car_out(): void
+    {
+        // Added once, and the payment window closed without paying.
+        $this->actingAs($this->account)
+            ->postJson('/api/v1/portal/plans', $this->car())
+            ->assertCreated();
+
+        // Tried again. This was refused as "you already have a running plan",
+        // by a plan that had never run - with nothing to renew either.
+        $second = $this->actingAs($this->account)
+            ->postJson('/api/v1/portal/plans', $this->car())
+            ->assertCreated();
+
+        SectorContext::withoutScope(function () use ($second) {
+            // The same unpaid plan, not a second one on the same car.
+            $this->assertSame(1, Subscription::query()->count());
+            $this->assertSame(Subscription::query()->sole()->id, $second->json('subscription_id'));
+
+            // And one open attempt to chase, not one per click.
+            $this->assertSame(1, Payment::query()->where('status', PaymentStatus::Initiated)->count());
+            $this->assertSame(1, Payment::query()->where('status', PaymentStatus::Failed)->count());
+        });
+    }
+
+    public function test_a_car_whose_plan_has_ended_can_be_given_a_new_one(): void
+    {
+        $vehicle = Vehicle::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'registration' => 'UP16AB2222',
+        ]);
+
+        Subscription::factory()->create([
+            'branch_id' => $this->branch->id,
+            'customer_id' => $this->customer->id,
+            'vehicle_id' => $vehicle->id,
+            'status' => SubscriptionStatus::Ended,
+            'period_end' => now()->subMonth(),
+        ]);
+
+        // An ended plan is not a running one. It used to be treated as one.
+        $this->actingAs($this->account)
+            ->postJson('/api/v1/portal/plans', $this->car())
+            ->assertCreated();
+    }
+
     public function test_the_price_is_not_taken_from_the_request(): void
     {
         $this->actingAs($this->account)

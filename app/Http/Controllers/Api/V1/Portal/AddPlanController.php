@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\V1\Portal;
 
 use App\Domain\Billing\StartPayment;
 use App\Domain\Pricing\PriceBook;
+use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\Vehicle;
 use App\Support\Tenancy\SectorContext;
@@ -69,17 +71,35 @@ class AddPlanController extends Controller
             ]);
         }
 
-        // Their own car, added again: renew it rather than starting a second
-        // plan on the same registration.
-        if ($existing && $existing->currentSubscription) {
+        $latest = $existing?->currentSubscription;
+
+        // Their own car, added again while it has a plan that is running or
+        // paused: renew it rather than starting a second plan on the same
+        // registration.
+        if ($latest && in_array($latest->status, [SubscriptionStatus::Active, SubscriptionStatus::Hold], true)) {
             throw ValidationException::withMessages([
                 'registration' => 'You already have a running plan for that car. Renew it instead.',
             ]);
         }
 
+        /*
+         * A plan for this car that was started here and never paid for.
+         *
+         * Adding the car creates it and a pending plan before the payment
+         * window opens. Closing that window and trying again used to be refused
+         * as "you already have a running plan" - by a plan that had never run -
+         * with nothing to renew and no way to add the car a second time. The
+         * unpaid plan is theirs to finish, so it is brought up to date with
+         * what they chose this time and a new payment is opened on it.
+         *
+         * A plan that has ended is neither of these: the car simply gets its
+         * next period below, as it always should have.
+         */
+        $unpaid = $latest && $latest->status === SubscriptionStatus::Pending ? $latest : null;
+
         $quote = $this->quote($data, $customer);
 
-        return DB::transaction(function () use ($data, $customer, $registration, $existing, $quote) {
+        return DB::transaction(function () use ($data, $customer, $registration, $existing, $quote, $unpaid) {
             $vehicle = $existing ?? Vehicle::create([
                 'branch_id' => $customer->branch_id,
                 'customer_id' => $customer->id,
@@ -89,6 +109,39 @@ class AddPlanController extends Controller
             ]);
 
             $start = Carbon::today();
+
+            if ($unpaid) {
+                $vehicle->update(['vehicle_model_id' => $data['vehicle_model_id']]);
+
+                $unpaid->update([
+                    'package_id' => $data['package_id'],
+                    'service_type_id' => $data['service_type_id'],
+                    'duration_id' => $data['duration_id'],
+                    'period_start' => $start,
+                    'period_end' => $start->copy()->addMonths($quote->months),
+                    'amount_paise' => $quote->totalPaise,
+                    'cloth_service' => ! empty($data['cloth_bundle_id']),
+                    'cloth_bundle_id' => $data['cloth_bundle_id'] ?? null,
+                ]);
+
+                // One open attempt to chase, not one per click.
+                Payment::query()
+                    ->where('subscription_id', $unpaid->id)
+                    ->where('status', PaymentStatus::Initiated)
+                    ->get()
+                    ->each(fn (Payment $payment) => $this->starter->abandon(
+                        $payment,
+                        'Replaced when the customer tried the payment again.',
+                    ));
+
+                $result = $this->starter->forSubscription($unpaid);
+
+                return response()->json([
+                    'data' => $result['checkout'],
+                    'quote' => $quote->toArray(),
+                    'subscription_id' => $unpaid->id,
+                ], 201);
+            }
 
             $subscription = Subscription::create([
                 'branch_id' => $customer->branch_id,

@@ -398,6 +398,66 @@ class PublicSignupTest extends TestCase
         $this->assertDatabaseCount('login_codes', 0);
     }
 
+    public function test_a_signup_that_was_never_paid_for_can_be_finished(): void
+    {
+        // Got as far as the payment window, and closed it.
+        $this->provedNumber('9876543210');
+        $this->postJson('/api/v1/public/signup', $this->order())->assertCreated();
+
+        /*
+         * Came back. A fresh code is sent - this was refused as "that car
+         * number is already registered", by the car their own first try had
+         * created - and the order goes through with a correction to the flat.
+         */
+        $this->provedNumber('9876543210');
+
+        $second = $this->postJson('/api/v1/public/signup', $this->order(['house_no' => 'B-202']))
+            ->assertCreated();
+
+        // One customer, one car, one plan: finished, not duplicated.
+        $this->assertSame(1, User::query()->where('role', UserRole::Customer)->count());
+        $this->assertSame(1, Vehicle::withoutGlobalScopes()->count());
+
+        $plan = Subscription::withoutGlobalScopes()->sole();
+        $this->assertSame($plan->id, $second->json('subscription_id'));
+        $this->assertSame(SubscriptionStatus::Pending, $plan->status);
+        $this->assertSame('B-202', Customer::withoutGlobalScopes()->sole()->house_no);
+
+        // The first attempt's payment is closed; the new one is the one open.
+        $this->assertSame(1, Payment::withoutGlobalScopes()->where('status', PaymentStatus::Initiated)->count());
+        $this->assertSame(1, Payment::withoutGlobalScopes()->where('status', PaymentStatus::Failed)->count());
+    }
+
+    public function test_somebody_who_has_paid_cannot_be_signed_up_over(): void
+    {
+        $this->provedNumber('9876543210');
+        $this->postJson('/api/v1/public/signup', $this->order())->assertCreated();
+
+        // Paid: this is a customer now, not an unfinished signup.
+        SectorContext::withoutScope(fn () => Payment::query()->sole()
+            ->forceFill(['status' => PaymentStatus::Captured, 'paid_at' => now()])->save());
+        SectorContext::withoutScope(fn () => Subscription::query()->sole()
+            ->forceFill(['status' => SubscriptionStatus::Active])->save());
+
+        $this->postJson('/api/v1/public/signup/code', ['phone' => '9876543210'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('phone');
+    }
+
+    public function test_somebody_elses_car_is_still_refused_on_the_way_back(): void
+    {
+        $this->provedNumber('9876543210');
+        $this->postJson('/api/v1/public/signup', $this->order())->assertCreated();
+
+        SectorContext::withoutScope(fn () => Vehicle::factory()->create(['registration' => 'DL01ZZ0001']));
+
+        // Their own car is theirs to keep; another customer's is not theirs to take.
+        $this->postJson('/api/v1/public/signup/code', [
+            'phone' => '9876543210',
+            'registration' => 'DL01ZZ0001',
+        ])->assertStatus(422)->assertJsonValidationErrors('registration');
+    }
+
     public function test_the_payment_is_stamped_with_the_customers_sector(): void
     {
         $this->provedNumber('9876543210');

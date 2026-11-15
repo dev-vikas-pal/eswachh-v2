@@ -59,7 +59,23 @@ export function describeError(error: unknown): { message: string; errors: Valida
 
     if (status === 401) return { message: 'Your session has ended. Please sign in again.', errors: {} };
     if (status === 403) return { message: 'You do not have access to that.', errors: {} };
-    if (status === 404) return { message: 'That record could not be found.', errors: {} };
+    if (status === 404) {
+        /*
+         * A lookup that found nothing says why, and that is worth showing: "we
+         * could not find a running plan for that car number, please call the
+         * office" tells somebody what to do next, where "that record could not
+         * be found" tells them only that it went wrong.
+         *
+         * Only a reply that marks itself as a lookup result (`found: false`) is
+         * trusted for its wording. Any other 404 keeps the plain sentence, so
+         * a framework's own message never reaches a customer.
+         */
+        if (data?.found === false && typeof data?.message === 'string' && data.message) {
+            return { message: data.message, errors: {} };
+        }
+
+        return { message: 'That record could not be found.', errors: {} };
+    }
     if (status === 429) return { message: data?.message ?? 'Too many attempts. Please wait a moment.', errors: {} };
 
     return fallback;

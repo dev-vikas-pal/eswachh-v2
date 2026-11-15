@@ -158,6 +158,9 @@ const signup = useSignup(form);
 const buttonLabel = computed(() => {
     if (signup.busy.value) return 'Please wait…';
 
+    // The order is placed and only the payment is outstanding.
+    if (signup.awaitingPayment.value) return `Try the payment again · ${quote.value?.formatted ?? ''}`;
+
     return signup.stage.value === 'code' ? `Pay ${quote.value?.formatted ?? ''}` : 'Continue';
 });
 
@@ -495,7 +498,9 @@ function submit() {
                         further up the form: by now they have read the total,
                         and the next thing they do is pay it.
                     -->
-                    <label v-if="signup.stage.value === 'code'" class="mt-4 block">
+                    <!-- Not asked for again once the order is placed: the code
+                         has done its job, and only the payment is left. -->
+                    <label v-if="signup.stage.value === 'code' && !signup.awaitingPayment.value" class="mt-4 block">
                         <span class="mb-1 block text-sm font-medium text-body">Code sent to {{ form.phone }}</span>
                         <input
                             v-model.trim="signup.code.value"
@@ -513,12 +518,12 @@ function submit() {
                     <button
                         type="submit"
                         class="mt-4 w-full rounded bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition hover:brightness-110 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent"
-                        :disabled="!quote || signup.busy.value || (signup.stage.value === 'code' && signup.code.value.length < 6)"
+                        :disabled="!quote || signup.busy.value || (signup.stage.value === 'code' && !signup.awaitingPayment.value && signup.code.value.length < 6)"
                     >
                         {{ buttonLabel }}
                     </button>
 
-                    <div v-if="signup.stage.value === 'code'" class="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs">
+                    <div v-if="signup.stage.value === 'code' && !signup.awaitingPayment.value" class="mt-2 flex flex-wrap items-center justify-center gap-3 text-xs">
                         <button
                             type="button"
                             class="text-accent underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
@@ -536,6 +541,16 @@ function submit() {
                             Change my details
                         </button>
                     </div>
+
+                    <!-- What just happened, when it is not an error: a code was
+                         sent, or the form went back a step because it changed. -->
+                    <p
+                        v-if="signup.notice.value && !signup.error.value"
+                        class="mt-3 rounded bg-sunk px-3 py-2 text-sm text-body"
+                        role="status"
+                    >
+                        {{ signup.notice.value }}
+                    </p>
 
                     <p v-if="signup.error.value" class="mt-3 rounded bg-crit-soft px-3 py-2 text-sm text-crit" role="alert">
                         {{ signup.error.value }}

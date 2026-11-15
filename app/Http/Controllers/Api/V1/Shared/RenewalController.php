@@ -246,9 +246,16 @@ class RenewalController extends Controller
         if (! $subscription) {
             // The same answer whether the car is unknown or has no live plan.
             // Telling them apart would confirm which cars are customers.
+            //
+            // It names the one case this page cannot help with - a signup that
+            // was never paid for, which is not a plan to renew - because that
+            // customer was sent here by the signup form and then told nothing.
+            // Said to everybody alike, so it gives nothing away.
             return response()->json([
                 'found' => false,
-                'message' => 'We could not find a running plan for that car number. Please call the office.',
+                'message' => 'We could not find a running plan for that car number. If you started signing up '
+                    .'and did not finish paying, go back to Subscribe and use the same mobile number. '
+                    .'Otherwise please call the office.',
             ], 404);
         }
 

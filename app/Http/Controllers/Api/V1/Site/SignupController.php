@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api\V1\Site;
 use App\Domain\Auth\PhoneCodes;
 use App\Domain\Billing\StartPayment;
 use App\Domain\Pricing\PriceBook;
+use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\Area;
 use App\Models\City;
 use App\Models\Customer;
+use App\Models\Payment;
 use App\Models\Sector;
 use App\Models\Society;
 use App\Models\State;
@@ -88,9 +90,14 @@ class SignupController extends Controller
 
         $phone = PhoneCodes::normalise($data['phone']);
 
+        // Somebody who got as far as the payment window and closed it. Their
+        // own number and their own car are not "already registered" to them.
+        $unfinished = $this->unfinishedSignup($phone);
+
         if ($registration = $data['registration'] ?? null) {
             $this->refuseIfCarTaken(
-                strtoupper((string) preg_replace('/\s+/', '', $registration))
+                strtoupper((string) preg_replace('/\s+/', '', $registration)),
+                $unfinished['vehicle']->id ?? null,
             );
         }
 
@@ -113,7 +120,7 @@ class SignupController extends Controller
             RateLimiter::hit($key, 600);
         }
 
-        if ($this->accountFor($phone)) {
+        if (! $unfinished && $this->accountFor($phone)) {
             throw ValidationException::withMessages([
                 'phone' => 'That number is already registered. Sign in instead, or use the renewal page.',
             ]);
@@ -176,7 +183,23 @@ class SignupController extends Controller
 
         $registration = strtoupper((string) preg_replace('/\s+/', '', $data['registration']));
 
-        $this->refuseIfTaken($phone, $registration);
+        /*
+         * Coming back to a signup that was never paid for.
+         *
+         * The first attempt creates the account, the car and a pending plan
+         * before the payment window opens, so that an abandoned checkout leaves
+         * something for the office to chase. It also left the customer with
+         * nowhere to go: closing the gateway and trying again was refused as
+         * "already registered" by the very records their first try had made,
+         * and the renewal page would not have them because nothing was paid.
+         *
+         * They have just proved the number again with a fresh code, so the
+         * unpaid record is theirs to finish. It is brought up to date with
+         * what the form says now and a new payment is opened on it.
+         */
+        $unfinished = $this->unfinishedSignup($phone);
+
+        $this->refuseIfTaken($phone, $registration, $unfinished);
 
         $place = $this->place($data);
 
@@ -193,9 +216,22 @@ class SignupController extends Controller
 
         $quote = $this->quote($data);
 
-        return DB::transaction(function () use ($data, $phone, $registration, $quote, $verified, $place) {
+        return DB::transaction(function () use ($data, $phone, $registration, $quote, $verified, $place, $unfinished) {
             // Nothing left that can refuse them, so the code is spent now.
             $this->codes->spend($verified);
+
+            if ($unfinished) {
+                $subscription = $this->bringUpToDate($unfinished, $data, $registration, $quote, $place);
+
+                $result = SectorContext::withoutScope(fn () => $this->starter->forSubscription($subscription));
+
+                return response()->json([
+                    'data' => $result['checkout'],
+                    'quote' => $quote->toArray(),
+                    'subscription_id' => $subscription->id,
+                ], 201);
+            }
+
             $account = User::create([
                 // A hint only; visibility comes from the customer's sector.
                 'branch_id' => null,
@@ -306,15 +342,134 @@ class SignupController extends Controller
         }
     }
 
-    private function refuseIfTaken(string $phone, string $registration): void
+    /**
+     * The signup this number started and never paid for, if that is all it has.
+     *
+     * Deliberately narrow. One car, one plan, that plan still pending and no
+     * money ever taken: the exact shape the public form leaves behind when the
+     * payment window is closed. Anybody with a paid plan, a second car or a
+     * plan the office has since moved on is a customer, and is sent to sign in
+     * like any other.
+     *
+     * @return array{user: User, customer: Customer, vehicle: Vehicle, subscription: Subscription}|null
+     */
+    private function unfinishedSignup(string $phone): ?array
     {
-        if ($this->accountFor($phone)) {
+        return SectorContext::withoutScope(function () use ($phone) {
+            $user = $this->accountFor($phone);
+
+            if (! $user || $user->role !== UserRole::Customer) {
+                return null;
+            }
+
+            $customer = Customer::query()->where('user_id', $user->id)->first();
+
+            if (! $customer) {
+                return null;
+            }
+
+            $plans = Subscription::query()->where('customer_id', $customer->id)->get();
+            $vehicles = Vehicle::query()->where('customer_id', $customer->id)->get();
+
+            if ($plans->count() !== 1
+                || $vehicles->count() !== 1
+                || $plans->first()->status !== SubscriptionStatus::Pending) {
+                return null;
+            }
+
+            $paid = Payment::query()
+                ->where('customer_id', $customer->id)
+                ->where('status', PaymentStatus::Captured)
+                ->exists();
+
+            return $paid ? null : [
+                'user' => $user,
+                'customer' => $customer,
+                'vehicle' => $vehicles->first(),
+                'subscription' => $plans->first(),
+            ];
+        });
+    }
+
+    /**
+     * Rewrite an unfinished signup with what the form says now.
+     *
+     * Everything, not only what changed: the customer may have corrected a car
+     * number, moved the address or picked a different plan before trying
+     * again, and the price has been worked out afresh from those choices.
+     *
+     * Payments left open by the earlier attempt are closed, so the office's
+     * list of abandoned signups shows one attempt to chase rather than one per
+     * click.
+     *
+     * @param  array{user: User, customer: Customer, vehicle: Vehicle, subscription: Subscription}  $unfinished
+     * @param  array<string, mixed>  $data
+     * @param  array{state_id: string, city_id: string, area_id: string, sector_id: string, society_id: ?string}  $place
+     */
+    private function bringUpToDate(array $unfinished, array $data, string $registration, $quote, array $place): Subscription
+    {
+        return SectorContext::withoutScope(function () use ($unfinished, $data, $registration, $quote, $place) {
+            $unfinished['user']->update([
+                'name' => $data['name'],
+                'email' => $data['email'] ?? null,
+            ]);
+
+            $unfinished['customer']->update([
+                'name' => $data['name'],
+                'email' => $data['email'] ?? null,
+                'state_id' => $place['state_id'],
+                'city_id' => $place['city_id'],
+                'area_id' => $place['area_id'],
+                'sector_id' => $place['sector_id'],
+                'society_id' => $place['society_id'],
+                'house_no' => $data['house_no'],
+                'preferred_time' => $data['preferred_time'] ?? null,
+            ]);
+
+            $unfinished['vehicle']->update([
+                'vehicle_model_id' => $data['vehicle_model_id'],
+                'registration' => $registration,
+            ]);
+
+            $start = Carbon::today();
+            $subscription = $unfinished['subscription'];
+
+            $subscription->update([
+                'package_id' => $data['package_id'],
+                'service_type_id' => $data['service_type_id'],
+                'duration_id' => $data['duration_id'],
+                'period_start' => $start,
+                'period_end' => $start->copy()->addMonths($quote->months),
+                'amount_paise' => $quote->totalPaise,
+                'cloth_service' => ! empty($data['cloth_bundle_id']),
+                'cloth_bundle_id' => $data['cloth_bundle_id'] ?? null,
+            ]);
+
+            Payment::query()
+                ->where('subscription_id', $subscription->id)
+                ->where('status', PaymentStatus::Initiated)
+                ->get()
+                ->each(fn (Payment $payment) => $this->starter->abandon(
+                    $payment,
+                    'Replaced when the customer came back to finish signing up.',
+                ));
+
+            return $subscription;
+        });
+    }
+
+    /**
+     * @param  array{vehicle: Vehicle}|null  $unfinished  their own unpaid signup, which is not "taken"
+     */
+    private function refuseIfTaken(string $phone, string $registration, ?array $unfinished = null): void
+    {
+        if (! $unfinished && $this->accountFor($phone)) {
             throw ValidationException::withMessages([
                 'phone' => 'That number is already registered. Sign in instead.',
             ]);
         }
 
-        $this->refuseIfCarTaken($registration);
+        $this->refuseIfCarTaken($registration, $unfinished['vehicle']->id ?? null);
     }
 
     /**
@@ -323,13 +478,15 @@ class SignupController extends Controller
      * late one is what actually guarantees it, because the form could have
      * changed in between.
      */
-    private function refuseIfCarTaken(string $registration): void
+    private function refuseIfCarTaken(string $registration, ?string $exceptVehicleId = null): void
     {
         // Scopes off: a car already on another sector's books is still taken,
         // and finding that out at the payment step is far worse than here.
         $taken = Vehicle::withoutGlobalScopes()
             ->where('registration', $registration)
             ->whereNull('deleted_at')
+            // Their own car, from a signup they are coming back to finish.
+            ->when($exceptVehicleId, fn ($q) => $q->whereKeyNot($exceptVehicleId))
             ->exists();
 
         if ($taken) {
