@@ -29,16 +29,17 @@ class SiteContentSeeder extends Seeder
                 'secondary_label' => 'What is included',
                 'secondary_route' => 'packages',
                 /*
-                 * Drawn for this business rather than bought in - water beading
-                 * on a lit panel, dark down the left so the headline has
-                 * somewhere to sit. What shipped here before was a stock
-                 * illustration of a laptop with a padlock on it, which is a
-                 * picture of a different company entirely.
+                 * No picture, on purpose. The hero draws its own panel - water
+                 * beading on pale, freshly cleaned paintwork - for any banner
+                 * without one, and that is the light site's default.
                  *
-                 * The source is docs/banners/hero.html: open it with ?p=dusk,
-                 * ?p=dawn, ?p=monsoon or ?p=night and screenshot at 2400x1000.
+                 * These used to carry the dark renderings from
+                 * docs/banners/hero.html, which were made to sit full-bleed
+                 * under white text and are a black slab inside a light page.
+                 * The files are still in public/images/banners for anybody who
+                 * wants one back; an image the office uploads is shown framed.
                  */
-                'image_path' => '/images/banners/beaded-dusk.jpg',
+                'image_path' => null,
                 'sort_order' => 0,
                 'status' => true,
             ]);
@@ -51,7 +52,7 @@ class SiteContentSeeder extends Seeder
                 'cta_route' => 'subscribe',
                 'secondary_label' => 'Meet the team',
                 'secondary_route' => 'team',
-                'image_path' => '/images/banners/beaded-dawn.jpg',
+                'image_path' => null,
                 'sort_order' => 1,
                 'status' => true,
             ]);
@@ -64,7 +65,7 @@ class SiteContentSeeder extends Seeder
                 'cta_route' => 'subscribe',
                 'secondary_label' => 'Read the guide',
                 'secondary_route' => 'blog',
-                'image_path' => '/images/banners/beaded-monsoon.jpg',
+                'image_path' => null,
                 'sort_order' => 2,
                 'status' => true,
             ]);
