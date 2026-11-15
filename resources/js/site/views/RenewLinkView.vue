@@ -31,13 +31,13 @@ const day = (iso: string | null) =>
             <svg class="mx-auto h-12 w-12 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            <h1 class="mt-3 text-2xl font-bold tracking-tight text-ink">Renewal received</h1>
+            <h1 class="page-title mt-3">Renewal received</h1>
             <p class="mt-1 text-body">
                 <span class="font-medium uppercase text-ink">{{ paid.car }}</span> is renewed. Nothing else to do.
             </p>
         </div>
 
-        <div class="mt-6 rounded-lg border border-line bg-surface">
+        <div class="mt-6 card">
             <h2 class="border-b border-line px-5 py-3 text-sm font-semibold uppercase tracking-wide text-muted">
                 Your renewal
             </h2>
@@ -68,7 +68,7 @@ const day = (iso: string | null) =>
             </dl>
         </div>
 
-        <div class="mt-6 rounded-lg border border-line bg-surface p-5 text-sm text-body">
+        <div class="mt-6 card p-5 text-sm text-body">
             <h2 class="mb-2 font-semibold text-ink">What happens next</h2>
             <ol class="ms-4 list-decimal space-y-1">
                 <li>
@@ -101,7 +101,7 @@ const day = (iso: string | null) =>
             tapping a button in WhatsApp, often on a phone on a slow connection,
             and a blank screen reads as a broken link.
         -->
-        <div v-if="loading" class="rounded-lg border border-line bg-surface p-6 text-center">
+        <div v-if="loading" class="card p-6 text-center">
             <p class="text-body">Finding your plan…</p>
         </div>
 
@@ -112,7 +112,7 @@ const day = (iso: string | null) =>
             somebody who tapped a renewal button is somebody trying to pay.
         -->
         <div v-else-if="dead">
-            <h1 class="text-2xl font-bold tracking-tight text-ink">This link has expired</h1>
+            <h1 class="page-title">This link has expired</h1>
             <p class="mt-2 text-body">{{ dead }}</p>
 
             <RouterLink
@@ -124,7 +124,7 @@ const day = (iso: string | null) =>
         </div>
 
         <template v-else-if="plan">
-            <h1 class="text-2xl font-bold tracking-tight text-ink">
+            <h1 class="page-title">
                 Renew your plan<span v-if="plan.name">, {{ plan.name.split(' ')[0] }}</span>
             </h1>
             <p class="mt-1 text-body">

@@ -112,6 +112,58 @@ class NotificationMatrixTest extends TestCase
         $this->assertSent(MessagePurpose::SubscriptionStarted, '9876543210');
     }
 
+    public function test_the_franchise_owner_covering_the_sector_is_told_as_well(): void
+    {
+        SiteSettings::put(['admin_notify_phone' => '9111111111']);
+
+        // Covers the customer's sector: the factory gives a branch's owner
+        // that branch's sectors.
+        User::factory()->franchiseOwner($this->branch)->create(['phone' => '9222222222']);
+
+        $this->capture($this->plan(SubscriptionStatus::Pending), PaymentPurpose::Subscription);
+
+        // Both of them, not whichever was first: they are different people.
+        $this->assertEqualsCanonicalizing(
+            ['9111111111', '9222222222'],
+            Message::query()->where('purpose', MessagePurpose::SubscriptionStartedAdmin)->pluck('recipient')->all(),
+        );
+    }
+
+    public function test_an_owner_is_told_even_when_no_office_number_is_set(): void
+    {
+        SiteSettings::put(['admin_notify_phone' => '']);
+        User::factory()->franchiseOwner($this->branch)->create(['phone' => '9222222222']);
+
+        $this->capture($this->plan(SubscriptionStatus::Pending), PaymentPurpose::Subscription);
+
+        $this->assertSent(MessagePurpose::SubscriptionStartedAdmin, '9222222222');
+    }
+
+    public function test_only_active_owners_of_this_sector_are_told(): void
+    {
+        SiteSettings::put(['admin_notify_phone' => '']);
+
+        // Switched off, a different sector, and a cleaner on this one.
+        User::factory()->franchiseOwner($this->branch)->create(['phone' => '9333333333', 'status' => false]);
+        User::factory()->franchiseOwner(Branch::factory()->create())->create(['phone' => '9444444444']);
+
+        $this->capture($this->plan(SubscriptionStatus::Pending), PaymentPurpose::Subscription);
+
+        // The cleaner set up in setUp covers this sector too, and is not told.
+        $this->assertNotSent(MessagePurpose::SubscriptionStartedAdmin);
+    }
+
+    public function test_one_number_is_told_once_however_many_ways_it_qualifies(): void
+    {
+        // The owner is also the office number, written differently.
+        SiteSettings::put(['admin_notify_phone' => '+91 92222 22222']);
+        User::factory()->franchiseOwner($this->branch)->create(['phone' => '9222222222']);
+
+        $this->capture($this->plan(SubscriptionStatus::Pending), PaymentPurpose::Subscription);
+
+        $this->assertSame(1, Message::query()->where('purpose', MessagePurpose::SubscriptionStartedAdmin)->count());
+    }
+
     // ------------------------------------------------------------------ [3]
 
     public function test_a_later_payment_is_a_renewal_not_a_new_plan(): void

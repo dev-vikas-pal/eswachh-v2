@@ -103,13 +103,13 @@ const day = (iso: string | null) =>
             <svg class="mx-auto h-12 w-12 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            <h1 class="mt-3 text-2xl font-bold tracking-tight text-ink">Renewal received</h1>
+            <h1 class="page-title mt-3">Renewal received</h1>
             <p class="mt-1 text-body">
                 <span class="font-medium uppercase text-ink">{{ paid.car }}</span> is renewed. Nothing else to do.
             </p>
         </div>
 
-        <div class="mt-6 rounded-lg border border-line bg-surface">
+        <div class="mt-6 card">
             <h2 class="border-b border-line px-5 py-3 text-sm font-semibold uppercase tracking-wide text-muted">
                 Your renewal
             </h2>
@@ -140,7 +140,7 @@ const day = (iso: string | null) =>
             </dl>
         </div>
 
-        <div class="mt-6 rounded-lg border border-line bg-surface p-5 text-sm text-body">
+        <div class="mt-6 card p-5 text-sm text-body">
             <h2 class="mb-2 font-semibold text-ink">What happens next</h2>
             <ol class="ms-4 list-decimal space-y-1">
                 <li>
@@ -175,7 +175,7 @@ const day = (iso: string | null) =>
     </div>
 
     <div v-else class="mx-auto max-w-xl px-4 py-12">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Renew your plan</h1>
+        <h1 class="page-title">Renew your plan</h1>
         <p class="mt-1 text-body">
             No account needed. Type your car number and we will find your plan.
         </p>

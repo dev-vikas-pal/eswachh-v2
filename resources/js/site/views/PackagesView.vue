@@ -18,21 +18,21 @@ const { data, isPending } = useQuery({
 </script>
 
 <template>
-    <div class="mx-auto max-w-6xl px-4 py-10">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Packages</h1>
+    <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+        <h1 class="page-title">Packages</h1>
         <p class="mt-1 max-w-prose text-body">
             Every plan includes a daily exterior clean. The package sets what else is done, and how often.
         </p>
 
         <p v-if="isPending" class="mt-8 text-muted">Loading…</p>
 
-        <div v-else class="mt-6 grid gap-4 md:grid-cols-3">
+        <div v-else class="mt-10 grid gap-5 md:grid-cols-3">
             <article
                 v-for="pkg in data?.packages ?? []"
                 :key="pkg.id"
-                class="flex flex-col rounded-lg border border-line bg-surface p-5"
+                class="card flex flex-col p-6 sm:p-7"
             >
-                <h2 class="text-lg font-semibold text-ink">{{ pkg.name }}</h2>
+                <h2 class="display text-2xl text-ink">{{ pkg.name }}</h2>
                 <p class="mt-1 text-sm text-muted">
                     <template v-if="pkg.price > 0">
                         <strong class="tabular-nums text-ink">+&#8377;{{ pkg.price }}</strong> a month
@@ -54,19 +54,20 @@ const { data, isPending } = useQuery({
 
                 <p v-if="!pkg.sections.length && pkg.summary" class="mt-3 text-sm text-body">{{ pkg.summary }}</p>
 
-                <RouterLink
-                    :to="{ name: 'subscribe' }"
-                    class="mt-5 rounded bg-accent px-4 py-2 text-center text-sm font-semibold text-on-accent transition hover:brightness-110"
-                >
-                    Price this package
-                </RouterLink>
+                <!-- Pushed to the foot of the card, so the buttons line up across
+                     packages however long each list is. -->
+                <div class="mt-auto pt-7">
+                    <RouterLink :to="{ name: 'subscribe' }" class="btn-primary w-full">
+                        Price this package
+                    </RouterLink>
+                </div>
             </article>
         </div>
 
-        <section class="mt-10">
-            <h2 class="text-xl font-bold tracking-tight text-ink">Interior cleaning</h2>
+        <section class="mt-14">
+            <h2 class="display text-2xl text-ink sm:text-3xl">Interior cleaning</h2>
             <div class="mt-3 grid gap-3 sm:grid-cols-3">
-                <div v-for="s in data?.service_types ?? []" :key="s.id" class="rounded border border-line bg-surface p-4">
+                <div v-for="s in data?.service_types ?? []" :key="s.id" class="card p-5">
                     <h3 class="font-medium text-ink">{{ s.name }}</h3>
                     <p class="mt-1 text-sm tabular-nums text-muted">
                         {{ s.price > 0 ? '+₹' + s.price + ' a month' : 'Included' }}
@@ -75,10 +76,10 @@ const { data, isPending } = useQuery({
             </div>
         </section>
 
-        <section class="mt-10">
-            <h2 class="text-xl font-bold tracking-tight text-ink">Signing up for longer</h2>
+        <section class="mt-14">
+            <h2 class="display text-2xl text-ink sm:text-3xl">Signing up for longer</h2>
             <div class="mt-3 grid gap-3 sm:grid-cols-3">
-                <div v-for="d in data?.durations ?? []" :key="d.id" class="rounded border border-line bg-surface p-4">
+                <div v-for="d in data?.durations ?? []" :key="d.id" class="card p-5">
                     <h3 class="font-medium text-ink">{{ d.name }}</h3>
                     <p class="mt-1 text-sm tabular-nums" :class="d.discount > 0 ? 'text-ok' : 'text-muted'">
                         {{ d.discount > 0 ? 'Save ₹' + d.discount : 'No discount' }}

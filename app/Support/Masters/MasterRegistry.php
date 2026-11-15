@@ -82,6 +82,8 @@ class MasterRegistry
                 'singular' => 'Sector',
                 'group' => 'Geography',
                 'parent' => ['key' => 'area_id', 'master' => 'areas', 'label' => 'Area'],
+                // And the city above the area: two areas can share a name.
+                'lineage' => 1,
                 'fields' => [
                     'name' => ['required', 'string', 'max:120'],
                 ],
@@ -101,6 +103,9 @@ class MasterRegistry
                 'singular' => 'Society',
                 'group' => 'Geography',
                 'parent' => ['key' => 'sector_id', 'master' => 'sectors', 'label' => 'Sector'],
+                // Sector, then its area and city, so a society can be placed
+                // without opening anything.
+                'lineage' => 2,
                 'fields' => [
                     'name' => ['required', 'string', 'max:120'],
                     // Charged every month, so a typo here is not a one-off.
@@ -360,6 +365,29 @@ class MasterRegistry
     }
 
     /**
+     * What the levels above a master's parent are called: Area and City for a
+     * society, whose parent is the sector.
+     *
+     * @param  array<string, mixed>  $definition
+     * @return array<int, string>
+     */
+    private static function lineageLabels(array $definition): array
+    {
+        $labels = [];
+        $link = $definition['parent'] ?? null;
+
+        for ($level = 0; $level < (int) ($definition['lineage'] ?? 0) && $link; $level++) {
+            $link = self::all()[$link['master']]['parent'] ?? null;
+
+            if ($link) {
+                $labels[] = $link['label'];
+            }
+        }
+
+        return $labels;
+    }
+
+    /**
      * The list a settings screen renders its menu from.
      *
      * @return array<int, array<string, mixed>>
@@ -375,6 +403,9 @@ class MasterRegistry
                 'singular' => $definition['singular'],
                 'group' => $definition['group'],
                 'parent' => $definition['parent'] ?? null,
+                // Labels for the levels above the parent the table also shows,
+                // in the order the rows carry them in lineage_names.
+                'lineage' => self::lineageLabels($definition),
                 'money' => $definition['money'] ?? [],
                 // Which fields earn a table column. Empty means "all of them",
                 // which is right for a master with three fields and wrong for

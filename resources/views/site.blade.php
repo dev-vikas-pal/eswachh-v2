@@ -121,7 +121,12 @@
     );
 @endphp
 <!DOCTYPE html>
-<html lang="en" class="antialiased">
+{{--
+    data-site turns on the public palette and typefaces in app.css, and
+    data-theme pins the page to light: the marketing pages do not follow the
+    visitor's device into a dark theme. The office app has its own shell.
+--}}
+<html lang="en" class="antialiased" data-site data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -142,9 +147,10 @@
 
     <link rel="canonical" href="{{ url()->current() }}">
 
-    {{-- The browser chrome picks this up, so a phone frames the page in the
-         brand colour instead of white. --}}
-    <meta name="theme-color" content="#EA580C">
+    {{-- The browser chrome picks this up. The page's own paper colour, so the
+         address bar on a phone continues the header rather than capping it
+         with a band of orange. --}}
+    <meta name="theme-color" content="#FBF7F1">
 
     {{-- What a shared link looks like in a chat app or on social media. --}}
     <meta property="og:type" content="website">

@@ -16,8 +16,9 @@ import { useSiteSession } from '@/site/session';
  * trusted. Here the quote is display only; the server prices the order again
  * from the ids when it is placed.
  *
- * And the address narrows one level at a time, only offering sectors a
- * franchise actually covers, so nobody can buy a round nobody will drive.
+ * And the address narrows one level at a time, offering only active masters.
+ * Whether staff are assigned to a sector is the office's business, settled
+ * after the signup - the server checks the chain itself holds together.
  */
 
 interface Option { id: string; name: string }
@@ -196,13 +197,13 @@ function submit() {
             <svg class="mx-auto h-12 w-12 text-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            <h1 class="mt-3 text-2xl font-bold tracking-tight text-ink">Payment received</h1>
+            <h1 class="page-title mt-3">Payment received</h1>
             <p class="mt-1 text-body">
                 Thank you, {{ form.name }}. Your cleaning plan is live.
             </p>
         </div>
 
-        <div class="mt-6 rounded-lg border border-line bg-surface">
+        <div class="mt-6 card">
             <h2 class="border-b border-line px-5 py-3 text-sm font-semibold uppercase tracking-wide text-muted">
                 Your order
             </h2>
@@ -235,7 +236,7 @@ function submit() {
             </dl>
         </div>
 
-        <div class="mt-6 rounded-lg border border-line bg-surface p-5 text-sm text-body">
+        <div class="mt-6 card p-5 text-sm text-body">
             <h2 class="mb-2 font-semibold text-ink">What happens next</h2>
             <ol class="ms-4 list-decimal space-y-1">
                 <li>We assign a cleaner to your car and tell you who it is.</li>
@@ -261,7 +262,7 @@ function submit() {
     </div>
 
     <div v-else class="mx-auto max-w-6xl px-4 py-8">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Start a subscription</h1>
+        <h1 class="page-title">Start a subscription</h1>
         <p class="mt-1 max-w-prose text-body">
             Tell us where the car is kept and how often you want it cleaned. The price updates as you choose.
         </p>
@@ -272,7 +273,7 @@ function submit() {
             is registered - but finding that out after filling the whole thing
             in reads as though the site had forgotten them.
         -->
-        <div v-if="session" class="mt-8 rounded-lg border border-line bg-surface p-6">
+        <div v-if="session" class="mt-8 card p-6">
             <h2 class="text-lg font-semibold text-ink">You are already signed in</h2>
             <p class="mt-1 max-w-prose text-body">
                 Adding another car is quicker from your own pages: your address and phone number
@@ -313,7 +314,7 @@ function submit() {
         <form v-else class="mt-6 grid gap-6 lg:grid-cols-[1fr_20rem]" @submit.prevent="submit">
             <div class="flex flex-col gap-6">
                 <!-- Who -->
-                <section class="rounded-lg border border-line bg-surface p-4">
+                <section class="card p-4">
                     <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Your details</h2>
                     <div class="grid gap-3 sm:grid-cols-2">
                         <label class="block">
@@ -340,7 +341,7 @@ function submit() {
                 </section>
 
                 <!-- Where -->
-                <section class="rounded-lg border border-line bg-surface p-4">
+                <section class="card p-4">
                     <h2 class="mb-1 text-sm font-semibold uppercase tracking-wide text-muted">Where the car is kept</h2>
                     <p class="mb-3 text-xs text-muted">Only areas we currently service are listed.</p>
 
@@ -399,7 +400,7 @@ function submit() {
                 </section>
 
                 <!-- What -->
-                <section class="rounded-lg border border-line bg-surface p-4">
+                <section class="card p-4">
                     <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Your plan</h2>
                     <div class="grid gap-3 sm:grid-cols-2">
                         <label class="block">

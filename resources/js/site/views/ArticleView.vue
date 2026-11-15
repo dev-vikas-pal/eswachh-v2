@@ -96,7 +96,7 @@ function when(iso: string): string {
                 </h2>
 
                 <ul v-if="data.comments.length" class="mt-4 flex flex-col gap-4">
-                    <li v-for="c in data.comments" :key="c.id" class="rounded-lg border border-line bg-surface p-4">
+                    <li v-for="c in data.comments" :key="c.id" class="card p-4">
                         <p class="text-sm font-medium text-ink">{{ c.author_name }}</p>
                         <p class="text-xs text-faint">{{ when(c.created_at) }}</p>
                         <p class="mt-2 whitespace-pre-line text-body">{{ c.body }}</p>

@@ -122,12 +122,12 @@ function money(rupees: number): string {
 
 <template>
     <div class="mx-auto max-w-2xl px-4 py-10">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Top up your cloths</h1>
+        <h1 class="page-title">Top up your cloths</h1>
         <p class="mt-1 text-body">
             Quote your car number and we will show you what is left and what you can buy.
         </p>
 
-        <form class="mt-6 rounded-lg border border-line bg-surface p-4" @submit.prevent="lookup">
+        <form class="mt-6 card p-4" @submit.prevent="lookup">
             <label class="block">
                 <span class="mb-1 block text-sm font-medium text-body">Car number</span>
                 <div class="flex flex-wrap gap-2">

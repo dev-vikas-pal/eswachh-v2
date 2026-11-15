@@ -10,6 +10,7 @@ use App\Domain\Messaging\Transport\TransportChain;
 use App\Domain\Messaging\Transport\TransportResult;
 use App\Domain\Messaging\Transport\TwilioSmsTransport;
 use App\Domain\Messaging\Transport\TwilioWhatsAppTransport;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -28,6 +29,10 @@ use Tests\TestCase;
  */
 class TransportChainTest extends TestCase
 {
+    // One test writes a template. Without this it stayed in the database and
+    // every later run failed on the unique key.
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();

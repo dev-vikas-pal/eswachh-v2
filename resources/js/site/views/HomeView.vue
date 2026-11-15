@@ -93,24 +93,32 @@ const money = (value: number) =>
     <div>
         <BannerSlider :banners="banners" :price-from="from">
             <!--
-                Shown in place of the picture when no live banner has one. A
-                home page with nothing beside the headline looks broken, and the
-                three steps are the next most useful thing to put there.
+                Laid over the hero's picture: what the daily message looks like.
+
+                It is the promise further down the page - "you hear what
+                happened" - shown rather than described, and it is labelled as
+                an example because that is what it is. Nobody's real car, and
+                not a claim about a number of customers.
             -->
-            <template #aside>
-                <div class="rounded-xl border border-line bg-sunk/60 p-6 backdrop-blur">
-                    <ol class="flex flex-col gap-5">
-                        <li v-for="(step, i) in steps" :key="step.title" class="flex gap-4">
-                            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-bold tabular-nums text-accent-ink">
-                                {{ i + 1 }}
-                            </span>
-                            <span>
-                                <span class="block font-semibold text-ink">{{ step.title }}</span>
-                                <span class="block text-sm text-body">{{ step.body }}</span>
-                            </span>
-                        </li>
-                    </ol>
-                </div>
+            <template #over>
+                <figure class="card absolute -bottom-6 left-3 w-[17.5rem] max-w-[calc(100%-1.5rem)] p-4 sm:-left-6 sm:bottom-8 sm:p-5">
+                    <figcaption class="flex items-center justify-between gap-3 text-[0.6875rem] font-bold uppercase tracking-widest text-muted">
+                        Your daily update
+                        <span class="rounded-full bg-sunk px-2 py-0.5 font-semibold normal-case tracking-normal text-muted">Example</span>
+                    </figcaption>
+
+                    <div class="mt-3 flex items-start gap-3">
+                        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ok-soft text-ok">
+                            <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                                <path d="m4 10.5 4 4 8-9" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </span>
+                        <p class="text-sm leading-snug text-body">
+                            <strong class="block font-semibold text-ink">UP16 AB 1234 was cleaned</strong>
+                            This morning at 6:42, by your regular cleaner.
+                        </p>
+                    </div>
+                </figure>
             </template>
         </BannerSlider>
 
@@ -120,101 +128,106 @@ const money = (value: number) =>
             This is the band that answers "why you" before somebody scrolls
             looking for a price, and every line in it is checkable.
         -->
-        <section class="border-b border-line bg-sunk/40">
-            <div class="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-3 md:py-14">
-                <div v-for="promise in promises" :key="promise.title" class="flex gap-4">
-                    <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-ink">
-                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <section class="mx-auto max-w-7xl px-4 pb-6 pt-10 sm:px-6 lg:px-8">
+            <div class="grid gap-4 md:grid-cols-3">
+                <div v-for="promise in promises" :key="promise.title" class="card p-6 sm:p-7">
+                    <span class="grid h-12 w-12 place-items-center rounded-2xl bg-accent-soft text-accent-ink">
+                        <svg class="h-6 w-6" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                             <path :d="promise.icon" stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                     </span>
-                    <div>
-                        <h2 class="font-semibold text-ink">{{ promise.title }}</h2>
-                        <p class="mt-1 text-sm leading-relaxed text-body">{{ promise.body }}</p>
-                    </div>
+                    <h2 class="mt-5 text-lg font-semibold text-ink">{{ promise.title }}</h2>
+                    <p class="mt-2 text-[0.9375rem] leading-relaxed text-body">{{ promise.body }}</p>
                 </div>
             </div>
         </section>
 
         <!--
-            The steps again in a row, but only when the hero is carrying an
-            image - otherwise they are already beside the headline and would be
-            said twice on one screen.
+            How it works. Numbered because it is a sequence: the three things
+            happen in this order, and the third does not happen without the
+            first two.
         -->
-        <section v-if="banners.some((b) => b.image)" class="mx-auto max-w-6xl px-4 pt-16 sm:px-6">
-            <p class="text-sm font-semibold uppercase tracking-widest text-accent">How it works</p>
-            <h2 class="mt-2 text-2xl font-bold tracking-tight text-ink sm:text-3xl">Three steps, then it just happens</h2>
+        <section class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+            <div class="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+                <div>
+                    <p class="eyebrow">How it works</p>
+                    <h2 class="display section-title mt-4">Three steps, then it just happens.</h2>
+                    <p class="mt-4 max-w-md leading-relaxed text-body">
+                        Setting up takes about three minutes. After that there is nothing to book and nothing
+                        to remember — the car is simply clean when you come down to it.
+                    </p>
+                    <RouterLink :to="{ name: 'subscribe' }" class="btn-primary mt-8">Start now</RouterLink>
+                </div>
 
-            <ol class="mt-8 grid gap-6 sm:grid-cols-3">
-                <li
-                    v-for="(step, i) in steps"
-                    :key="step.title"
-                    class="relative rounded-xl border border-line bg-surface p-5"
-                >
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-bold tabular-nums text-on-accent">
-                        {{ i + 1 }}
-                    </span>
-                    <h3 class="mt-4 font-semibold text-ink">{{ step.title }}</h3>
-                    <p class="mt-1 text-sm leading-relaxed text-body">{{ step.body }}</p>
-                </li>
-            </ol>
+                <ol class="relative flex flex-col gap-4">
+                    <li
+                        v-for="(step, i) in steps"
+                        :key="step.title"
+                        class="card flex items-start gap-5 p-6"
+                    >
+                        <span class="display text-4xl leading-none tabular-nums text-accent">0{{ i + 1 }}</span>
+                        <div>
+                            <h3 class="text-lg font-semibold text-ink">{{ step.title }}</h3>
+                            <p class="mt-1 leading-relaxed text-body">{{ step.body }}</p>
+                        </div>
+                    </li>
+                </ol>
+            </div>
         </section>
 
         <!-- What it costs -->
-        <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-            <div class="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                    <p class="text-sm font-semibold uppercase tracking-widest text-accent">What it costs</p>
-                    <h2 class="mt-2 text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-                        Priced by the size of your car
-                    </h2>
-                    <p class="mt-2 max-w-prose text-body">
-                        Then adjusted for the package, how often the inside is done, and how long you sign
-                        up for. Longer plans cost less per month.
-                    </p>
+        <section class="border-y border-line bg-surface">
+            <div class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+                <div class="flex flex-wrap items-end justify-between gap-6">
+                    <div>
+                        <p class="eyebrow">What it costs</p>
+                        <h2 class="display section-title mt-4">Priced by the size of your car.</h2>
+                        <p class="mt-4 max-w-prose leading-relaxed text-body">
+                            Then adjusted for the package, how often the inside is done, and how long you sign
+                            up for. Longer plans cost less per month.
+                        </p>
+                    </div>
+
+                    <RouterLink :to="{ name: 'packages' }" class="btn-quiet">
+                        See what is in each package
+                    </RouterLink>
                 </div>
 
-                <RouterLink
-                    :to="{ name: 'packages' }"
-                    class="rounded-lg border border-line-strong px-5 py-2.5 text-sm font-semibold text-body transition hover:bg-sunk"
-                >
-                    See what is in each package
-                </RouterLink>
+                <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <!--
+                        A card per car size, linking straight into the form.
+                        The price is the base rate, said plainly rather than
+                        dressed as a total somebody would then find was
+                        different.
+                    -->
+                    <RouterLink
+                        v-for="type in data?.vehicle_types ?? []"
+                        :key="type.id"
+                        :to="{ name: 'subscribe' }"
+                        class="group flex flex-col rounded-[1.25rem] border border-line bg-ground p-6 transition duration-200 hover:-translate-y-1 hover:border-accent hover:bg-surface hover:shadow-[var(--lift-strong)]"
+                    >
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-muted">{{ type.name }}</h3>
+
+                        <p class="mt-4 flex items-baseline gap-2">
+                            <span class="display text-5xl tabular-nums text-ink">{{ money(type.price) }}</span>
+                            <span class="text-sm text-muted">/ month</span>
+                        </p>
+
+                        <p class="mt-2 text-sm text-muted">Base rate, before package and duration.</p>
+
+                        <span class="mt-6 inline-flex items-center gap-1.5 border-t border-line pt-4 text-sm font-semibold text-accent-ink">
+                            Get my price
+                            <svg class="h-4 w-4 transition group-hover:translate-x-1" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M4 10h12m-5-5 5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </span>
+                    </RouterLink>
+                </div>
+
+                <p class="mt-6 text-sm text-muted">
+                    Your society may add a small surcharge. It is shown before you pay, never after.
+                </p>
             </div>
-
-            <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <!--
-                    A card per car size, linking straight into the form. The
-                    price is the base rate, said plainly rather than dressed as
-                    a total somebody would then find was different.
-                -->
-                <RouterLink
-                    v-for="type in data?.vehicle_types ?? []"
-                    :key="type.id"
-                    :to="{ name: 'subscribe' }"
-                    class="group rounded-xl border border-line bg-surface p-5 transition hover:border-accent hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                >
-                    <h3 class="font-semibold text-ink">{{ type.name }}</h3>
-
-                    <p class="mt-2 flex items-baseline gap-1.5">
-                        <span class="text-3xl font-bold tabular-nums tracking-tight text-ink">{{ money(type.price) }}</span>
-                        <span class="text-sm text-muted">/ month</span>
-                    </p>
-
-                    <p class="mt-1 text-xs text-muted">base rate, before package and duration</p>
-
-                    <span class="mt-4 inline-flex items-center gap-1 text-sm font-medium text-accent-ink">
-                        Get my price
-                        <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                            <path d="m8 4 6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
-                    </span>
-                </RouterLink>
-            </div>
-
-            <p class="mt-6 text-sm text-muted">
-                Your society may add a small surcharge. It is shown before you pay, never after.
-            </p>
         </section>
 
         <!--
@@ -223,65 +236,69 @@ const money = (value: number) =>
             structured data, so what Google shows and what a visitor reads can
             never disagree.
         -->
-        <section v-if="faqs.length" class="border-y border-line bg-sunk/40">
-            <div class="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-                <p class="text-sm font-semibold uppercase tracking-widest text-accent">Before you ask</p>
-                <h2 class="mt-2 text-2xl font-bold tracking-tight text-ink sm:text-3xl">Common questions</h2>
+        <section v-if="faqs.length" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+            <div class="grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
+                <div>
+                    <p class="eyebrow">Before you ask</p>
+                    <h2 class="display section-title mt-4">Common questions.</h2>
+                    <p class="mt-4 max-w-md leading-relaxed text-body">
+                        The things people most often want to know before starting a plan.
+                    </p>
+                    <RouterLink :to="{ name: 'faq' }" class="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-ink hover:underline">
+                        All questions
+                        <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path d="M4 10h12m-5-5 5 5-5 5" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </RouterLink>
+                </div>
 
-                <div class="mt-8 divide-y divide-line rounded-xl border border-line bg-surface">
-                    <details v-for="faq in faqs" :key="faq.id" class="group px-5 py-4">
-                        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-ink">
+                <div class="card divide-y divide-line overflow-hidden">
+                    <details v-for="faq in faqs" :key="faq.id" class="group px-6 py-5 open:bg-sunk/50">
+                        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-semibold text-ink [&::-webkit-details-marker]:hidden">
                             {{ faq.question }}
-                            <svg
-                                class="h-4 w-4 shrink-0 text-muted transition group-open:rotate-180"
-                                viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"
-                            >
-                                <path d="m5 8 5 5 5-5" stroke-linecap="round" stroke-linejoin="round" />
-                            </svg>
+                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-line-strong text-muted transition group-open:rotate-45 group-open:border-accent group-open:text-accent-ink">
+                                <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                                    <path d="M10 4v12M4 10h12" stroke-linecap="round" />
+                                </svg>
+                            </span>
                         </summary>
 
                         <!-- Plain text, as the questions page renders them.
                              The answers are written as prose in the office and
                              are not markup, so nothing here interprets them as
                              any. -->
-                        <p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-body">{{ faq.answer }}</p>
+                        <p class="mt-3 max-w-prose whitespace-pre-line leading-relaxed text-body">{{ faq.answer }}</p>
                     </details>
                 </div>
-
-                <RouterLink :to="{ name: 'faq' }" class="mt-6 inline-block text-sm font-medium text-accent-ink hover:underline">
-                    All questions
-                </RouterLink>
             </div>
         </section>
 
         <!-- The last thing on the page is the thing the page is for. -->
-        <section class="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-            <div class="rounded-2xl border border-line-strong bg-gradient-to-br from-accent-soft via-surface to-surface p-8 sm:p-12">
-                <h2 class="max-w-xl text-2xl font-bold tracking-tight text-ink sm:text-3xl" style="text-wrap: balance">
+        <section class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 lg:pb-28">
+            <div class="closing relative overflow-hidden rounded-[2rem] border border-line px-6 py-12 text-center sm:px-12 sm:py-16">
+                <h2 class="display mx-auto max-w-2xl text-3xl leading-tight text-ink sm:text-5xl" style="text-wrap: balance">
                     Wake up to a clean car tomorrow morning.
                 </h2>
 
-                <p class="mt-3 max-w-prose text-body">
+                <p class="mx-auto mt-5 max-w-xl leading-relaxed text-body">
                     Tell us where the car is kept and see the price straight away. Nothing is charged until
                     you have seen the total.
                 </p>
 
-                <div class="mt-7 flex flex-wrap gap-3">
-                    <RouterLink
-                        :to="{ name: 'subscribe' }"
-                        class="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-on-accent transition hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                        See your price
-                    </RouterLink>
-
-                    <RouterLink
-                        :to="{ name: 'renew' }"
-                        class="rounded-lg border border-line-strong bg-surface px-6 py-3 text-sm font-semibold text-body transition hover:bg-sunk"
-                    >
-                        Renew an existing plan
-                    </RouterLink>
+                <div class="mt-9 flex flex-wrap justify-center gap-3">
+                    <RouterLink :to="{ name: 'subscribe' }" class="btn-primary">See your price</RouterLink>
+                    <RouterLink :to="{ name: 'renew' }" class="btn-quiet">Renew an existing plan</RouterLink>
                 </div>
             </div>
         </section>
     </div>
 </template>
+
+<style scoped>
+.closing {
+    background:
+        radial-gradient(38rem 20rem at 50% -30%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+        var(--surface);
+    box-shadow: var(--lift);
+}
+</style>

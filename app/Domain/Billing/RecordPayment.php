@@ -8,10 +8,12 @@ use App\Enums\MessagePurpose;
 use App\Enums\PaymentPurpose;
 use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
+use App\Enums\UserRole;
 use App\Mail\WelcomeToEswachh;
 use App\Models\ClothBundle;
 use App\Models\Payment;
 use App\Models\Subscription;
+use App\Models\User;
 use App\Support\Settings\SiteSettings;
 use App\Support\Tenancy\SectorContext;
 use Illuminate\Database\QueryException;
@@ -409,9 +411,9 @@ class RecordPayment
 
                 $this->emailWelcome($subscription);
 
-                // And the office, so somebody assigns a cleaner. v1 sent this
-                // to a number written into the source; this reads a setting.
-                if ($office = trim((string) SiteSettings::get('admin_notify_phone'))) {
+                // And the office, so somebody assigns a cleaner: the alert
+                // number in Settings, and whoever runs the sector.
+                foreach ($this->officeNumbersFor($subscription) as $office) {
                     $messenger->notify(
                         $subscription,
                         MessagePurpose::SubscriptionStartedAdmin,
@@ -526,6 +528,48 @@ class RecordPayment
      * Failures are swallowed and logged. A mail server being down must not
      * roll back a payment that has already been taken.
      */
+    /**
+     * Who in the office hears about a new plan.
+     *
+     * The number in Settings - v1 had one written into the source - and every
+     * active franchise owner covering the customer's sector, because they are
+     * the one who has to send a cleaner. A sector the head office runs itself
+     * has no owner, and then the Settings number is the whole list.
+     *
+     * Each number once, however many ways it qualifies.
+     *
+     * @return array<int, string>
+     */
+    private function officeNumbersFor(Subscription $subscription): array
+    {
+        $numbers = [trim((string) SiteSettings::get('admin_notify_phone'))];
+
+        $sectorId = StartPayment::sectorFor($subscription);
+
+        if ($sectorId) {
+            $owners = User::query()
+                ->where('role', UserRole::FranchiseOwner)
+                ->where('status', true)
+                ->whereIn('id', DB::table('user_sector')->select('user_id')->where('sector_id', $sectorId))
+                ->pluck('phone')
+                ->all();
+
+            array_push($numbers, ...$owners);
+        }
+
+        $unique = [];
+
+        foreach ($numbers as $number) {
+            $digits = substr((string) preg_replace('/\D+/', '', (string) $number), -10);
+
+            if (strlen($digits) === 10) {
+                $unique[$digits] ??= trim((string) $number);
+            }
+        }
+
+        return array_values($unique);
+    }
+
     private function emailWelcome(Subscription $subscription): void
     {
         $email = $subscription->customer?->email;

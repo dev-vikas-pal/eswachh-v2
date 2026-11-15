@@ -118,6 +118,60 @@ class MasterListingTest extends TestCase
             ->assertOk();
     }
 
+    public function test_a_society_is_listed_with_the_name_of_its_sector(): void
+    {
+        $sector = SectorContext::withoutScope(fn () => Sector::query()->where('branch_id', $this->branch->id)->firstOrFail());
+        SectorContext::withoutScope(fn () => \App\Models\Society::create([
+            'sector_id' => $sector->id,
+            'name' => 'Amrapali Castle',
+            'surcharge_paise' => 5000,
+        ]));
+
+        // Withdrawn since: the society still belongs to it, and should say so.
+        SectorContext::withoutScope(fn () => $sector->delete());
+
+        [$area, $city] = SectorContext::withoutScope(function () use ($sector) {
+            $area = \App\Models\Area::query()->findOrFail($sector->area_id);
+
+            return [$area, \App\Models\City::query()->findOrFail($area->city_id)];
+        });
+
+        // Sector, then the area and city above it.
+        $this->actingAs($this->admin)->getJson('/api/v1/masters/societies')
+            ->assertOk()
+            ->assertJsonPath('data.0.name', 'Amrapali Castle')
+            ->assertJsonPath('data.0.parent_name', $sector->name)
+            ->assertJsonPath('data.0.lineage_names', [$area->name, $city->name]);
+    }
+
+    public function test_a_sector_is_listed_with_its_area_and_city(): void
+    {
+        $sector = SectorContext::withoutScope(fn () => Sector::query()->where('branch_id', $this->branch->id)->firstOrFail());
+        [$area, $city] = SectorContext::withoutScope(function () use ($sector) {
+            $area = \App\Models\Area::query()->findOrFail($sector->area_id);
+
+            return [$area, \App\Models\City::query()->findOrFail($area->city_id)];
+        });
+
+        $row = collect(
+            $this->actingAs($this->admin)->getJson('/api/v1/masters/sectors')->assertOk()->json('data')
+        )->firstWhere('id', $sector->id);
+
+        $this->assertSame($area->name, $row['parent_name']);
+        $this->assertSame([$city->name], $row['lineage_names']);
+    }
+
+    public function test_the_catalogue_names_the_levels_each_list_shows(): void
+    {
+        $catalogue = collect(
+            $this->actingAs($this->admin)->getJson('/api/v1/masters')->assertOk()->json('data')
+        )->keyBy('key');
+
+        $this->assertSame(['Area', 'City'], $catalogue['societies']['lineage']);
+        $this->assertSame(['City'], $catalogue['sectors']['lineage']);
+        $this->assertSame([], $catalogue['cities']['lineage']);
+    }
+
     public function test_the_catalogue_lists_every_master(): void
     {
         $response = $this->actingAs($this->admin)->getJson('/api/v1/masters')->assertOk();

@@ -6,7 +6,9 @@ use App\Domain\Auth\PhoneCodes;
 use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
+use App\Models\Area;
 use App\Models\Branch;
+use App\Models\City;
 use App\Models\ClothBundle;
 use App\Models\Customer;
 use App\Models\Duration;
@@ -15,6 +17,7 @@ use App\Models\Package;
 use App\Models\Payment;
 use App\Models\Sector;
 use App\Models\ServiceType;
+use App\Models\Society;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -57,8 +60,8 @@ class PublicSignupTest extends TestCase
         $this->branch = Branch::factory()->create();
         $this->sector = Sector::factory()->create(['branch_id' => $this->branch->id]);
 
-        // Somebody has to cover it, or the signup is correctly refused: an
-        // address nobody services takes money for a round that never happens.
+        // Covered here, as most sectors will be. Coverage is not what decides
+        // whether a signup is accepted - see the tests on unassigned sectors.
         User::factory()->franchiseOwner($this->branch)->create()
             ->sectors()->syncWithoutDetaching([$this->sector->id]);
 
@@ -258,36 +261,110 @@ class PublicSignupTest extends TestCase
         );
     }
 
-    public function test_a_sector_nobody_covers_is_refused(): void
+    public function test_an_active_sector_nobody_is_assigned_to_is_accepted(): void
     {
-        $orphan = SectorContext::withoutScope(fn () => Sector::factory()->create());
+        // The head office runs it directly; staff are assigned afterwards.
+        $unassigned = SectorContext::withoutScope(fn () => Sector::factory()->create());
 
         $this->provedNumber('9876543210');
 
-        /*
-         * Read from the assignment, not from a branch_id on the sector. That
-         * column stopped meaning anything when territory moved to user_sector,
-         * so a sector the address form had happily offered was refused here.
-         */
-        $this->postJson('/api/v1/public/signup', $this->order(['sector_id' => $orphan->id]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('sector_id');
+        $this->postJson('/api/v1/public/signup', $this->order(['sector_id' => $unassigned->id]))
+            ->assertCreated();
+
+        $this->assertSame($unassigned->id, Customer::withoutGlobalScopes()->sole()->sector_id);
     }
 
-    public function test_the_address_form_only_offers_sectors_somebody_covers(): void
+    public function test_the_address_form_offers_every_active_sector_and_no_other(): void
     {
-        $orphan = SectorContext::withoutScope(
-            fn () => Sector::factory()->create(['area_id' => $this->sector->area_id])
-        );
+        [$unassigned, $switchedOff, $withdrawn] = SectorContext::withoutScope(fn () => [
+            Sector::factory()->create(['area_id' => $this->sector->area_id]),
+            Sector::factory()->create(['area_id' => $this->sector->area_id, 'status' => false]),
+            tap(Sector::factory()->create(['area_id' => $this->sector->area_id]))->delete(),
+        ]);
 
         $offered = $this->getJson('/api/v1/public/locations?level=sectors&parent_id='.$this->sector->area_id)
             ->assertOk()
             ->json('data.*.id');
 
-        // Offering one and then refusing it at the payment step is the worst of
-        // both: the two answers come from the same fact now.
+        // Active is what puts a sector on sale, not whether somebody covers it.
         $this->assertContains($this->sector->id, $offered);
-        $this->assertNotContains($orphan->id, $offered);
+        $this->assertContains($unassigned->id, $offered);
+        $this->assertNotContains($switchedOff->id, $offered);
+        $this->assertNotContains($withdrawn->id, $offered);
+    }
+
+    public function test_a_switched_off_sector_is_refused(): void
+    {
+        $switchedOff = SectorContext::withoutScope(fn () => Sector::factory()->create(['status' => false]));
+
+        $this->provedNumber('9876543210');
+
+        // Offered by a stale page, perhaps, but not on sale.
+        $this->postJson('/api/v1/public/signup', $this->order(['sector_id' => $switchedOff->id]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('sector_id');
+    }
+
+    public function test_a_sector_in_a_switched_off_area_is_refused(): void
+    {
+        SectorContext::withoutScope(fn () => Area::query()->whereKey($this->sector->area_id)->update(['status' => false]));
+
+        $this->provedNumber('9876543210');
+
+        $this->postJson('/api/v1/public/signup', $this->order())
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('sector_id');
+    }
+
+    public function test_an_area_that_is_not_the_sectors_is_refused(): void
+    {
+        $elsewhere = SectorContext::withoutScope(function () {
+            $area = Area::query()->findOrFail($this->sector->area_id);
+
+            return Area::create(['city_id' => $area->city_id, 'name' => 'Somewhere else', 'status' => true]);
+        });
+
+        $this->provedNumber('9876543210');
+
+        $this->postJson('/api/v1/public/signup', $this->order(['area_id' => $elsewhere->id]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('area_id');
+    }
+
+    public function test_a_society_from_another_sector_is_refused(): void
+    {
+        $nextDoor = SectorContext::withoutScope(fn () => Society::create([
+            'sector_id' => Sector::factory()->create()->id,
+            'name' => 'Next door',
+            'surcharge_paise' => 15000,
+            'status' => true,
+        ]));
+
+        $this->provedNumber('9876543210');
+
+        // Its surcharge would have gone on this bill, and its address on the round.
+        $this->postJson('/api/v1/public/signup', $this->order(['society_id' => $nextDoor->id]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('society_id');
+    }
+
+    public function test_the_whole_address_is_saved_from_the_sector(): void
+    {
+        $this->provedNumber('9876543210');
+
+        // The form sent only the sector.
+        $this->postJson('/api/v1/public/signup', $this->order())->assertCreated();
+
+        $customer = Customer::withoutGlobalScopes()->sole();
+        [$area, $city] = SectorContext::withoutScope(function () {
+            $area = Area::query()->findOrFail($this->sector->area_id);
+
+            return [$area, City::query()->findOrFail($area->city_id)];
+        });
+
+        $this->assertSame($area->id, $customer->area_id);
+        $this->assertSame($city->id, $customer->city_id);
+        $this->assertSame($city->state_id, $customer->state_id);
     }
 
     public function test_a_taken_car_number_is_refused_before_a_code_is_sent(): void
@@ -309,13 +386,13 @@ class PublicSignupTest extends TestCase
         $this->assertDatabaseCount('login_codes', 0);
     }
 
-    public function test_an_uncovered_sector_is_refused_before_a_code_is_sent(): void
+    public function test_a_switched_off_sector_is_refused_before_a_code_is_sent(): void
     {
-        $orphan = SectorContext::withoutScope(fn () => Sector::factory()->create());
+        $switchedOff = SectorContext::withoutScope(fn () => Sector::factory()->create(['status' => false]));
 
         $this->postJson('/api/v1/public/signup/code', [
             'phone' => '9876543210',
-            'sector_id' => $orphan->id,
+            'sector_id' => $switchedOff->id,
         ])->assertStatus(422)->assertJsonValidationErrors('sector_id');
 
         $this->assertDatabaseCount('login_codes', 0);

@@ -34,8 +34,8 @@ function toggle(id: string) {
 </script>
 
 <template>
-    <div class="mx-auto max-w-3xl px-4 py-10">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Questions</h1>
+    <div class="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+        <h1 class="page-title">Questions</h1>
         <p class="mt-1 text-body">The things people ask most often. Tap a question to see the answer.</p>
 
         <p v-if="isPending" class="mt-8 text-muted">Loading…</p>
@@ -44,12 +44,12 @@ function toggle(id: string) {
             No questions have been published yet.
         </p>
 
-        <dl v-else class="mt-6 divide-y divide-line border-y border-line">
+        <dl v-else class="card mt-8 divide-y divide-line overflow-hidden">
             <div v-for="faq in faqs" :key="faq.id">
                 <dt>
                     <button
                         type="button"
-                        class="flex w-full items-start gap-3 py-4 text-left transition hover:text-accent-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        class="flex w-full items-start gap-3 px-6 py-5 text-left transition hover:bg-sunk/60"
                         :aria-expanded="open.has(faq.id)"
                         :aria-controls="'answer-' + faq.id"
                         @click="toggle(faq.id)"
@@ -64,7 +64,7 @@ function toggle(id: string) {
                         </svg>
                     </button>
                 </dt>
-                <dd v-show="open.has(faq.id)" :id="'answer-' + faq.id" class="-mt-1 pb-4 pe-7 text-body">
+                <dd v-show="open.has(faq.id)" :id="'answer-' + faq.id" class="-mt-1 whitespace-pre-line px-6 pb-5 pe-12 leading-relaxed text-body">
                     {{ faq.answer }}
                 </dd>
             </div>

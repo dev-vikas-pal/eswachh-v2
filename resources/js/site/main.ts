@@ -12,6 +12,15 @@ import router from '@/site/router';
 import PublicLayout from '@/site/PublicLayout.vue';
 import '../../css/app.css';
 
+/*
+ * The site's two typefaces, bundled rather than fetched from a font service:
+ * no third-party request on a visitor's first paint, and they load from the
+ * same place as everything else. Imported here and not in app.css so the
+ * office bundle, which shares that stylesheet, does not carry them.
+ */
+import '@fontsource-variable/fraunces/opsz.css';
+import '@fontsource-variable/plus-jakarta-sans';
+
 createApp(PublicLayout)
     .use(router)
     .use(VueQueryPlugin, {

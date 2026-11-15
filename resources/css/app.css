@@ -157,6 +157,219 @@ body {
 }
 
 /*
+|------------------------------------------------------------------------------
+| The public site
+|------------------------------------------------------------------------------
+|
+| Everything below is scoped to html[data-site], which only site.blade.php
+| sets. The office and the customer's pages share this file and none of it
+| reaches them.
+|
+| The public site is light, always. It used to follow the visitor's device, so
+| the same address was a cream page on one phone and a near-black one on the
+| next, and the marketing pages are the one place where how the business looks
+| should not be decided by somebody's battery setting.
+|
+| Warm paper rather than grey, ink that is brown-black rather than blue-black,
+| and the brand orange kept for the things a visitor is meant to press.
+*/
+html[data-site] {
+    --ground: #FBF7F1;
+    --surface: #FFFFFF;
+    --sunk: #F6F0E7;
+    --ink: #1D1711;
+    --body: #4D4339;
+    --muted: #7B6F63;
+    --faint: #A89C8F;
+    --line: #ECE4D8;
+    --line-strong: #DCD1C2;
+
+    --accent: #E8590C;
+    --accent-ink: #B4430A;
+    --accent-soft: #FFF0E2;
+    --on-accent: #FFFFFF;
+
+    --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+    --font-text: 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+
+    /* Softer corners than the office screens, which are dense on purpose. */
+    --radius-lg: 1rem;
+    --radius-xl: 1.25rem;
+    --radius-2xl: 1.75rem;
+
+    --lift: 0 1px 2px rgb(74 48 20 / 0.04), 0 10px 28px -12px rgb(74 48 20 / 0.14);
+    --lift-strong: 0 2px 4px rgb(74 48 20 / 0.05), 0 24px 48px -20px rgb(74 48 20 / 0.24);
+
+    color-scheme: light;
+    scroll-behavior: smooth;
+}
+
+html[data-site] body {
+    font-family: var(--font-text);
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+}
+
+/*
+| Headlines in the serif, everything else in the sans. Only h1 takes it
+| automatically: an h2 on these pages is as often a small label above a form
+| section as it is a headline, and a serif in capitals at twelve pixels is
+| nobody's idea of premium. Section headlines ask for it with .display.
+*/
+html[data-site] h1,
+html[data-site] .display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-variation-settings: 'opsz' 96;
+    letter-spacing: -0.022em;
+}
+
+html[data-site] ::selection {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/*
+| Form controls, once, for every form on the site.
+|
+| Written here rather than on each input because there are thirty of them
+| across signup, renewal and top-up, and they should not be able to disagree.
+| Sixteen pixels is deliberate: anything smaller and a phone zooms the whole
+| page in the moment a field is tapped, and never zooms back out.
+*/
+html[data-site] :is(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea) {
+    min-height: 2.875rem;
+    border-radius: 0.75rem;
+    padding: 0.625rem 0.875rem;
+    font-size: 1rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+html[data-site] :is(input, select, textarea):hover:not(:disabled, :focus) {
+    border-color: var(--muted);
+}
+
+html[data-site] :is(input, select, textarea):focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+html[data-site] :is(input, select, textarea):disabled {
+    background: var(--sunk);
+    cursor: not-allowed;
+}
+
+/* The bare `rounded` the forms and buttons were written with, a size up. */
+html[data-site] .rounded {
+    border-radius: 0.75rem;
+}
+
+/*
+| The sentence under a page's title, which every page has. Outside the layer
+| below so it outranks the small top margin those paragraphs were written with.
+*/
+html[data-site] .page-title + p {
+    margin-top: 0.875rem;
+    font-size: 1.0625rem;
+    line-height: 1.6;
+}
+
+html[data-site] :is(a, button):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+@layer components {
+    /* The top of every page other than the home page. */
+    .page-title {
+        font-size: clamp(1.875rem, 1.4rem + 2vw, 2.75rem);
+        line-height: 1.1;
+        color: var(--ink);
+        text-wrap: balance;
+    }
+
+    /* The small line above a headline that says what the section is. */
+    .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent-ink);
+    }
+
+    .eyebrow::before {
+        content: '';
+        width: 1.5rem;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--accent);
+    }
+
+    .section-title {
+        font-size: clamp(1.625rem, 1.3rem + 1.4vw, 2.375rem);
+        line-height: 1.12;
+        color: var(--ink);
+        text-wrap: balance;
+    }
+
+    /* The one thing on a screen a visitor is meant to press. */
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        border-radius: 999px;
+        background: var(--accent);
+        padding: 0.875rem 1.625rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--on-accent);
+        box-shadow: 0 1px 0 rgb(255 255 255 / 0.25) inset, 0 10px 22px -10px color-mix(in srgb, var(--accent) 80%, transparent);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-ink);
+        transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+        transform: translateY(0);
+    }
+
+    /* Everything else that is a button. */
+    .btn-quiet {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        border-radius: 999px;
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+        padding: 0.875rem 1.5rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--ink);
+        transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .btn-quiet:hover {
+        border-color: var(--ink);
+        background: var(--sunk);
+    }
+
+    .card {
+        border-radius: 1.25rem;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: var(--lift);
+    }
+}
+
+/*
 | Compact density tightens the table rows and nothing else. It is for people
 | working a long list on a laptop, so it buys back vertical space where the
 | rows are, and leaves the reading parts of the interface alone.

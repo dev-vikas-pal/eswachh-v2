@@ -8,8 +8,12 @@ use App\Domain\Pricing\PriceBook;
 use App\Enums\SubscriptionStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Area;
+use App\Models\City;
 use App\Models\Customer;
 use App\Models\Sector;
+use App\Models\Society;
+use App\Models\State;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -91,7 +95,7 @@ class SignupController extends Controller
         }
 
         if ($sectorId = $data['sector_id'] ?? null) {
-            $this->refuseIfSectorUncovered($sectorId);
+            $this->place(['sector_id' => $sectorId]);
         }
 
         if (strlen($phone) !== 10) {
@@ -157,7 +161,7 @@ class SignupController extends Controller
          * Checked, not spent.
          *
          * Everything below can still refuse this signup - a car number already
-         * on the books, a sector nobody covers - and a code burned by one of
+         * on the books, a sector taken off sale - and a code burned by one of
          * those leaves the customer retyping a code that has silently stopped
          * working, with nothing on screen to say why. It is spent inside the
          * transaction, once nothing else can fail.
@@ -174,7 +178,7 @@ class SignupController extends Controller
 
         $this->refuseIfTaken($phone, $registration);
 
-        $this->refuseIfSectorUncovered($data['sector_id']);
+        $place = $this->place($data);
 
         /*
          * The form no longer offers cloths while the service is off, but the
@@ -189,7 +193,7 @@ class SignupController extends Controller
 
         $quote = $this->quote($data);
 
-        return DB::transaction(function () use ($data, $phone, $registration, $quote, $verified) {
+        return DB::transaction(function () use ($data, $phone, $registration, $quote, $verified, $place) {
             // Nothing left that can refuse them, so the code is spent now.
             $this->codes->spend($verified);
             $account = User::create([
@@ -215,11 +219,12 @@ class SignupController extends Controller
                 'name' => $data['name'],
                 'phone' => $phone,
                 'email' => $data['email'] ?? null,
-                'state_id' => $data['state_id'] ?? null,
-                'city_id' => $data['city_id'] ?? null,
-                'area_id' => $data['area_id'] ?? null,
-                'sector_id' => $data['sector_id'],
-                'society_id' => $data['society_id'] ?? null,
+                // From the sector, not the form: one chain, always complete.
+                'state_id' => $place['state_id'],
+                'city_id' => $place['city_id'],
+                'area_id' => $place['area_id'],
+                'sector_id' => $place['sector_id'],
+                'society_id' => $place['society_id'],
                 'house_no' => $data['house_no'],
                 'preferred_time' => $data['preferred_time'] ?? null,
                 'status' => true,
@@ -335,20 +340,65 @@ class SignupController extends Controller
     }
 
     /**
-     * Somebody has to cover the sector, or nobody will ever be sent to clean
-     * the car. Read from the assignment, not from anything on the sector row.
+     * Where the car is kept, checked as one chain and filled in from the sector.
+     *
+     * An active sector is one the business services. Nobody has to be assigned
+     * to it yet - the head office may run it directly, and staff are given it
+     * afterwards on the People screen. What must hold is the masters
+     * themselves: the sector, its area, city and state all active and not
+     * withdrawn, and anything the form sent belonging to that same chain. A
+     * society from the next sector over would otherwise put its surcharge on
+     * the bill and the wrong address on the round.
+     *
+     * The state, city and area are taken from the sector rather than trusted
+     * from the form, so a customer record is never left half an address.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{state_id: string, city_id: string, area_id: string, sector_id: string, society_id: ?string}
      */
-    private function refuseIfSectorUncovered(string $sectorId): void
+    private function place(array $data): array
     {
-        $covered = SectorContext::withoutScope(
-            fn () => DB::table('user_sector')->where('sector_id', $sectorId)->exists()
-        );
+        return SectorContext::withoutScope(function () use ($data) {
+            $refuse = function (string $field, string $message): never {
+                throw ValidationException::withMessages([$field => $message]);
+            };
 
-        if (! $covered) {
-            throw ValidationException::withMessages([
-                'sector_id' => 'We do not service that sector yet.',
-            ]);
-        }
+            $sector = Sector::query()->where('status', true)->find($data['sector_id'] ?? null);
+
+            if (! $sector) {
+                $refuse('sector_id', 'We do not service that sector at the moment. Please choose another, or call the office.');
+            }
+
+            $area = Area::query()->where('status', true)->find($sector->area_id);
+            $city = $area ? City::query()->where('status', true)->find($area->city_id) : null;
+            $state = $city ? State::query()->where('status', true)->find($city->state_id) : null;
+
+            // A sector whose area, city or state has been switched off or
+            // withdrawn is not on sale, whatever the sector row itself says.
+            if (! $area || ! $city || ! $state) {
+                $refuse('sector_id', 'That sector is not available at the moment. Please call the office.');
+            }
+
+            $chain = ['state_id' => $state->id, 'city_id' => $city->id, 'area_id' => $area->id];
+
+            foreach ($chain as $field => $id) {
+                if (! empty($data[$field]) && $data[$field] !== $id) {
+                    $refuse($field, 'That does not match the sector chosen. Please choose the address again.');
+                }
+            }
+
+            $societyId = $data['society_id'] ?? null;
+
+            if ($societyId && ! Society::query()
+                ->where('status', true)
+                ->where('sector_id', $sector->id)
+                ->whereKey($societyId)
+                ->exists()) {
+                $refuse('society_id', 'That society is not in the sector chosen.');
+            }
+
+            return $chain + ['sector_id' => $sector->id, 'society_id' => $societyId ?: null];
+        });
     }
 
     private function accountFor(string $phone): ?User

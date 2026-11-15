@@ -28,7 +28,7 @@ function when(iso: string): string {
 
 <template>
     <div class="mx-auto max-w-5xl px-4 py-10">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Car care advice</h1>
+        <h1 class="page-title">Car care advice</h1>
         <p class="mt-1 max-w-prose text-body">Looking after a car between cleans, and what we have learned doing it daily.</p>
 
         <div class="mt-6 flex flex-wrap items-center gap-2">
@@ -66,7 +66,7 @@ function when(iso: string): string {
         </p>
 
         <div v-else class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <article v-for="post in posts" :key="post.id" class="flex flex-col rounded-lg border border-line bg-surface p-5">
+            <article v-for="post in posts" :key="post.id" class="flex flex-col card p-5">
                 <p v-if="post.category" class="text-xs font-semibold uppercase tracking-wide text-accent">{{ post.category }}</p>
                 <h2 class="mt-1 text-lg font-semibold leading-snug text-ink">
                     <RouterLink :to="{ name: 'article', params: { slug: post.slug } }" class="hover:text-accent-ink">

@@ -90,8 +90,11 @@ class MasterController extends Controller implements HasMiddleware
                 $query->where($definition['parent']['key'], $filters['parent_id']);
             }
 
+            $rows = $query->get();
+            $lineage = $this->lineage($rows, $definition);
+
             return response()->json([
-                'data' => $query->get()->map(fn (Model $row) => $this->present($row, $definition)),
+                'data' => $rows->map(fn (Model $row) => $this->present($row, $definition, $lineage)),
                 'meta' => [
                     'key' => $definition['key'],
                     'label' => $definition['label'],
@@ -317,10 +320,61 @@ class MasterController extends Controller implements HasMiddleware
     }
 
     /**
+     * Where each row sits: its parent's name, then as many levels above that
+     * as the master asks for with `lineage` - a society's sector, area and
+     * city; a sector's area and city.
+     *
+     * One query per level for the whole list, never one per row. Withdrawn
+     * rows are included at every level: a society still points at its sector
+     * after the sector is taken off the list, and the table should say which.
+     *
+     * @param  \Illuminate\Support\Collection<int, Model>  $rows
      * @param  array<string, mixed>  $definition
+     * @return array<string, array<int, string|null>>  row id => [parent, above it, ...]
+     */
+    private function lineage($rows, array $definition): array
+    {
+        if (! isset($definition['parent'])) {
+            return [];
+        }
+
+        // Where each row has got to on the way up, starting at its parent.
+        $at = $rows->mapWithKeys(fn (Model $row) => [
+            $row->getKey() => $row->{$definition['parent']['key']},
+        ])->all();
+
+        $names = array_fill_keys(array_keys($at), []);
+        $link = $definition['parent'];
+        $levels = 1 + (int) ($definition['lineage'] ?? 0);
+
+        for ($level = 0; $level < $levels && $link; $level++) {
+            $master = MasterRegistry::get($link['master']);
+            $above = $master['parent']['key'] ?? null;
+            $ids = array_values(array_unique(array_filter($at)));
+
+            $found = $ids === [] ? collect() : $master['model']::withTrashed()
+                ->whereIn('id', $ids)
+                ->get(array_filter(['id', $master['titleField'] ?? 'name', $above]))
+                ->keyBy('id');
+
+            foreach ($at as $rowId => $id) {
+                $record = $id !== null ? $found->get($id) : null;
+                $names[$rowId][] = $record?->{$master['titleField'] ?? 'name'};
+                $at[$rowId] = $above && $record ? $record->{$above} : null;
+            }
+
+            $link = $master['parent'] ?? null;
+        }
+
+        return $names;
+    }
+
+    /**
+     * @param  array<string, mixed>  $definition
+     * @param  array<string, array<int, string|null>>|null  $lineage  from lineage(), for a list
      * @return array<string, mixed>
      */
-    private function present(Model $row, array $definition): array
+    private function present(Model $row, array $definition, ?array $lineage = null): array
     {
         $titleField = $definition['titleField'] ?? 'name';
 
@@ -371,6 +425,14 @@ class MasterController extends Controller implements HasMiddleware
 
         if (isset($definition['parent'])) {
             $out['parent_id'] = $row->{$definition['parent']['key']};
+
+            // A single row - just saved - looks its own chain up.
+            $lineage ??= $this->lineage(collect([$row]), $definition);
+            $chain = $lineage[$row->getKey()] ?? [];
+
+            $out['parent_name'] = $chain[0] ?? null;
+            // The levels above the parent, in the order the screen labels them.
+            $out['lineage_names'] = array_slice($chain, 1);
         }
 
         return $out;

@@ -17,6 +17,8 @@ interface MasterMeta {
     singular: string;
     group: string;
     parent: { key: string; master: string; label: string } | null;
+    /** Labels for the levels shown above the parent - Area, City for a society. */
+    lineage: string[];
     money: string[];
     columns: string[];
     rich: string[];
@@ -35,6 +37,10 @@ interface MasterRow {
     status: boolean;
     withdrawn: boolean;
     parent_id?: string | null;
+    /** The sector a society is in, the state a city is in - whatever the parent is called. */
+    parent_name?: string | null;
+    /** The levels above the parent, matching MasterMeta.lineage. */
+    lineage_names?: (string | null)[];
     [key: string]: unknown;
 }
 
@@ -450,6 +456,8 @@ async function restore(row: MasterRow) {
                     <thead>
                         <tr class="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                             <th class="px-3 py-2 font-medium">Name</th>
+                            <th v-if="current?.parent" class="px-3 py-2 font-medium">{{ current.parent.label }}</th>
+                            <th v-for="label in current?.lineage ?? []" :key="label" class="px-3 py-2 font-medium">{{ label }}</th>
                             <th v-for="f in tableColumns"
                                 :key="f" class="px-3 py-2 font-medium">
                                 <template v-if="f === 'staff_names'">Covered by</template>
@@ -475,6 +483,10 @@ async function restore(row: MasterRow) {
                             :class="row.withdrawn ? 'opacity-60' : ''"
                         >
                             <td class="px-3 py-2 font-medium text-ink">{{ row.name }}</td>
+                            <td v-if="current?.parent" class="px-3 py-2 text-body">{{ row.parent_name ?? '—' }}</td>
+                            <td v-for="(label, i) in current?.lineage ?? []" :key="label" class="px-3 py-2 text-body">
+                                {{ row.lineage_names?.[i] ?? '—' }}
+                            </td>
                             <td v-for="f in tableColumns"
                                 :key="f" class="px-3 py-2 tabular-nums text-body">
                                 <span v-if="current?.rich.includes(f)" class="line-clamp-2 block max-w-md">

@@ -69,6 +69,36 @@ class Messenger
     private const COUNTRY_CODE = '91';
 
     /**
+     * Who a message for this number actually goes to.
+     *
+     * The number itself, unless MSG91_TEST_RECIPIENT is set - then everything
+     * goes there, and the log says so each time.
+     *
+     * Shared by every way a message leaves, because the redirect is only safe
+     * if it is total. The sign-in code used to go its own way and skip it, so
+     * while testing on the live site every other message reached the tester
+     * and the one-time code went to whatever number had been typed in.
+     *
+     * @param  array<string, mixed>  $context  added to the log line
+     */
+    public static function recipientFor(string $phone, array $context = []): string
+    {
+        $testRecipient = (string) config('services.whatsapp.test_recipient');
+
+        if ($testRecipient === '') {
+            return $phone;
+        }
+
+        Log::warning('Message redirected to the test number.', $context + [
+            'intended_for' => $phone,
+            'sent_to' => $testRecipient,
+            'why' => 'MSG91_TEST_RECIPIENT is set. Unset it and no customer is messaged from here.',
+        ]);
+
+        return $testRecipient;
+    }
+
+    /**
      * Is a message actually going to leave the building?
      */
     public function deliveryEnabled(): bool
@@ -288,17 +318,8 @@ class Messenger
          * check-integrations reports it, and every redirected message says so in
          * the log.
          */
-        $testRecipient = (string) config('services.whatsapp.test_recipient');
-
-        if ($testRecipient !== '' && $recipient) {
-            Log::warning('Message redirected to the test number.', [
-                'intended_for' => $recipient,
-                'sent_to' => $testRecipient,
-                'subscription_id' => $subscription->id,
-                'why' => 'MSG91_TEST_RECIPIENT is set. Unset it and no customer is messaged from here.',
-            ]);
-
-            $recipient = $testRecipient;
+        if ($recipient) {
+            $recipient = self::recipientFor($recipient, ['subscription_id' => $subscription->id]);
         }
 
         if (! $recipient) {

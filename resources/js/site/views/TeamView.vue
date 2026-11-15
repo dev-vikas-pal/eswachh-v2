@@ -16,7 +16,7 @@ function initials(name: string): string {
 
 <template>
     <div class="mx-auto max-w-4xl px-4 py-10">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">The people who do it</h1>
+        <h1 class="page-title">The people who do it</h1>
         <p class="mt-1 max-w-prose text-body">
             The same cleaner comes to your car each day. These are the people running it.
         </p>
@@ -28,7 +28,7 @@ function initials(name: string): string {
         </p>
 
         <div v-else class="mt-8 grid gap-5 sm:grid-cols-2">
-            <article v-for="member in data" :key="member.id" class="flex gap-4 rounded-lg border border-line bg-surface p-5">
+            <article v-for="member in data" :key="member.id" class="flex gap-4 card p-5">
                 <span
                     class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent-soft text-lg font-bold text-accent-ink"
                     aria-hidden="true"

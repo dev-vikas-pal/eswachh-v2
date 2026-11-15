@@ -248,21 +248,19 @@ class CatalogueController extends Controller
                     ->where('city_id', $input['parent_id'])->orderBy('name')->get(['id', 'name']),
 
                 /*
-                 * Only sectors somebody actually covers.
+                 * Every active sector, whether or not anybody covers it yet.
                  *
-                 * Offering an address nobody services takes a customer's money
-                 * for a round that will never happen - which is how v1
-                 * accumulated subscriptions with no cleaner attached.
+                 * Active is the business saying "we service this". The head
+                 * office may run a sector directly, with no franchise, and staff
+                 * are assigned after the customer has signed up - so an empty
+                 * user_sector row is not a reason to turn somebody away. It used
+                 * to be, and every sector vanished from this list on a database
+                 * where nobody had been assigned yet.
                  *
-                 * Read from the assignment, not from a column on the sector. It
-                 * used to ask for a branch_id, which stopped meaning anything
-                 * the moment territory moved to user_sector - a sector with a
-                 * branch and nobody on it would still have been offered.
+                 * Withdrawing a sector, or switching it off, is how one is
+                 * taken off sale.
                  */
                 'sectors' => Sector::query()->where('status', true)
-                    ->whereExists(fn ($q) => $q->selectRaw(1)
-                        ->from('user_sector')
-                        ->whereColumn('user_sector.sector_id', 'sectors.id'))
                     ->where('area_id', $input['parent_id'])->orderBy('name')->get(['id', 'name']),
 
                 'societies' => Society::query()->where('status', true)

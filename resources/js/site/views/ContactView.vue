@@ -26,8 +26,8 @@ const whatsappLink = computed(() => {
 </script>
 
 <template>
-    <div class="mx-auto max-w-4xl px-4 py-10">
-        <h1 class="text-2xl font-bold tracking-tight text-ink">Get in touch</h1>
+    <div class="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
+        <h1 class="page-title">Get in touch</h1>
         <p class="mt-1 max-w-prose text-body">
             The quickest way to sort anything out is to call the office. If it is about a clean that
             went wrong, raising it from your account gets it a reference number and a named person.
@@ -37,7 +37,7 @@ const whatsappLink = computed(() => {
             <a
                 v-if="contact.phone"
                 :href="'tel:' + contact.phone"
-                class="rounded-lg border border-line bg-surface p-5 transition hover:border-line-strong"
+                class="card p-6 transition hover:-translate-y-0.5 hover:border-accent"
             >
                 <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">Phone</h2>
                 <p class="mt-1 text-lg font-semibold tabular-nums text-ink">{{ contact.phone }}</p>
@@ -49,7 +49,7 @@ const whatsappLink = computed(() => {
                 :href="whatsappLink"
                 target="_blank"
                 rel="noopener"
-                class="rounded-lg border border-line bg-surface p-5 transition hover:border-line-strong"
+                class="card p-6 transition hover:-translate-y-0.5 hover:border-accent"
             >
                 <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">WhatsApp</h2>
                 <p class="mt-1 text-lg font-semibold tabular-nums text-ink">{{ contact.whatsapp }}</p>
@@ -59,13 +59,13 @@ const whatsappLink = computed(() => {
             <a
                 v-if="contact.email"
                 :href="'mailto:' + contact.email"
-                class="rounded-lg border border-line bg-surface p-5 transition hover:border-line-strong"
+                class="card p-6 transition hover:-translate-y-0.5 hover:border-accent"
             >
                 <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">Email</h2>
                 <p class="mt-1 text-lg font-semibold text-ink">{{ contact.email }}</p>
             </a>
 
-            <div v-if="contact.address" class="rounded-lg border border-line bg-surface p-5">
+            <div v-if="contact.address" class="card p-6">
                 <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">Office</h2>
                 <p class="mt-1 whitespace-pre-line text-body">{{ contact.address }}</p>
             </div>
@@ -78,7 +78,7 @@ const whatsappLink = computed(() => {
             Contact details have not been published yet.
         </p>
 
-        <section class="mt-10 rounded-lg border border-line bg-sunk p-5">
+        <section class="mt-12 rounded-[1.25rem] border border-line bg-sunk p-6 sm:p-8">
             <h2 class="font-semibold text-ink">Already a customer?</h2>
             <p class="mt-1 text-sm text-body">
                 Sign in to see your plan, your payments, and to raise a complaint that gets tracked
@@ -87,13 +87,13 @@ const whatsappLink = computed(() => {
             <div class="mt-4 flex flex-wrap gap-3">
                 <a
                     href="/login"
-                    class="rounded bg-accent px-5 py-2 text-sm font-semibold text-on-accent transition hover:brightness-110"
+                    class="btn-primary"
                 >
                     Sign in
                 </a>
                 <RouterLink
                     :to="{ name: 'faq' }"
-                    class="rounded border border-line-strong px-5 py-2 text-sm font-semibold text-body transition hover:bg-surface"
+                    class="btn-quiet"
                 >
                     Read the questions first
                 </RouterLink>

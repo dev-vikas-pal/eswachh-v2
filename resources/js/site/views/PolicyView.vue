@@ -43,7 +43,7 @@ const updated = computed(() =>
     <div class="mx-auto max-w-3xl px-4 py-10">
         <p v-if="isLoading" class="text-muted">Loading…</p>
 
-        <div v-else-if="isError" class="rounded-lg border border-line bg-surface p-6">
+        <div v-else-if="isError" class="card p-6">
             <h1 class="text-xl font-semibold text-ink">Not published yet</h1>
             <p class="mt-2 text-body">
                 This page has not been written yet. Please call the office if you need it.
@@ -51,7 +51,7 @@ const updated = computed(() =>
         </div>
 
         <article v-else>
-            <h1 class="text-2xl font-bold tracking-tight text-ink">{{ data.title }}</h1>
+            <h1 class="page-title">{{ data.title }}</h1>
             <p class="mt-1 text-sm text-muted">
                 {{ data.business_name }}<span v-if="updated"> · last updated {{ updated }}</span>
             </p>

@@ -175,6 +175,11 @@ class PhoneCodes
          * not return a 500, because a 500 for one number and a 200 for another
          * is itself an answer to "is this person a customer of yours".
          */
+        // The test number applies to the code as well. Unlike every other
+        // message it was never redirected, so a tester got everything except
+        // the one message they needed to sign in.
+        $to = Messenger::recipientFor($phone, ['message' => 'sign-in code']);
+
         try {
             /*
              * Its own chain, separate from everything else.
@@ -192,7 +197,7 @@ class PhoneCodes
              */
             $result = $this->transports->send(
                 new OutboundMessage(
-                    to: $phone,
+                    to: $to,
                     // What an SMS would send, and what is logged outside
                     // production. WhatsApp ignores it in favour of the approved
                     // template named below.
@@ -210,7 +215,17 @@ class PhoneCodes
                     'transport' => $result->transport,
                     'error' => $result->error,
                 ]);
+
+                return;
             }
+
+            // Where it went, never what it was. Without this a code that
+            // reached the wrong phone left nothing in the log to show it.
+            Log::info('Phone code sent.', [
+                'to' => Messenger::dialable($to),
+                'transport' => $result->transport,
+                'provider_id' => $result->providerId,
+            ]);
         } catch (\Throwable $e) {
             Log::error('A phone code could not be sent.', ['error' => $e->getMessage()]);
         }

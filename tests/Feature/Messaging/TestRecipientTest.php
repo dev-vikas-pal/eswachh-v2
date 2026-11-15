@@ -93,6 +93,26 @@ class TestRecipientTest extends TestCase
      * customer - the one telling the office a new plan needs a cleaner goes to
      * a number in Settings, and while testing that must not go out either.
      */
+    public function test_the_sign_in_code_is_redirected_like_every_other_message(): void
+    {
+        config()->set('services.whatsapp.test_recipient', '8756966569');
+
+        // The code goes through PhoneCodes, not notify(). It used to skip the
+        // redirect, so a tester got every message except the one to sign in.
+        $this->assertSame('8756966569', Messenger::recipientFor('8756966533'));
+
+        $source = (string) file_get_contents(app_path('Domain/Auth/PhoneCodes.php'));
+        $this->assertStringContainsString('Messenger::recipientFor(', $source);
+        $this->assertStringContainsString('to: $to,', $source);
+    }
+
+    public function test_no_number_is_rewritten_when_no_test_number_is_set(): void
+    {
+        config()->set('services.whatsapp.test_recipient', null);
+
+        $this->assertSame('8756966533', Messenger::recipientFor('8756966533'));
+    }
+
     public function test_a_message_addressed_elsewhere_is_redirected_too(): void
     {
         config()->set('services.whatsapp.test_recipient', '8756966569');
